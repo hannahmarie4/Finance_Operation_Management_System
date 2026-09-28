@@ -50,13 +50,9 @@ export const StatusCard: React.FC<StatusCardProps> = ({
     value: `${Math.floor(Math.random() * 20) + 2}%`
   } as Trend;
 
-  const displaySparkline = sparklineData || (
-    displayTrend.type === 'up' 
-      ? [20, 25, 30, 28, 40, 45, 60] // going up
-      : [60, 55, 40, 42, 30, 25, 20] // going down
-  );
+  const displaySparkline = sparklineData || [];
 
-  const displayPeriodText = periodText || 'vs. last week';
+  const displayPeriodText = periodText || 'vs prev.';
 
   const customStyles = {
     '--kpi-ac': colors.accent,
@@ -64,6 +60,7 @@ export const StatusCard: React.FC<StatusCardProps> = ({
     '--kpi-ic': colors.accent,
     cursor: onClick ? 'pointer' : 'default',
     userSelect: 'none',
+    padding: '16px',
   } as React.CSSProperties;
 
   // Polarity aware coloring: for 'lower-is-better', a decrease is positive (green), and an increase is negative (red)
@@ -126,35 +123,29 @@ export const StatusCard: React.FC<StatusCardProps> = ({
         }
       } : undefined}
     >
-      <div className="kpi-top">
-        <span className="kpi-label">{label}</span>
-
-      </div>
-      <div className="kpi-val">{value}</div>
-      
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap', marginTop: 'auto' }}>
-        <div className={`kpi-trend ${getTrendClass(displayTrend.type)}`}>
-          <span>{getTrendIcon(displayTrend.type)} {displayTrend.value}</span>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', height: '100%' }}>
+        {icon && (
+          <div style={{ 
+            width: 38, height: 38, borderRadius: 10, flexShrink: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: 'var(--kpi-ibg)', color: 'var(--kpi-ic)' 
+          }}>
+            <i className={`ti ${icon}`} style={{ fontSize: '1.25rem' }} />
+          </div>
+        )}
+        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+          <span className="kpi-label" style={{ fontSize: '0.7rem', fontWeight: 600, color: '#475569', marginBottom: '4px', display: 'block', whiteSpace: 'normal', lineHeight: 1.2, textTransform: 'uppercase' }}>{label}</span>
+          <div className="kpi-val" style={{ fontSize: '1.15rem', fontWeight: 800, color: '#0F172A', marginBottom: '8px', lineHeight: 1 }}>{value}</div>
+          
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: '4px', flexWrap: 'wrap', marginTop: 'auto' }}>
+            <div className={`kpi-trend ${getTrendClass(displayTrend.type)}`} style={{ display: 'flex', alignItems: 'center', gap: '2px', fontWeight: 600, fontSize: '0.7rem' }}>
+              <span>{getTrendIcon(displayTrend.type)} {displayTrend.value}</span>
+            </div>
+            <span className="kpi-period" style={{ fontSize: '0.65rem', color: '#94A3B8', whiteSpace: 'nowrap' }}>{displayPeriodText}</span>
+          </div>
         </div>
-        <span className="kpi-period">{displayPeriodText}</span>
       </div>
-
-      <div className="kpi-spark">
-        {displaySparkline.map((val, idx) => {
-          const maxSparkVal = Math.max(...displaySparkline);
-          const heightPercent = maxSparkVal > 0 ? (val / maxSparkVal) * 100 : 0;
-          const isHigh = val > maxSparkVal * 0.7; // highlight highest bars
-          return (
-            <div 
-              key={idx} 
-              className={`spark-b ${isHigh ? 'hi' : ''}`} 
-              style={{ height: `${heightPercent}%` }} 
-              title={`Value: ${val}`} 
-            />
-          );
-        })}
-      </div>
-      </div>
+    </div>
     </>
   );
 };

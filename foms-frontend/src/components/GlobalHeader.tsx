@@ -13,7 +13,8 @@ import {
   Sparkles,
   MoreVertical,
   Calendar,
-  Clock
+  Clock,
+  ArrowLeft
 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -116,31 +117,85 @@ const GlobalHeader: React.FC<GlobalHeaderProps> = () => {
   const todayNotifications = useMemo(() => sortedFiltered.filter(n => n.isToday), [sortedFiltered]);
   const earlierNotifications = useMemo(() => sortedFiltered.filter(n => !n.isToday), [sortedFiltered]);
 
-  // Derive title from active route
-  const currentTitle = useMemo(() => {
-    if (location.pathname.startsWith('/profile')) return 'My Profile';
-    if (!user) return 'Dashboard';
+  // Derive title and subtitle from active route
+  const currentTitleInfo = useMemo(() => {
+    if (location.pathname.startsWith('/profile')) return { title: 'My Profile', subtitle: 'Settings' };
+    if (!user) return { title: 'Dashboard', subtitle: 'Application' };
     const userGroups = NAV_CONFIG[user.role]?.groups || [];
     for (const group of userGroups) {
       for (const item of group.items) {
         if (location.pathname.startsWith(item.path)) {
-          return item.label;
+          return { title: item.label, subtitle: group.label };
         }
       }
     }
-    return 'Dashboard';
+    
+    // Fallbacks for routes not in the sidebar navigation
+    if (location.pathname.startsWith('/invoice-create')) return { title: 'Create Invoice', subtitle: 'Invoicing' };
+    
+    return { title: 'Dashboard', subtitle: 'Overview' };
   }, [location.pathname, user]);
+
+  const { title: currentTitle, subtitle: currentSubtitle } = currentTitleInfo;
 
   // Derive profile display info
   const profileName = user?.fullName || 'Guest User';
   const profileRole = user ? ROLE_LABELS[user.role] : 'Unauthenticated';
   const profileInitials = profileName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
 
+  const isChildRoute = 
+    location.pathname.split('/').filter(Boolean).length > 1 || 
+    location.search.length > 0 ||
+    location.pathname.startsWith('/invoice-create');
+
   return (
-    <header className="site-header" style={{ zIndex: 99999, position: 'sticky' }}>
+    <header className="site-header" style={{ position: 'sticky' }}>
       <nav className="nav-bar">
         {/* Left Side: Page Title */}
-        <h1 className="header-title">{currentTitle}</h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          {isChildRoute && (
+            <button
+              onClick={() => navigate(-1)}
+              style={{
+                width: '36px',
+                height: '36px',
+                borderRadius: '50%',
+                border: '1px solid #E2E8F0',
+                background: '#fff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                color: '#334155',
+                transition: 'all 200ms',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = '#1E3A8A';
+                e.currentTarget.style.color = '#1E3A8A';
+                e.currentTarget.style.background = '#EFF6FF';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = '#E2E8F0';
+                e.currentTarget.style.color = '#334155';
+                e.currentTarget.style.background = '#fff';
+              }}
+              aria-label="Go back"
+            >
+              <ArrowLeft size={18} strokeWidth={2} />
+            </button>
+          )}
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              <span>{profileRole}</span>
+              <ChevronRight size={12} strokeWidth={3} />
+              <span style={{ color: '#0F172A' }}>{currentTitle}</span>
+            </span>
+            <h1 className="header-title" style={{ margin: '2px 0 0', fontSize: '1.5rem', fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em' }}>
+              {currentTitle}
+            </h1>
+          </div>
+        </div>
         
         {/* Right Side: Interactive Controls */}
         <div className="header-controls">

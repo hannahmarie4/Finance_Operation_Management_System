@@ -9,9 +9,10 @@ import { User, Lock, AlertCircle, Eye, EyeOff, Calendar } from 'lucide-react';
 import './LoginPage.css';
 
 type SpeedPayStep = 'login' | 'dashboard' | 'summary' | 'payment' | 'upload' | 'submitted';
-type DashTab = 'to_pay' | 'recent';
+type DashTab = 'dashboard' | 'my_invoices' | 'pay_invoice' | 'recent';
 
 const PAYMENT_METHODS = [
+  { id: 'paymongo', label: 'PayMongo', color: '#10B981' },
   { id: 'gcash', label: 'GCash', color: '#007AFF' },
   { id: 'maya', label: 'Maya', color: '#00AA6C' },
   { id: 'bank', label: 'Bank Transfer (QRPh)', color: '#1E3A5F' },
@@ -110,10 +111,13 @@ export const SpeedPay: React.FC = () => {
   const [referenceNumber, setReferenceNumber] = useState('');
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [clientEmail, setClientEmail] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [nameErrors, setNameErrors] = useState<{ first?: string; last?: string; email?: string }>({});
   const [existingSubmission, setExistingSubmission] = useState<any>(null);
   const [showEmailModal, setShowEmailModal] = useState(false);
 
-  const [dashTab, setDashTab] = useState<DashTab>('to_pay');
+  const [dashTab, setDashTab] = useState<DashTab>('pay_invoice');
 
   const currentDate = useMemo(() => {
     return new Date().toLocaleDateString('en-US', {
@@ -154,7 +158,7 @@ export const SpeedPay: React.FC = () => {
     if (!loggedInClient) return [];
     return invoices.filter(
       i => i.clientId === loggedInClient.id &&
-        ['Sent', 'Overdue', 'Finalized', 'Verified'].includes(i.status)
+        ['Sent', 'Overdue'].includes(i.status)
     );
   }, [loggedInClient, invoices]);
 
@@ -165,7 +169,7 @@ export const SpeedPay: React.FC = () => {
       acc[schedule].push(inv);
       return acc;
     }, {} as Record<string, Invoice[]>);
-    
+
     const order = ['Weekly', 'Semi-monthly', 'Monthly'];
     return Object.entries(grouped).sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]));
   }, [clientInvoices]);
@@ -181,7 +185,7 @@ export const SpeedPay: React.FC = () => {
     setLoginError('');
     if (!loginId || !loginPass) { setLoginError('Please fill in both fields.'); return; }
     if (loginPass !== 'Password@123') { setLoginError('Invalid credentials. (Demo password: Password@123)'); return; }
-    
+
     // loginId is expected to be Invoice Number
     const invoice = invoices.find(i => i.invoiceNumber.toLowerCase() === loginId.toLowerCase());
     if (!invoice) {
@@ -196,7 +200,11 @@ export const SpeedPay: React.FC = () => {
 
     sessionStorage.setItem('speedpay_client', JSON.stringify(client));
     setLoggedInClient(client);
-    setClientEmail(client.email);
+    setClientEmail(client.email ?? '');
+    // Pre-fill name from client contact person
+    const nameParts = (client.contactPerson ?? '').trim().split(' ');
+    setFirstName(nameParts[0] ?? '');
+    setLastName(nameParts.slice(1).join(' ') ?? '');
     setStep('dashboard');
   };
 
@@ -206,6 +214,7 @@ export const SpeedPay: React.FC = () => {
     setStep('login');
     setLoginId(''); setLoginPass('');
     setFoundInvoice(null); setSelectedMethod(''); setReferenceNumber(''); setProofFile(null);
+    setFirstName(''); setLastName(''); setNameErrors({});
     setShowProfileMenu(false);
   };
 
@@ -221,7 +230,7 @@ export const SpeedPay: React.FC = () => {
     clientInvoices.reduce((sum, i) => sum + (i.totalAmount ?? 0), 0),
     [clientInvoices]
   );
-  
+
   const totalPaid = useMemo(() =>
     clientRecentPayments.filter(p => p.status === 'Validated' as any || (p as any).status === 'Approved').reduce((sum, p) => sum + ((p as any).amountPaid ?? 0), 0),
     [clientRecentPayments]
@@ -256,8 +265,17 @@ export const SpeedPay: React.FC = () => {
   const handleSelectInvoice = (inv: Invoice) => {
     const existing = existingSubmissionsForInvoice(inv);
     setFoundInvoice(inv);
-    if (existing) { setExistingSubmission(existing); setReferenceNumber(existing.referenceNumber); setStep('submitted'); }
-    else { setExistingSubmission(null); setStep('summary'); }
+    if (existing) {
+      setExistingSubmission(existing);
+      setReferenceNumber(existing.referenceNumber);
+      setStep('submitted');
+    }
+    else {
+      setExistingSubmission(null);
+      if (dashTab !== 'pay_invoice') {
+        setStep('summary');
+      }
+    }
   };
 
   const handlePayMongoCheckout = async () => {
@@ -265,16 +283,24 @@ export const SpeedPay: React.FC = () => {
     setIsProcessing(true);
     try {
       const secretKey = import.meta.env.VITE_PAYMONGO_SECRET_KEY;
-      if (!secretKey) throw new Error('Missing VITE_PAYMONGO_SECRET_KEY in .env');
+      if (!secretKey) {
+        // Fallback for demo purposes when no API key is provided
+        window.open('https://developers.paymongo.com/docs/testing', '_blank');
+        setIsProcessing(false);
+        setStep('upload');
+        toast.info('PayMongo API key not found in .env. Opening PayMongo demo page for testing.', 'Demo Mode');
+        return;
+      }
 
       const amountInCents = Math.round(foundInvoice.totalAmount * 100);
       if (amountInCents < 10000) throw new Error(`Minimum amount is ₱100. Invoice total is ${fmt(foundInvoice.totalAmount)}.`);
 
-      const response = await fetch('/api/paymongo-link', {
+      const response = await fetch('https://api.paymongo.com/v1/links', {
         method: 'POST',
         headers: {
           'Accept': 'application/json',
           'Content-Type': 'application/json',
+          'Authorization': `Basic ${btoa(secretKey + ':')}`
         },
         body: JSON.stringify({
           data: {
@@ -312,6 +338,7 @@ export const SpeedPay: React.FC = () => {
 
   const handleSubmit = () => {
     if (!foundInvoice) return;
+    if (!validateName()) return;
     if (proofFile) {
       const reader = new FileReader();
       reader.onloadend = () => saveSubmission(reader.result as string);
@@ -321,7 +348,22 @@ export const SpeedPay: React.FC = () => {
     }
   };
 
+  const validateName = () => {
+    const errors: { first?: string; last?: string; email?: string } = {};
+    const nameRegex = /^[a-zA-Z\s'-]+$/;
+    if (!firstName.trim()) errors.first = 'First name is required.';
+    else if (!nameRegex.test(firstName)) errors.first = 'First name must contain letters only.';
+    if (!lastName.trim()) errors.last = 'Last name is required.';
+    else if (!nameRegex.test(lastName)) errors.last = 'Last name must contain letters only.';
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!clientEmail.trim()) errors.email = 'Email address is required.';
+    else if (!emailRegex.test(clientEmail)) errors.email = 'Please enter a valid email address.';
+    setNameErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   const saveSubmission = (fileUrl: string | undefined) => {
+    const fullName = `${firstName.trim()} ${lastName.trim()}`;
     const newPayment = {
       id: `PAY-${Date.now()}`,
       invoiceId: foundInvoice!.id,
@@ -334,7 +376,7 @@ export const SpeedPay: React.FC = () => {
       recordedBy: 'SpeedPay System',
       status: 'Pending Validation' as const,
       recordedAt: new Date().toISOString(),
-      notes: `SpeedPay transaction by ${loggedInClient?.name}`
+      notes: `SpeedPay transaction by ${fullName} (${clientEmail})`
     };
     addPayment(newPayment);
     setExistingSubmission(newPayment);
@@ -446,38 +488,54 @@ export const SpeedPay: React.FC = () => {
   // DASHBOARD LAYOUT
   return (
     <div className="app-layout" style={{ alignItems: 'stretch' }}>
-      
+
       {/* ── SIDEBAR ── */}
       <aside className="sidebar">
         <div className="sidebar-logo">
           <div className="logo-img-wrapper">
-             <img src="/logo.png" alt="Speedex" className="sidebar-logo-img" onError={(e) => (e.currentTarget as HTMLImageElement).style.display = 'none'} />
+            <img src="/logo.png" alt="Speedex" className="sidebar-logo-img" onError={(e) => (e.currentTarget as HTMLImageElement).style.display = 'none'} />
           </div>
         </div>
 
         <nav className="sidebar-nav">
           <div className="nav-item-container">
-            <a href="#" onClick={(e) => { e.preventDefault(); setDashTab('to_pay'); setStep('dashboard'); }} className={`nav-item ${dashTab === 'to_pay' && step === 'dashboard' ? 'active' : ''}`}>
+            <a href="#" onClick={(e) => { e.preventDefault(); setDashTab('dashboard'); setStep('dashboard'); }} className={`nav-item ${dashTab === 'dashboard' && step === 'dashboard' ? 'active' : ''}`}>
+              <span className="nav-icon" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+                <i className="ti ti-layout-dashboard" style={{ fontSize: "18px" }} />
+              </span>
+              <span className="nav-label">Dashboard</span>
+            </a>
+          </div>
+          <div className="nav-item-container">
+            <a href="#" onClick={(e) => { e.preventDefault(); setDashTab('my_invoices'); setStep('dashboard'); }} className={`nav-item ${dashTab === 'my_invoices' && step === 'dashboard' ? 'active' : ''}`}>
               <span className="nav-icon" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
                 <i className="ti ti-file-invoice" style={{ fontSize: "18px" }} />
               </span>
-              <span className="nav-label">To Pay</span>
+              <span className="nav-label">My Invoices</span>
+            </a>
+          </div>
+          <div className="nav-item-container">
+            <a href="#" onClick={(e) => { e.preventDefault(); setDashTab('pay_invoice'); setStep('dashboard'); }} className={`nav-item ${dashTab === 'pay_invoice' && step === 'dashboard' ? 'active' : ''}`}>
+              <span className="nav-icon" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+                <i className="ti ti-credit-card" style={{ fontSize: "18px" }} />
+              </span>
+              <span className="nav-label">Pay an Invoice</span>
             </a>
           </div>
           <div className="nav-item-container">
             <a href="#" onClick={(e) => { e.preventDefault(); setDashTab('recent'); setStep('dashboard'); }} className={`nav-item ${dashTab === 'recent' && step === 'dashboard' ? 'active' : ''}`}>
               <span className="nav-icon" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
-                <i className="ti ti-receipt" style={{ fontSize: "18px" }} />
+                <i className="ti ti-history" style={{ fontSize: "18px" }} />
               </span>
-              <span className="nav-label">Recently Paid</span>
+              <span className="nav-label">Payment History</span>
             </a>
           </div>
         </nav>
 
         {loggedInClient && (
           <div className="sidebar-footer" ref={profileRef}>
-            <div 
-              className={`profile-card ${showProfileMenu ? "active" : ""}`} 
+            <div
+              className={`profile-card ${showProfileMenu ? "active" : ""}`}
               onClick={() => setShowProfileMenu(!showProfileMenu)}
               role="button"
               style={{ cursor: 'pointer' }}
@@ -509,11 +567,13 @@ export const SpeedPay: React.FC = () => {
 
       {/* ── MAIN AREA ── */}
       <div className="main-area" style={{ justifyContent: 'flex-start', height: '100vh', overflowY: 'auto', overflowX: 'hidden', boxSizing: 'border-box' }}>
-        
+
         {/* ── GLOBAL HEADER ── */}
         <header className="global-header" style={{ justifyContent: 'space-between', padding: '10px 28px', background: '#fff', borderBottom: '1px solid #E2E8F0', display: 'flex', alignItems: 'center' }}>
           <div className="gh-left">
-            <h1 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0F172A', margin: 0 }}>SpeedPay Portal</h1>
+            <h1 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0F172A', margin: 0 }}>
+              {dashTab === 'dashboard' ? 'Dashboard' : dashTab === 'my_invoices' ? 'My Invoices' : dashTab === 'pay_invoice' ? 'Pay an Invoice' : 'Payment History'}
+            </h1>
           </div>
           <div className="gh-right">
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 9999, color: '#334155', fontSize: '0.85rem', fontWeight: 500, whiteSpace: 'nowrap' }}>
@@ -526,8 +586,8 @@ export const SpeedPay: React.FC = () => {
         {/* ── CONTENT AREA ── */}
         <main className="content-area" style={{ flex: 1, padding: '28px', background: '#EEF2FF', display: 'flex', flexDirection: 'column', minWidth: 0, boxSizing: 'border-box', width: '100%', maxWidth: '100%' }}>
           <div style={{ maxWidth: 860, margin: '0 auto', width: '100%' }}>
-            
-            {step === 'dashboard' && dashTab === 'to_pay' && (
+
+            {step === 'dashboard' && dashTab === 'dashboard' && (
               <>
                 {/* ── Dashboard Charts ── */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
@@ -580,57 +640,154 @@ export const SpeedPay: React.FC = () => {
                   </div>
                 </div>
 
-                {clientInvoices.length === 0 ? (
-                  <Card>
-                    <div style={emptyState}>
-                      <i className="ti ti-checks" style={{ fontSize: 44, color: '#10B981', display: 'block', marginBottom: 10 }} />
-                      <p style={{ margin: 0, color: '#64748B', fontWeight: 600 }}>You have no outstanding invoices.</p>
-                    </div>
-                  </Card>
-                ) : (
-                  <div>
-                    <h2 style={{ margin: '0 0 20px', fontSize: '1.25rem', fontWeight: 800, color: '#0F172A' }}>Invoices to Pay</h2>
-                  {toPayGroups.map(([schedule, groupInvoices]) => (
-                    <Card key={schedule} style={{ marginBottom: 24 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                        <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#0F172A', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{schedule} Billing</span>
-                        <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#6366F1' }}>Total: {fmt(groupInvoices.reduce((s, i) => s + i.totalAmount, 0))}</span>
-                      </div>
-                      <div style={{ overflowX: 'auto', border: '1px solid #E2E8F0', borderRadius: 8 }}>
-                        <table style={tableStyle}>
-                          <thead>
-                            <tr>
-                              {['Invoice No.', 'Period', 'Base Amount', 'VAT', 'Surcharge', 'Total Due', 'Due Date', 'Status', ''].map(h => (
-                                <th key={h} style={thStyle}>{h}</th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {groupInvoices.map((inv: Invoice) => (
-                              <tr key={inv.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
-                                <td style={tdStyle}><span style={{ fontWeight: 700, color: '#0F172A' }}>{inv.invoiceNumber}</span></td>
-                                <td style={tdStyle}>{inv.billingPeriod}</td>
-                                <td style={tdStyle}>{fmt(inv.amount)}</td>
-                                <td style={tdStyle}>{fmt(inv.vatAmount)}</td>
-                                <td style={tdStyle}>{fmt(inv.surchargeAmount)}</td>
-                                <td style={{ ...tdStyle, fontWeight: 800, color: '#6366F1' }}>{fmt(inv.totalAmount)}</td>
-                                <td style={tdStyle}>{new Date(inv.dueDate).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
-                                <td style={tdStyle}>
-                                  <span style={{ ...badgeBase, ...statusBadge(inv.status) }}>{inv.status}</span>
-                                </td>
-                                <td style={tdStyle}>
-                                  <button onClick={() => handleSelectInvoice(inv)} style={btnPrimarySmall}>Pay Now</button>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </Card>
-                  ))}
-                </div>
-              )}
+
               </>
+            )}
+
+            {step === 'dashboard' && dashTab === 'my_invoices' && (
+              <Card>
+                <h2 style={{ margin: '0 0 20px', fontSize: '1.25rem', fontWeight: 800, color: '#0F172A' }}>My Invoices</h2>
+                <p style={{ color: '#64748B' }}>List of all your invoices will be displayed here.</p>
+              </Card>
+            )}
+
+            {step === 'dashboard' && dashTab === 'pay_invoice' && (
+              <Card style={{ padding: '32px 24px', background: '#fff' }}>
+                <h2 style={{ fontSize: '1.5rem', fontWeight: 800, margin: '0 0 32px', color: '#0F172A' }}>Pay an Invoice</h2>
+
+                {/* Step 1: Select invoice */}
+                <div style={{ marginBottom: 40 }}>
+                  <h3 style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: '1.1rem', color: '#0F172A', marginBottom: 20 }}>
+                    <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#0F172A', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800 }}>1</div>
+                    Select invoice
+                  </h3>
+
+                  <div style={{ background: '#F8FAFC', padding: 16, borderRadius: 12, display: 'flex', gap: 12, marginBottom: 16, border: '1px solid #E2E8F0', flexWrap: 'wrap' }}>
+                    <div style={{ flex: '1 1 200px', display: 'flex', alignItems: 'center', background: '#fff', border: '1px solid #CBD5E1', borderRadius: 8, padding: '0 12px' }}>
+                      <i className="ti ti-search" style={{ color: '#64748B' }} />
+                      <input type="text" placeholder="Search invoice number..." style={{ border: 'none', padding: '10px', outline: 'none', width: '100%', fontSize: 13, color: '#0F172A' }} />
+                    </div>
+                    <select style={{ padding: '0 12px', border: '1px solid #CBD5E1', borderRadius: 8, background: '#fff', fontSize: 13, color: '#0F172A', fontWeight: 600 }}>
+                      <option>All statuses</option>
+                    </select>
+                    <select style={{ padding: '0 12px', border: '1px solid #CBD5E1', borderRadius: 8, background: '#fff', fontSize: 13, color: '#0F172A', fontWeight: 600 }}>
+                      <option>All service areas</option>
+                    </select>
+                    <select style={{ padding: '0 12px', border: '1px solid #CBD5E1', borderRadius: 8, background: '#fff', fontSize: 13, color: '#0F172A', fontWeight: 600 }}>
+                      <option>Due date: soonest</option>
+                    </select>
+                  </div>
+
+                  <p style={{ fontSize: 12, color: '#64748B', marginBottom: 16, fontWeight: 600 }}>{clientInvoices.length} invoices found</p>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {clientInvoices.map(inv => {
+                      const isSelected = foundInvoice?.id === inv.id;
+                      const isOverdue = inv.status === 'Overdue';
+                      const isDueSoon = !isOverdue && new Date(inv.dueDate) >= new Date();
+                      return (
+                        <div key={inv.id} onClick={() => handleSelectInvoice(inv)} style={{ display: 'flex', alignItems: 'center', padding: '16px 20px', borderRadius: 12, border: isSelected ? '2px solid #10B981' : '1px solid #E2E8F0', background: isSelected ? '#F0FDF4' : '#fff', cursor: 'pointer', transition: 'all 0.2s' }}>
+                          <div style={{ marginRight: 20, display: 'flex', alignItems: 'center' }}>
+                            <div style={{ width: 18, height: 18, borderRadius: '50%', border: isSelected ? '5px solid #10B981' : '1px solid #CBD5E1', background: '#fff' }} />
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
+                              <span style={{ fontWeight: 800, color: '#0F172A', fontSize: '1.05rem' }}>{inv.invoiceNumber}</span>
+                              <span style={{ padding: '2px 8px', borderRadius: 12, fontSize: 10, fontWeight: 800, background: isOverdue ? '#FEE2E2' : (isDueSoon ? '#FEF3C7' : '#FEE2E2'), color: isOverdue ? '#991B1B' : (isDueSoon ? '#B45309' : '#991B1B') }}>
+                                {isOverdue ? 'Overdue' : (isDueSoon ? 'Due soon' : 'Unpaid')}
+                              </span>
+                            </div>
+                            <div style={{ color: '#64748B', fontSize: 13 }}>{loggedInClient?.serviceArea || 'National Capital Region'}</div>
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            <div style={{ fontWeight: 800, color: '#0F172A', fontSize: '1.05rem' }}>{fmt(inv.totalAmount)}</div>
+                            <div style={{ color: '#94A3B8', fontSize: 11, marginTop: 4, fontWeight: 600 }}>Due {new Date(inv.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Step 2: Payment details & breakdown */}
+                {foundInvoice && (
+                  <div>
+                    <h3 style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: '1.1rem', color: '#0F172A', marginBottom: 20 }}>
+                      <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#0F172A', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800 }}>2</div>
+                      Payment details & breakdown
+                    </h3>
+
+                    <div style={{ border: '1px solid #E2E8F0', borderRadius: 12, padding: 32, background: '#fff' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 32 }}>
+                        <div>
+                          <h4 style={{ margin: '0 0 6px', fontSize: '1.1rem', fontWeight: 900, color: '#0F172A', textTransform: 'uppercase' }}>{loggedInClient?.name || 'TEST COMPANY'}</h4>
+                          <p style={{ margin: 0, fontSize: 11, color: '#64748B', textTransform: 'uppercase', fontWeight: 600 }}>SERVICE AREA: {loggedInClient?.serviceArea || 'NATIONAL CAPITAL REGION'}</p>
+                          <p style={{ margin: '2px 0 0', fontSize: 11, color: '#64748B', textTransform: 'uppercase', fontWeight: 600 }}>METRO MANILA, PHILIPPINES</p>
+                        </div>
+                        <div style={{ background: '#F0FDFA', padding: '20px', borderRadius: 12, minWidth: 260, border: '1px solid #CCFBF1' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                            <span style={{ fontSize: 11, color: '#64748B', fontWeight: 600 }}>Invoice Number</span>
+                            <span style={{ fontSize: 11, color: '#64748B', fontWeight: 600 }}>Due Date</span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+                            <span style={{ fontSize: '1.05rem', fontWeight: 900, color: '#0F172A' }}>{foundInvoice.invoiceNumber}</span>
+                            <span style={{ fontSize: '1.05rem', fontWeight: 900, color: '#0F172A' }}>{new Date(foundInvoice.dueDate).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })}</span>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: 11, color: '#64748B', marginBottom: 4, fontWeight: 600 }}>Please Pay</div>
+                            <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#0F172A' }}>{fmt(foundInvoice.totalAmount)}</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ marginBottom: 28 }}>
+                        <div style={{ fontSize: 11, color: '#94A3B8', marginBottom: 4, fontWeight: 600 }}>Billing Period</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A' }}>{foundInvoice.billingPeriod}</div>
+                      </div>
+
+                      <div style={{ borderTop: '1px solid #E2E8F0', padding: '16px 0', display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: '#475569', fontSize: 13, fontWeight: 500 }}>Remaining Balance from previous bill</span>
+                        <span style={{ color: '#0F172A', fontSize: 13, fontWeight: 600 }}>0.00</span>
+                      </div>
+
+                      <div style={{ borderTop: '1px solid #E2E8F0', padding: '20px 0' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+                          <span style={{ color: '#0F172A', fontSize: 14, fontWeight: 800 }}>Charges for this billing period</span>
+                          <span style={{ color: '#0F172A', fontSize: 14, fontWeight: 800 }}>{fmt(foundInvoice.totalAmount)}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12, paddingLeft: 16 }}>
+                          <span style={{ color: '#64748B', fontSize: 13 }}>Logistics Services</span>
+                          <span style={{ color: '#64748B', fontSize: 13, fontWeight: 500 }}>{fmt(foundInvoice.amount)}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12, paddingLeft: 16 }}>
+                          <span style={{ color: '#64748B', fontSize: 13 }}>Government Taxes (VAT)</span>
+                          <span style={{ color: '#64748B', fontSize: 13, fontWeight: 500 }}>{fmt(foundInvoice.vatAmount)}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', paddingLeft: 16 }}>
+                          <span style={{ color: '#64748B', fontSize: 13 }}>Other Surcharges</span>
+                          <span style={{ color: '#64748B', fontSize: 13, fontWeight: 500 }}>{fmt(foundInvoice.surchargeAmount)}</span>
+                        </div>
+                      </div>
+
+                      <div style={{ borderTop: '2px solid #E2E8F0', borderBottom: '2px solid #E2E8F0', padding: '24px 0', display: 'flex', justifyContent: 'space-between', marginBottom: 28 }}>
+                        <span style={{ color: '#0F172A', fontSize: '1.15rem', fontWeight: 900 }}>Total Amount Due</span>
+                        <span style={{ color: '#0F172A', fontSize: '1.15rem', fontWeight: 900 }}>{fmt(foundInvoice.totalAmount)}</span>
+                      </div>
+
+                      <div style={{ background: '#FEF3C7', border: '1px solid #FDE68A', borderRadius: 8, padding: '16px', marginBottom: 24, display: 'flex', gap: 12, alignItems: 'center' }}>
+                        <i className="ti ti-camera" style={{ fontSize: 20, color: '#92400E' }} />
+                        <span style={{ color: '#92400E', fontSize: 12, fontWeight: 500, lineHeight: 1.4 }}>Before redirecting to PayMongo: please take a screenshot of your payment as proof. You will need to upload this in the next step.</span>
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                        <button onClick={() => { setSelectedMethod('paymongo'); handlePayMongoCheckout(); }} style={{ background: '#0F172A', color: '#fff', padding: '14px 24px', borderRadius: 8, fontWeight: 700, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, transition: 'background 0.2s' }}>
+                          Pay via PayMongo →
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </Card>
             )}
 
             {step === 'dashboard' && dashTab === 'recent' && (
@@ -749,10 +906,26 @@ export const SpeedPay: React.FC = () => {
                   </div>
                 )}
 
-                <button onClick={handlePayMongoCheckout} disabled={!selectedMethod || isProcessing}
-                  style={{ ...btnPrimary, width: '100%', background: selectedMethod && !isProcessing ? 'linear-gradient(135deg,#10B981,#059669)' : '#E2E8F0', color: selectedMethod && !isProcessing ? '#fff' : '#94A3B8', cursor: selectedMethod && !isProcessing ? 'pointer' : 'not-allowed' }}>
-                  {isProcessing ? '⟳ Generating payment link...' : 'Proceed to Payment →'}
-                </button>
+                <div style={{ background: '#FEF3C7', border: '1px solid #FDE68A', borderRadius: 8, padding: '16px', marginBottom: 24, display: 'flex', gap: 12, alignItems: 'flex-start', color: '#92400E' }}>
+                  <i className="ti ti-camera" style={{ fontSize: 20, flexShrink: 0, marginTop: 2 }} />
+                  <p style={{ margin: 0, fontSize: '0.875rem' }}>
+                    Before redirecting to PayMongo: please take a <strong>screenshot</strong> of your payment as proof. You will need to upload this in the next step.
+                  </p>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  {selectedMethod === 'bank' ? (
+                    <button onClick={() => setStep('upload')}
+                      style={{ ...btnPrimary, background: '#0F172A', color: '#fff', padding: '12px 24px', cursor: 'pointer', border: 'none', borderRadius: 8, fontWeight: 700 }}>
+                      Proceed to Upload Proof →
+                    </button>
+                  ) : (
+                    <button onClick={handlePayMongoCheckout} disabled={!selectedMethod || isProcessing}
+                      style={{ ...btnPrimary, background: '#0F172A', color: '#fff', padding: '12px 24px', cursor: selectedMethod && !isProcessing ? 'pointer' : 'not-allowed', opacity: selectedMethod && !isProcessing ? 1 : 0.5, border: 'none', borderRadius: 8, fontWeight: 700 }}>
+                      {isProcessing ? '⟳ Redirecting...' : 'Pay via PayMongo →'}
+                    </button>
+                  )}
+                </div>
               </Card>
             )}
 
@@ -761,28 +934,66 @@ export const SpeedPay: React.FC = () => {
               <Card>
                 {renderBack('payment', 'Back to Payment Method')}
                 <h2 style={{ margin: '0 0 6px', fontSize: '1.2rem', fontWeight: 800, color: '#0F172A' }}>Upload Proof of Payment</h2>
-                <p style={{ margin: '0 0 24px', color: '#64748B', fontSize: '0.875rem' }}>Return here after completing payment in PayMongo and upload your proof.</p>
+                <p style={{ margin: '0 0 24px', color: '#64748B', fontSize: '0.875rem' }}>
+                  {selectedMethod === 'bank'
+                    ? 'Upload your bank transfer screenshot and enter the reference number below.'
+                    : 'Return here after completing payment in PayMongo and upload your proof.'}
+                </p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                   <div>
                     <label style={labelStyle}>Transaction Reference No. *</label>
-                    <input value={referenceNumber} onChange={e => setReferenceNumber(e.target.value)} placeholder="Auto-filled from PayMongo" style={inputStyle} />
+                    <input value={referenceNumber} onChange={e => setReferenceNumber(e.target.value)} placeholder={selectedMethod === 'bank' ? 'Enter reference number from receipt' : 'Auto-filled from PayMongo'} style={inputStyle} />
+                  </div>
+                  {/* ── Name Fields (separate first/last for PayMongo) ── */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div>
+                      <label style={labelStyle}>First Name *</label>
+                      <input
+                        value={firstName}
+                        onChange={e => { setFirstName(e.target.value); setNameErrors(prev => ({ ...prev, first: undefined })); }}
+                        placeholder="e.g. Maria"
+                        style={{ ...inputStyle, borderColor: nameErrors.first ? '#EF4444' : '#E2E8F0' }}
+                      />
+                      {nameErrors.first && <p style={{ margin: '4px 0 0', fontSize: '0.75rem', color: '#EF4444' }}>{nameErrors.first}</p>}
+                    </div>
+                    <div>
+                      <label style={labelStyle}>Last Name *</label>
+                      <input
+                        value={lastName}
+                        onChange={e => { setLastName(e.target.value); setNameErrors(prev => ({ ...prev, last: undefined })); }}
+                        placeholder="e.g. Dela Cruz"
+                        style={{ ...inputStyle, borderColor: nameErrors.last ? '#EF4444' : '#E2E8F0' }}
+                      />
+                      {nameErrors.last && <p style={{ margin: '4px 0 0', fontSize: '0.75rem', color: '#EF4444' }}>{nameErrors.last}</p>}
+                    </div>
+                  </div>
+                  <div style={{ background: '#EEF2FF', border: '1px solid #C7D2FE', borderRadius: 8, padding: '8px 12px' }}>
+                    <p style={{ margin: 0, fontSize: '0.75rem', color: '#4338CA', fontWeight: 600 }}>
+                      <i className={selectedMethod === 'bank' ? "ti ti-user" : "ti ti-brand-paymongo"} style={{ marginRight: 5 }} />
+                      {selectedMethod === 'bank' ? 'Payer Full Name: ' : 'PayMongo Full Name: '}
+                      <strong>{[firstName, lastName].filter(Boolean).join(' ') || '—'}</strong>
+                    </p>
                   </div>
                   <div>
                     <label style={labelStyle}>Your Email *</label>
-                    <input type="email" value={clientEmail} onChange={e => setClientEmail(e.target.value)} placeholder="email@example.com" style={inputStyle} />
+                    <input type="email" value={clientEmail} onChange={e => { setClientEmail(e.target.value); setNameErrors(prev => ({ ...prev, email: undefined })); }} placeholder="email@example.com" style={{ ...inputStyle, borderColor: nameErrors.email ? '#EF4444' : '#E2E8F0' }} />
+                    {nameErrors.email && <p style={{ margin: '4px 0 0', fontSize: '0.75rem', color: '#EF4444' }}>{nameErrors.email}</p>}
                   </div>
-                  <div>
-                    <label style={labelStyle}>Proof of Payment *</label>
-                    <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '24px', borderRadius: 10, border: `2px dashed ${proofFile ? '#10B981' : '#E2E8F0'}`, background: proofFile ? '#F0FDF4' : '#F8FAFC', cursor: 'pointer' }}>
+                  <div style={{ opacity: !referenceNumber ? 0.5 : 1, pointerEvents: !referenceNumber ? 'none' : 'auto', transition: 'all 0.2s' }}>
+                    <label style={labelStyle}>
+                      Proof of Payment *
+                      {!referenceNumber && <span style={{ color: '#EF4444', fontSize: '0.75rem', fontWeight: 400, marginLeft: 8 }}>(Enter Reference No. first)</span>}
+                    </label>
+                    <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '24px', borderRadius: 10, border: `2px dashed ${proofFile ? '#10B981' : '#E2E8F0'}`, background: proofFile ? '#F0FDF4' : '#F8FAFC', cursor: !referenceNumber ? 'not-allowed' : 'pointer' }}>
                       <i className={`ti ${proofFile ? 'ti-circle-check' : 'ti-cloud-upload'}`} style={{ fontSize: 30, color: proofFile ? '#10B981' : '#94A3B8' }} />
                       <span style={{ fontSize: '0.82rem', color: proofFile ? '#065F46' : '#94A3B8', fontWeight: 600 }}>{proofFile ? proofFile.name : 'Click to upload (JPG, PNG, PDF)'}</span>
-                      <input type="file" accept=".jpg,.jpeg,.png,.pdf" style={{ display: "none" }} onChange={e => setProofFile(e.target.files?.[0] ?? null)} />
+                      <input type="file" accept=".jpg,.jpeg,.png,.pdf" style={{ display: "none" }} disabled={!referenceNumber} onChange={e => setProofFile(e.target.files?.[0] ?? null)} />
                     </label>
                     {proofFile && proofFile.type.startsWith('image/') && <img src={URL.createObjectURL(proofFile)} style={{ maxWidth: '100%', maxHeight: 200, borderRadius: 8, marginTop: 14, alignSelf: 'center' }} />}
                   </div>
                 </div>
-                <button onClick={handleSubmit} disabled={!referenceNumber || !proofFile || !clientEmail}
-                  style={{ ...btnPrimary, marginTop: 24, width: '100%', background: referenceNumber && proofFile && clientEmail ? 'linear-gradient(135deg,#10B981,#059669)' : '#E2E8F0', color: referenceNumber && proofFile && clientEmail ? '#fff' : '#94A3B8', cursor: referenceNumber && proofFile && clientEmail ? 'pointer' : 'not-allowed' }}>
+                <button onClick={handleSubmit} disabled={!referenceNumber || !proofFile || !clientEmail || !firstName || !lastName}
+                  style={{ ...btnPrimary, marginTop: 24, width: '100%', background: (referenceNumber && proofFile && clientEmail && firstName && lastName) ? 'linear-gradient(135deg,#10B981,#059669)' : '#E2E8F0', color: (referenceNumber && proofFile && clientEmail && firstName && lastName) ? '#fff' : '#94A3B8', cursor: (referenceNumber && proofFile && clientEmail && firstName && lastName) ? 'pointer' : 'not-allowed' }}>
                   Submit for Finance Validation ✓
                 </button>
               </Card>

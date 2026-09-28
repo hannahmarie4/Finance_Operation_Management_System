@@ -88,47 +88,102 @@ export const DeliveryPerformanceChart: React.FC = () => {
 
 export const OrderStatusChart: React.FC = () => {
   return (
-    <Card>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <i className="ti ti-box" style={{ color: '#00A99D', fontSize: '1.2rem' }}></i>
-          Order Status Breakdown
-        </h3>
-        <span style={{ background: '#FFF7ED', color: '#EA580C', padding: '4px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: 700, letterSpacing: '0.5px' }}>
-          ALL TIME
-        </span>
+    <DonutWidget
+      title="Order Status Breakdown"
+      subtitle="ALL TIME"
+      icon="ti-box"
+      data={orderStatusData}
+      centerLabel="ORDERS"
+    />
+  );
+};
+
+export const DonutWidget: React.FC<{
+  title: string;
+  subtitle?: string;
+  icon?: string;
+  data: { name: string; value: number; color: string }[];
+  centerNumber?: number | string;
+  centerLabel?: string;
+  footerLeftIcon?: string;
+  footerLeftLabel?: string;
+  footerLeftValue?: string;
+  footerRightLabel?: string;
+  onFooterRightClick?: () => void;
+}> = ({ title, subtitle, icon, data, centerNumber, centerLabel, footerLeftIcon, footerLeftLabel, footerLeftValue, footerRightLabel, onFooterRightClick }) => {
+  const total = data.reduce((sum, item) => sum + item.value, 0);
+  const displayNumber = centerNumber !== undefined ? centerNumber : total;
+
+  return (
+    <Card style={{ padding: '24px', display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+        <div>
+          <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#0F172A' }}>{title}</h3>
+          {subtitle && <p style={{ margin: '6px 0 0', fontSize: '0.8125rem', color: '#64748B', lineHeight: 1.4 }}>{subtitle}</p>}
+        </div>
+        {icon && (
+          <i className={`ti ${icon}`} style={{ fontSize: '1.25rem', color: '#00A99D' }} />
+        )}
       </div>
-      <div style={{ width: '100%', height: 280, display: 'flex', justifyContent: 'center' }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={orderStatusData}
-              cx="40%"
-              cy="50%"
-              innerRadius={70}
-              outerRadius={100}
-              paddingAngle={2}
-              dataKey="value"
-              stroke="none"
-            >
-              {orderStatusData.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={entry.color} />
-              ))}
-            </Pie>
-            <Tooltip
-              contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
-              itemStyle={{ fontSize: '13px', fontWeight: 600 }}
-            />
-            <Legend
-              layout="vertical"
-              verticalAlign="middle"
-              align="right"
-              iconType="circle"
-              wrapperStyle={{ fontSize: '13px', color: '#475569' }}
-            />
-          </PieChart>
-        </ResponsiveContainer>
+
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+        <div style={{ position: 'relative', width: 180, height: 180, margin: '20px auto' }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={data}
+                cx="50%"
+                cy="50%"
+                innerRadius={65}
+                outerRadius={85}
+                paddingAngle={4}
+                dataKey="value"
+                stroke="none"
+                isAnimationActive={false}
+              >
+                {data.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.color} />
+                ))}
+              </Pie>
+              <Tooltip 
+                contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
+                itemStyle={{ fontSize: '13px', fontWeight: 600 }}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+            <span style={{ fontSize: '26px', fontWeight: 900, color: '#0F172A', lineHeight: 1.1 }}>{displayNumber}</span>
+            {centerLabel && <span style={{ fontSize: '10px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: 4 }}>{centerLabel}</span>}
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 10 }}>
+          {data.map(item => (
+            <div key={item.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ width: 10, height: 10, borderRadius: '50%', background: item.color }} />
+                <span style={{ fontSize: '13px', color: '#334155', fontWeight: 500 }}>{item.name}</span>
+              </div>
+              <span style={{ fontSize: '13px', color: '#0F172A', fontWeight: 800 }}>{item.value}</span>
+            </div>
+          ))}
+        </div>
       </div>
+
+      {(footerLeftLabel || footerRightLabel) && (
+        <div style={{ borderTop: '1px solid #E2E8F0', marginTop: 24, paddingTop: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ fontSize: '12px', color: '#64748B', display: 'flex', alignItems: 'center', gap: 4 }}>
+            {footerLeftIcon && <i className={`ti ${footerLeftIcon}`} style={{ color: '#00A99D', fontSize: '14px' }} />}
+            {footerLeftLabel && <span>{footerLeftLabel}:</span>}
+            {footerLeftValue && <span style={{ fontWeight: 800, color: '#0F172A' }}>{footerLeftValue}</span>}
+          </div>
+          {footerRightLabel && (
+            <div onClick={onFooterRightClick} style={{ fontSize: '12px', fontWeight: 800, color: '#00A99D', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, transition: 'opacity 0.2s' }} onMouseEnter={e => e.currentTarget.style.opacity = '0.8'} onMouseLeave={e => e.currentTarget.style.opacity = '1'}>
+              {footerRightLabel} <i className="ti ti-arrow-right" style={{ fontSize: '14px' }} />
+            </div>
+          )}
+        </div>
+      )}
     </Card>
   );
 };

@@ -64,11 +64,12 @@ export interface CreateButton {
   label: string;
   icon?: string;
   onClick: () => void;
-  variant?: "primary" | "secondary";
+  variant?: "primary" | "secondary" | "danger";
 }
 
 export interface DataTableProps<T> {
   title?: string;
+  subtitle?: string | ReactNode;
   rowKey: keyof T;
   data: T[];
   columns: ColumnDef<T>[];
@@ -98,9 +99,11 @@ export interface DataTableProps<T> {
   onSortChange?: (sortKey: string | null, sortDir: SortDirection) => void;
   onSearchChange?: (query: string) => void;
   onFilterChange?: (filters: Record<string, string>) => void;
+  isRowSelectable?: (row: T) => boolean;
   // Default pre-selected filter values
   defaultFilters?: Record<string, string>;
-}
+  customFilters?: ReactNode;
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -164,6 +167,7 @@ function ActionMenu<T>({ row, actions }: ActionMenuProps<T>) {
 // ─── Main Component ───────────────────────────────────────────────────────────
 export function DataTable<T>({
   title,
+  subtitle,
   rowKey,
   data,
   columns,
@@ -193,7 +197,9 @@ export function DataTable<T>({
   onSortChange,
   onSearchChange,
   onFilterChange,
+  isRowSelectable,
   defaultFilters = {},
+  customFilters,
 }: DataTableProps<T>) {
   const { toast } = useToast();
 
@@ -306,8 +312,8 @@ export function DataTable<T>({
   }, [processed, page, pageSize, serverSide, data]);
 
   // ── Selection ─────────────────────────────────────────────────────────────────
-  const pageKeys = paginated.map((r) => r[rowKey] as string | number);
-  const allMatchingKeys = processed.map((r) => r[rowKey] as string | number);
+  const pageKeys = paginated.filter(r => isRowSelectable ? isRowSelectable(r) : true).map((r) => r[rowKey] as string | number);
+  const allMatchingKeys = processed.filter(r => isRowSelectable ? isRowSelectable(r) : true).map((r) => r[rowKey] as string | number);
   const allPageSelected = pageKeys.length > 0 && pageKeys.every((k) => selected.has(k));
   const somePageSelected = pageKeys.some((k) => selected.has(k));
 
@@ -554,9 +560,16 @@ export function DataTable<T>({
   return (
     <div className={`dt-root ${densityClass} ${className}`}>
       {title && (
-        <h2 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#0F172A', margin: 0, paddingBottom: 0, paddingLeft: 24, paddingRight: 24, paddingTop: 28 }}>
-          {title}
-        </h2>
+        <div style={{ paddingBottom: subtitle ? 12 : 20, paddingLeft: 24, paddingRight: 24, paddingTop: 24 }}>
+          <h2 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#0F172A', margin: 0 }}>
+            {title}
+          </h2>
+          {subtitle && (
+            <p style={{ margin: '4px 0 0', color: '#64748B', fontSize: '0.9rem' }}>
+              {subtitle}
+            </p>
+          )}
+        </div>
       )}
       {/* ── Toolbar ── */}
       <div className="dt-toolbar">
@@ -564,22 +577,22 @@ export function DataTable<T>({
           <div className="dt-search-wrap">
             <i className="ti ti-search dt-search-icon" aria-hidden="true" />
             <input
-              id="dt-search-input"
-              type="text"
-              className="dt-search"
-              placeholder={searchPlaceholder}
-              value={search}
-              onChange={(e) => handleSearchChange(e.target.value)}
-              onFocus={() => setShowRecent(true)}
-              onBlur={handleSearchBlur}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  saveRecentSearch(search);
-                  setShowRecent(false);
-                }
-              }}
-              aria-label="Search records"
-            />
+                id="dt-search-input"
+                type="text"
+                className="dt-search"
+                placeholder={searchPlaceholder}
+                value={search}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                onFocus={() => setShowRecent(true)}
+                onBlur={handleSearchBlur}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    saveRecentSearch(search);
+                    setShowRecent(false);
+                  }
+                }}
+                aria-label="Search records"
+              />
             {search && (
               <button
                 className="dt-search-clear"
@@ -613,7 +626,7 @@ export function DataTable<T>({
               value={activeFilters[f.key] ?? ""}
               onChange={(e) => handleFilterChange(f.key, e.target.value)}
             >
-              <option value="" hidden>{f.label}</option>
+              <option value="">{f.label}</option>
               {f.options.map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
@@ -621,6 +634,7 @@ export function DataTable<T>({
               ))}
             </select>
           ))}
+          {customFilters}
         </div>
 
         <div className="dt-toolbar-right">
@@ -629,16 +643,18 @@ export function DataTable<T>({
           {exportable && (
             <div style={{ display: 'flex', gap: 8 }}>
               <button
-                className="dt-btn dt-btn--secondary"
+                className="dt-btn"
                 onClick={handleExportCSV}
                 title="Export to CSV"
+                style={{ background: '#0EA5E9', color: '#fff', border: 'none', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.2s' }}
               >
                 <i className="ti ti-file-spreadsheet" aria-hidden="true" /> CSV
               </button>
               <button
-                className="dt-btn dt-btn--secondary"
+                className="dt-btn"
                 onClick={handleExportPDF}
                 title="Export to PDF"
+                style={{ background: '#F43F5E', color: '#fff', border: 'none', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.2s' }}
               >
                 <i className="ti ti-file-description" aria-hidden="true" /> PDF
               </button>
@@ -649,6 +665,7 @@ export function DataTable<T>({
             <Button
               key={i}
               title={btn.label}
+              icon={btn.icon}
               variant={btn.variant === "secondary" ? "secondary" : "primary"}
               size="sm"
               onClick={btn.onClick}
@@ -916,7 +933,11 @@ export function DataTable<T>({
                           type="checkbox"
                           className="dt-checkbox"
                           checked={isSelected}
-                          onChange={() => toggleRow(key)}
+                          disabled={isRowSelectable ? !isRowSelectable(row) : false}
+                          onChange={() => {
+                            if (isRowSelectable && !isRowSelectable(row)) return;
+                            toggleRow(key);
+                          }}
                           aria-label={`Select row ${key}`}
                         />
                       </td>

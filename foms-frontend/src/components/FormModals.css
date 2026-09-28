@@ -23,10 +23,10 @@
   --z-raised:   10;
   --z-dropdown: 40;
   --z-sticky:   50;
-  --z-overlay:  80;
-  --z-modal:    100;
-  --z-toast:    200;
-  --z-tooltip:  300;
+  --z-overlay:  10000;
+  --z-modal:    10010;
+  --z-toast:    10020;
+  --z-tooltip:  10030;
 }
 
 

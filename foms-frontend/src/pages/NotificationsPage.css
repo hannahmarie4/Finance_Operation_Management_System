@@ -66,6 +66,7 @@
   background: #00A99D;
   color: #FFF;
 }
+
 .notif-tab-count.success {
   background: #00A99D;
   color: #FFF;
@@ -86,7 +87,8 @@
   margin-bottom: 12px;
   margin-top: 24px;
 }
-.notif-list > div:first-child .notif-date-header {
+
+.notif-list>div:first-child .notif-date-header {
   margin-top: 0;
 }
 

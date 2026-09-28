@@ -81,6 +81,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </button>
       </div>
 
+      {/* Role Badge */}
+      {!collapsed && user && (
+        <div style={{ padding: '0 24px', marginBottom: '24px' }}>
+          <div style={{
+            background: 'rgba(16, 185, 129, 0.15)',
+            color: '#10B981',
+            padding: '8px 12px',
+            borderRadius: '9999px',
+            fontSize: '0.75rem',
+            fontWeight: 800,
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '6px',
+            border: '1px solid rgba(16, 185, 129, 0.2)'
+          }}>
+            {ROLE_LABELS[user.role] || user.role}
+          </div>
+        </div>
+      )}
+
       {/* Navigation Links */}
       <nav className="sidebar-nav">
         {navGroups.map((group, groupIndex) => (

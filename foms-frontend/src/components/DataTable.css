@@ -46,19 +46,18 @@
   width: 100%;
   height: 42px;
   padding: 0 32px 0 38px;
-  border: 1px solid var(--border, #E2E8F0);
+  border: none;
   border-radius: 9999px;
-  background: #fff;
+  background: #F1F5F9;
   color: var(--tp, #0F172A);
   font-size: 13px;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: all 0.2s;
 }
 
 .dt-search:focus {
   outline: none;
-  border: 2px solid var(--teal, #00A99D);
-  box-shadow: 0 0 0 3px rgba(0, 169, 157, 0.12);
-  padding: 0 31px 0 37px; /* compensate for 2px border */
+  background: #E2E8F0;
+  padding: 0 32px 0 38px;
 }
 
 .dt-search-icon {

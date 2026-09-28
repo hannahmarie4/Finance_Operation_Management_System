@@ -7,6 +7,8 @@ import { Card } from '../components/Card';
 import { useAppData } from '../context/AppDataContext';
 import { TableContainer } from '../components/TableContainer';
 import { ClientInfoCard } from '../components/ClientInfoCard';
+import { StatusCard } from '../components/StatusCard';
+import { Button } from '../components/Buttons';
 
 const safeDate = (val: any) => {
   if (!val) return '—';
@@ -18,36 +20,43 @@ const formatPeso = (n: number) =>
   `₱${n.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
 
 const agingBracketColor: Record<string, string> = {
-  'Current':     '#10B981',
   '0-30 days':   '#F59E0B',
   '31-60 days':  '#F97316',
   '61-90 days':  '#EF4444',
   '90+ days':    '#7C3AED',
 };
 
+const mapBracket = (bracket: string) => bracket === 'Current' ? '0-30 days' : bracket;
+
 export const AccountsReceivable: React.FC = () => {
   const { user } = useAuth();
   const { id } = useParams();
   const navigate = useNavigate();
   const { arRecords, clients, invoices } = useAppData();
-  const [activeTab, setActiveTab] = useState<'all' | 'unpaid' | 'paid'>('all');
+
+  // Only deal with unpaid records in Accounts Receivable
+  const activeArRecords = arRecords.filter(r => r.outstandingBalance > 0);
 
   if (!user) return null;
 
   // ── Per-client detail view ──────────────────────────────────────────
   const client = clients.find(c => c.id === id);
   if (id && client) {
-    const clientInvoices = arRecords
+    const clientInvoices = activeArRecords
       .filter(r => r.clientId === id)
-      .map(rec => {
+      .map((rec, index) => {
         const inv = invoices.find(i => i.id === rec.invoiceId);
         const dueDate = inv?.dueDate || rec.dueDate || null;
         const agingDays = dueDate
           ? Math.max(0, Math.floor((Date.now() - new Date(dueDate).getTime()) / (1000 * 60 * 60 * 24)))
           : 0;
+        let invNo = inv?.invoiceNumber ?? rec.invoiceId;
+        if (invNo.startsWith('DUMMY-INV-')) {
+          invNo = `INV-${String(index + 1).padStart(3, '0')}`;
+        }
         return {
           ...rec,
-          invoiceNumber: inv?.invoiceNumber ?? rec.invoiceId,
+          invoiceNumber: invNo,
           invoiceDate: inv?.createdAt ?? rec.invoiceDate,
           dueDate,
           originalAmount: rec.originalAmount,
@@ -60,42 +69,21 @@ export const AccountsReceivable: React.FC = () => {
         };
       });
 
-    const allTab   = clientInvoices;
-    const unpaidTab = clientInvoices.filter(r => r.outstandingBalance > 0);
-    const paidTab   = clientInvoices.filter(r => r.outstandingBalance === 0);
+    const visibleData = clientInvoices;
 
-    const visibleData = activeTab === 'unpaid' ? unpaidTab : activeTab === 'paid' ? paidTab : allTab;
-
-    const totalOutstanding = unpaidTab.reduce((s, r) => s + r.outstandingBalance, 0);
-    const totalPaid = paidTab.reduce((s, r) => s + r.paidAmount, 0);
-    const totalOriginal = allTab.reduce((s, r) => s + r.originalAmount, 0);
-
-    const tabStyle = (tab: typeof activeTab) => ({
-      padding: '8px 20px',
-      borderRadius: 8,
-      border: 'none',
-      cursor: 'pointer',
-      fontWeight: 700,
-      fontSize: '0.85rem',
-      background: activeTab === tab ? '#0F172A' : '#F1F5F9',
-      color: activeTab === tab ? '#fff' : '#64748B',
-      transition: 'all 0.15s',
-    });
+    const totalOutstanding = visibleData.reduce((s, r) => s + r.outstandingBalance, 0);
+    const totalOriginal = visibleData.reduce((s, r) => s + r.originalAmount, 0);
 
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-        <div onClick={() => navigate('/accounts-receivable')} style={{ cursor: 'pointer', color: '#64748B', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: 600, width: 'fit-content' }}>
-          <i className="ti ti-arrow-left" style={{ fontSize: '16px' }} /> Back to Accounts Receivable
-        </div>
 
         <ClientInfoCard client={client} />
 
         {/* Summary Cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
           {[
             { label: 'Total Billed', value: formatPeso(totalOriginal), icon: 'ti-file-invoice', color: '#6366F1', bg: '#EEF2FF' },
             { label: 'Total Outstanding', value: formatPeso(totalOutstanding), icon: 'ti-clock-exclamation', color: '#EF4444', bg: '#FEF2F2' },
-            { label: 'Total Collected', value: formatPeso(totalPaid), icon: 'ti-circle-check', color: '#10B981', bg: '#F0FDF4' },
           ].map(card => (
             <div key={card.label} style={{ background: '#fff', borderRadius: 14, padding: '20px 24px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', display: 'flex', alignItems: 'center', gap: 16 }}>
               <div style={{ width: 44, height: 44, borderRadius: 12, background: card.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -112,44 +100,64 @@ export const AccountsReceivable: React.FC = () => {
         <Card>
           <div style={{ padding: '24px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-              <h3 style={{ margin: 0, fontSize: '1rem', color: '#0F172A', fontWeight: 700 }}>Invoice / Billing History</h3>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button style={tabStyle('all')} onClick={() => setActiveTab('all')}>All ({allTab.length})</button>
-                <button style={tabStyle('unpaid')} onClick={() => setActiveTab('unpaid')}>Unpaid ({unpaidTab.length})</button>
-                <button style={tabStyle('paid')} onClick={() => setActiveTab('paid')}>Paid ({paidTab.length})</button>
-              </div>
+              <h3 style={{ margin: 0, fontSize: '1rem', color: '#0F172A', fontWeight: 700 }}>Accounts Receivable History</h3>
             </div>
             <DataTable
               columns={[
-                { key: 'invoiceNumber', label: 'INVOICE NO.', sortable: true },
+                { key: 'invoiceNumber', label: 'INVOICE NO.', sortable: true, render: (row: any) => (
+                  <span style={{ color: '#0F172A', fontWeight: 700 }}>
+                    {row.invoiceNumber}
+                  </span>
+                )},
                 { key: 'invoiceDate', label: 'INVOICE DATE', sortable: true, render: (row: any) => safeDate(row.invoiceDate) },
                 { key: 'dueDate', label: 'DUE DATE', sortable: true, render: (row: any) => safeDate(row.dueDate) },
                 { key: 'originalAmount', label: 'AMOUNT', sortable: true, render: (row: any) => formatPeso(row.originalAmount) },
                 { key: 'paidAmount', label: 'PAID', sortable: true, render: (row: any) => <span style={{ color: '#10B981', fontWeight: 700 }}>{formatPeso(row.paidAmount)}</span> },
                 { key: 'outstandingBalance', label: 'OUTSTANDING', sortable: true, render: (row: any) => (
-                  <span style={{ color: row.outstandingBalance > 0 ? '#EF4444' : '#10B981', fontWeight: 700 }}>
+                  <span style={{ color: row.outstandingBalance > 0 ? '#EF4444' : row.outstandingBalance === 0 ? '#10B981' : '#F59E0B', fontWeight: 700 }}>
                     {formatPeso(row.outstandingBalance)}
                   </span>
                 )},
-                { key: 'agingBracket', label: 'AGING BRACKET', render: (row: any) => (
+                { key: 'agingBracket', label: 'AGING BRACKET', render: (row: any) => {
+                  const mapped = mapBracket(row.agingBracket);
+                  return (
                   <span style={{
                     padding: '3px 12px', borderRadius: 9999, fontWeight: 700, fontSize: '0.75rem',
-                    color: agingBracketColor[row.agingBracket] || '#64748B',
-                    background: (agingBracketColor[row.agingBracket] || '#64748B') + '18',
+                    color: agingBracketColor[mapped] || '#64748B',
+                    background: (agingBracketColor[mapped] || '#64748B') + '18',
                   }}>
-                    {row.agingBracket}
+                    {mapped}
                   </span>
-                )},
+                )}},
                 { key: 'agingDays', label: 'DAYS OVERDUE', sortable: true, render: (row: any) => (
                   <span style={{ color: row.agingDays > 0 ? '#EF4444' : '#64748B', fontWeight: 600 }}>
                     {row.outstandingBalance > 0 ? `${row.agingDays} days` : '—'}
                   </span>
-                )},
-                { key: 'status', label: 'STATUS', render: (row: any) => <StatusBadge status={row.status} /> },
+                )}
               ]}
               data={visibleData}
               rowKey="id"
               searchPlaceholder="Search invoices..."
+              actions={[
+                {
+                  label: 'View Details',
+                  icon: 'ti-eye',
+                  onClick: (row: any) => navigate(`/invoicing-desk/${row.invoiceId}`)
+                }
+              ]}
+              filters={[{
+                key: 'agingBracket', label: 'Aging Overdue', options: [
+                  { label: 'Current', value: 'Current' },
+                  { label: '0-30 days', value: '0-30 days' },
+                  { label: '31-60 days', value: '31-60 days' },
+                  { label: '61-90 days', value: '61-90 days' },
+                  { label: '90+ days', value: '90+ days' },
+                ],
+                filterFn: (row: any, val: string) => {
+                  const mapped = mapBracket(row.agingBracket);
+                  return row.agingBracket === val || mapped === val;
+                },
+              }]}
             />
           </div>
         </Card>
@@ -159,7 +167,7 @@ export const AccountsReceivable: React.FC = () => {
 
   // ── List View ───────────────────────────────────────────────────────
   const grouped = new Map<string, any[]>();
-  arRecords.forEach(r => {
+  activeArRecords.forEach(r => {
     if (!grouped.has(r.clientId)) grouped.set(r.clientId, []);
     grouped.get(r.clientId)!.push(r);
   });
@@ -171,21 +179,15 @@ export const AccountsReceivable: React.FC = () => {
     const unpaidCount = recs.filter(r => r.outstandingBalance > 0).length;
 
     // Determine worst aging bracket
-    const bracketOrder = ['Current', '0-30 days', '31-60 days', '61-90 days', '90+ days'];
+    const bracketOrder = ['0-30 days', '31-60 days', '61-90 days', '90+ days'];
     const worstBracket = recs
       .filter(r => r.outstandingBalance > 0)
-      .map(r => r.agingBracket)
-      .sort((a, b) => bracketOrder.indexOf(b) - bracketOrder.indexOf(a))[0] ?? 'Current';
+      .map(r => mapBracket(r.agingBracket))
+      .sort((a, b) => bracketOrder.indexOf(b) - bracketOrder.indexOf(a))[0] ?? '0-30 days';
 
-    const paidCount = recs.filter(r => r.outstandingBalance <= 0 || r.status === 'Paid').length;
-
-    let computedStatus = 'Paid';
-    const hasUnpaid = unpaidCount > 0;
-    const hasPaid = paidCount > 0;
-
-    if (hasUnpaid) {
-      if (recs.some(r => r.status === 'Overdue')) computedStatus = 'Overdue';
-      else computedStatus = 'Unpaid';
+    let computedStatus = 'Unpaid';
+    if (recs.some(r => r.status === 'Overdue' || r.agingDays > 0)) {
+      computedStatus = 'Overdue';
     }
 
     return {
@@ -194,15 +196,42 @@ export const AccountsReceivable: React.FC = () => {
       totalOriginal,
       totalOutstanding,
       unpaidCount,
-      paidCount,
+      paidCount: 0,
       worstBracket,
       status: computedStatus,
     };
   });
 
+  const totalAr = activeArRecords.reduce((s, r) => s + r.outstandingBalance, 0);
+
+  // Calculate Aging Totals Summary
+  const agingTotals = {
+    '0-30 days': 0,
+    '31-60 days': 0,
+    '61-90 days': 0,
+    '90+ days': 0,
+  };
+  
+  activeArRecords.forEach(r => {
+    if (r.outstandingBalance > 0) {
+       const mapped = mapBracket(r.agingBracket);
+       if (mapped in agingTotals) {
+         agingTotals[mapped as keyof typeof agingTotals] += r.outstandingBalance;
+       }
+    }
+  });
+
   return (
-    <TableContainer>
-      <DataTable
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '16px' }}>
+        <StatusCard label="Total AR" value={formatPeso(totalAr)} icon="ti-wallet" variant="info" />
+        <StatusCard label="0-30 days" value={formatPeso(agingTotals['0-30 days'])} icon="ti-alert-circle" variant="warning" />
+        <StatusCard label="31-60 days" value={formatPeso(agingTotals['31-60 days'])} icon="ti-alert-triangle" variant="warning" />
+        <StatusCard label="61-90 days" value={formatPeso(agingTotals['61-90 days'])} icon="ti-alert-triangle" variant="danger" />
+        <StatusCard label="90+ days" value={formatPeso(agingTotals['90+ days'])} icon="ti-skull" variant="danger" />
+      </div>
+      <TableContainer>
+        <DataTable
         columns={[
           { key: 'id', label: 'CLIENT ID', sortable: true },
           { key: 'clientName', label: 'CLIENT NAME', sortable: true, render: (row: any) => (
@@ -222,31 +251,36 @@ export const AccountsReceivable: React.FC = () => {
             </span>
           )},
           { key: 'worstBracket', label: 'AGING CATEGORY', render: (row: any) => (
-            row.totalOutstanding > 0 ? (
-              <span style={{
-                padding: '3px 12px', borderRadius: 9999, fontWeight: 700, fontSize: '0.75rem',
-                color: agingBracketColor[row.worstBracket] || '#64748B',
-                background: (agingBracketColor[row.worstBracket] || '#64748B') + '18',
-              }}>
-                {row.worstBracket}
-              </span>
-            ) : <span style={{ color: '#10B981', fontWeight: 700 }}>Fully Paid</span>
+            <span style={{
+              padding: '3px 12px', borderRadius: 9999, fontWeight: 700, fontSize: '0.75rem',
+              color: agingBracketColor[row.worstBracket] || '#64748B',
+              background: (agingBracketColor[row.worstBracket] || '#64748B') + '18',
+            }}>
+              {row.worstBracket}
+            </span>
           )},
           { key: 'status', label: 'STATUS', render: (row: any) => <StatusBadge status={row.status} /> },
         ]}
         data={listData}
         rowKey="id"
         searchPlaceholder="Search accounts receivable..."
+        actions={[
+          {
+            label: 'View Details',
+            icon: 'ti-eye',
+            onClick: (row: any) => navigate(`/accounts-receivable/${row.id}`)
+          }
+        ]}
         filters={[{
           key: 'status', label: 'All Statuses', options: [
             { label: 'Overdue', value: 'Overdue' },
-            { label: 'Unpaid', value: 'Unpaid' },
-            { label: 'Paid', value: 'Paid' },
+            { label: 'Unpaid', value: 'Unpaid' }
           ],
           filterFn: (row: any, val: string) => row.status === val,
         }]}
       />
-    </TableContainer>
+      </TableContainer>
+    </div>
   );
 };
 

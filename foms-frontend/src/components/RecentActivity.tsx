@@ -11,94 +11,59 @@ export function relativeTime(ts: string): string {
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs} hr${hrs !== 1 ? 's' : ''} ago`;
   const days = Math.floor(hrs / 24);
-  return `${days} day${days !== 1 ? 's' : ''} ago`;
+  return `${days}d ago`;
 }
 
-export function logToMessage(log: AuditLog): string {
-  const name = log.userFullName;
-  switch (log.action) {
-    case 'LOGIN': return `${name} logged in to the system.`;
-    case 'LOGOUT': return `${name} logged out of the system.`;
-    case 'WAYBILL_ENCODED': return log.details;
-    case 'WAYBILL_VALIDATED': return log.details;
-    case 'POD_VALIDATED': return log.details;
-    case 'CTC_SUBMITTED': return log.details;
-    case 'CLIENT_UPDATED': return log.details;
-    case 'INVOICE_CREATED': return log.details;
-    case 'INVOICE_APPROVED': return log.details;
-    case 'PAYMENT_RECORDED': return log.details;
-    case 'PAYMENT_VALIDATED': return log.details;
-    default: return log.details;
-  }
-}
-
-export function actionDot(action: string): string {
-  if (['WAYBILL_VALIDATED', 'POD_VALIDATED', 'INVOICE_APPROVED', 'PAYMENT_VALIDATED'].includes(action)) return '#10B981';
-  if (['INVOICE_CREATED', 'WAYBILL_ENCODED'].includes(action)) return '#6366F1';
-  if (['PAYMENT_RECORDED', 'CTC_SUBMITTED'].includes(action)) return '#F59E0B';
-  return '#94A3B8';
+export function getActionColor(action: string): string {
+  if (action === 'LOGIN_SUCCESS' || action === 'RECOMMENDATION_APPROVED' || action === 'UNIQUE_SAVED' || action === 'DOCUMENT_SCAN') return '#10B981'; // Green
+  if (action === 'DUPLICATE_DETECTED') return '#F59E0B'; // Orange
+  // Generic fallback colors
+  if (action.includes('VALIDATED') || action.includes('APPROVED')) return '#10B981';
+  if (action.includes('CREATED') || action.includes('ENCODED')) return '#0EA5E9';
+  if (action.includes('RECORDED') || action.includes('SUBMITTED')) return '#F59E0B';
+  return '#10B981'; // Default green
 }
 
 // ── Component ───────────────────────────────────────────────────────
-export const RecentActivity: React.FC<{ logs: AuditLog[]; title?: string }> = ({ logs, title = 'Recent Activity' }) => (
-  <Card>
-    <style>
-      {`
-        .ra-item {
-          transition: transform 0.2s ease, background-color 0.2s ease;
-          padding: 10px 12px;
-          margin: 0 -12px;
-          border-radius: 8px;
-          cursor: default;
-        }
-        .ra-item:hover {
-          transform: translateX(6px);
-          background-color: #F8FAFC;
-        }
-        .ra-arrow {
-          opacity: 0;
-          transform: translateX(-10px);
-          transition: all 0.2s ease;
-          color: #00A99D;
-          font-weight: bold;
-          margin-left: 8px;
-        }
-        .ra-item:hover .ra-arrow {
-          opacity: 1;
-          transform: translateX(0);
-        }
-      `}
-    </style>
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-      <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0F172A' }}>{title}</h3>
-      <span style={{ padding: '3px 10px', borderRadius: 9999, background: '#F0FDF4', color: '#10B981', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.06em', display: 'flex', alignItems: 'center', gap: 5 }}>
-        <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10B981', display: 'inline-block', animation: 'pulse 2s infinite' }} />
-        LIVE
-      </span>
+export const RecentActivity: React.FC<{ logs: AuditLog[]; title?: string; onViewAll?: () => void }> = ({ logs, title = 'Recent Activity', onViewAll }) => (
+  <Card style={{ padding: '24px' }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+      <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: '#0F172A' }}>{title}</h3>
+      {onViewAll ? (
+        <span 
+          onClick={onViewAll}
+          style={{ color: '#0D9488', fontSize: '0.875rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+        >
+          View All <i className="ti ti-arrow-right"></i>
+        </span>
+      ) : (
+        <span style={{ padding: '4px 10px', borderRadius: 9999, background: '#ECFDF5', color: '#10B981', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ width: 4, height: 4, borderRadius: '50%', background: '#10B981', display: 'inline-block' }} />
+          LIVE FEED
+        </span>
+      )}
     </div>
     {logs.length === 0 ? (
       <p style={{ color: '#94A3B8', fontSize: '0.875rem', textAlign: 'center', padding: '24px 0' }}>No recent activity.</p>
     ) : (
-      <div style={{ display: 'flex', flexDirection: 'column' }}>
-        {logs.map((log, idx) => (
-          <div key={log.id} className="ra-item" style={{ display: 'flex', gap: 12, alignItems: 'flex-start', borderBottom: idx < logs.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
-            <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 4 }}>
-              <div style={{ width: 10, height: 10, borderRadius: '50%', background: actionDot(log.action), flexShrink: 0 }} />
-              {idx < logs.length - 1 && <div style={{ width: 1, flexGrow: 1, background: '#F1F5F9', marginTop: 4, minHeight: '20px' }} />}
-            </div>
-            <div style={{ flex: 1, paddingBottom: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {logs.map((log) => {
+          return (
+            <div key={log.id} style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+              <div style={{ width: 8, height: 8, borderRadius: '50%', background: getActionColor(log.action), marginTop: 7, flexShrink: 0 }} />
               <div>
-                <p style={{ margin: 0, fontSize: '0.855rem', color: '#334155', lineHeight: 1.45 }}>{logToMessage(log)}</p>
-                <p style={{ margin: '3px 0 0', fontSize: '0.75rem', color: '#94A3B8' }}>
-                  {relativeTime(log.timestamp)}
-                  {log.action !== 'LOGIN' && log.action !== 'LOGOUT' && ` · ${log.userFullName}`}
+                <p style={{ margin: 0, fontSize: '0.9rem', color: '#0F172A', fontWeight: 600 }}>
+                  System event: {log.action} for <strong>System</strong>
+                </p>
+                <p style={{ margin: '4px 0 0', fontSize: '0.8rem', color: '#64748B' }}>
+                  {relativeTime(log.timestamp)} &bull; {log.userRole || 'Finance Manager'}
                 </p>
               </div>
-              <span className="ra-arrow">→</span>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     )}
   </Card>
 );
+

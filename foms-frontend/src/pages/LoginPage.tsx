@@ -395,7 +395,7 @@ export function LoginPage() {
                 <p style={{ fontSize: '13px', color: '#4B5563', margin: '0 0 24px 0', lineHeight: '1.5' }}>
                   Please enter the email address you'd like your password reset information sent to
                 </p>
-                
+
                 <div className="login-field" style={{ marginBottom: '24px' }}>
                   <label className="login-label" style={{ textTransform: 'none', letterSpacing: 'normal', fontSize: '12px', fontWeight: 600, color: '#4B5563' }}>
                     Enter email address

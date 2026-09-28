@@ -1,4 +1,5 @@
 import React from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import Button from '../components/Buttons';
 import { DataTable } from '../components/DataTable';
 import { StatusBadge } from '../components/StatusBadge';
@@ -10,7 +11,13 @@ import { TableContainer } from '../components/TableContainer';
 export const InvoiceArchives: React.FC = () => {
   const { toast } = useToast();
   const { invoices, clients } = useAppData();
-  const [selectedClientId, setSelectedClientId] = React.useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const selectedClientId = searchParams.get('client');
+  const setSelectedClientId = (id: string | null) => {
+    if (id) setSearchParams({ client: id });
+    else setSearchParams({});
+  };
 
   let enriched: any[] = [];
   if (selectedClientId) {
@@ -47,14 +54,17 @@ export const InvoiceArchives: React.FC = () => {
   const kpiInvoices = selectedClientId ? invoices.filter(i => i.clientId === selectedClientId) : invoices;
   const totalBilled = kpiInvoices.reduce((sum, i) => sum + i.totalAmount, 0);
   const totalPaid = kpiInvoices.filter(i => i.status === 'Paid').reduce((sum, i) => sum + i.totalAmount, 0);
+  const totalOutstanding = kpiInvoices.filter(i => ['Sent', 'Overdue'].includes(i.status)).reduce((sum, i) => sum + i.totalAmount, 0);
 
   const columns = [
     { key: 'invoiceNumber', label: 'INVOICE NO.', sortable: true },
-    { key: 'clientName', label: 'CLIENT NAME', sortable: true, render: (row: any) => (
-      !selectedClientId
-        ? <button onClick={() => setSelectedClientId(row.clientId)} style={{ background: 'none', border: 'none', padding: 0, color: '#3B82F6', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}>{row.clientName}</button>
-        : <span style={{ fontWeight: 600 }}>{row.clientName}</span>
-    )},
+    {
+      key: 'clientName', label: 'CLIENT NAME', sortable: true, render: (row: any) => (
+        !selectedClientId
+          ? <button onClick={() => setSelectedClientId(row.clientId)} style={{ background: 'none', border: 'none', padding: 0, color: '#3B82F6', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}>{row.clientName}</button>
+          : <span style={{ fontWeight: 600 }}>{row.clientName}</span>
+      )
+    },
     { key: 'createdAt', label: 'DATE CREATED', sortable: true, render: (row: any) => new Date(row.createdAt).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' }) },
     { key: 'waybillCount', label: 'WAYBILLS COVERED' },
     { key: 'amount', label: 'BASE AMOUNT', render: (row: any) => `₱${row.amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` },
@@ -64,15 +74,16 @@ export const InvoiceArchives: React.FC = () => {
   ];
 
   const actions = [
-    { label: 'View Invoice', icon: 'ti-eye', onClick: (row: any) => toast.info(`Viewing invoice details for ${row.invoiceNumber}`, 'Invoice View') },
-    { label: 'Download PDF', icon: 'ti-file-download', onClick: (row: any) => toast.info(`Downloading PDF for invoice ${row.invoiceNumber}`, 'Download Started') },
+    { label: 'View Invoice', icon: 'ti-eye', onClick: (row: any) => navigate(`/invoicing-desk/${row.id}`) },
+    { label: 'Download PDF', icon: 'ti-file-download', onClick: (row: any) => navigate(`/invoicing-desk/${row.id}?action=download`) },
   ];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
         <StatusCard label="Total Invoiced" value={`₱${totalBilled.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`} icon="ti-coin" variant="new" />
         <StatusCard label="Collected" value={`₱${totalPaid.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`} icon="ti-circle-check" variant="success" />
+        <StatusCard label="Outstanding" value={`₱${totalOutstanding.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`} icon="ti-alert-circle" variant="warning" />
         <StatusCard label="Total Records" value={kpiInvoices.length} icon="ti-file-invoice" variant="info" />
       </div>
       <TableContainer>
@@ -84,19 +95,16 @@ export const InvoiceArchives: React.FC = () => {
           rowKey="id"
           searchPlaceholder="Search invoices..."
           searchFields={['invoiceNumber', 'clientName', 'status'] as any}
-          filters={[{ key: 'status', label: 'Status', options: [
-            { label: 'Draft', value: 'Draft' }, { label: 'Pending Approval', value: 'Pending Approval' },
-            { label: 'Approved', value: 'Approved' }, { label: 'Sent', value: 'Sent' },
-            { label: 'Paid', value: 'Paid' }, { label: 'Overdue', value: 'Overdue' }
-          ], filterFn: (row: any, val: string) => row.status === val }]}
+          filters={[{
+            key: 'status', label: 'Status', options: [
+              { label: 'Draft', value: 'Draft' }, { label: 'Pending Approval', value: 'Pending Approval' },
+              { label: 'Approved', value: 'Approved' }, { label: 'Sent', value: 'Sent' },
+              { label: 'Paid', value: 'Paid' }, { label: 'Overdue', value: 'Overdue' }
+            ], filterFn: (row: any, val: string) => row.status === val
+          }]}
           exportable={false} columnToggle={true} densityToggle={true}
         />
       </TableContainer>
-      {selectedClientId && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
-          <Button variant="secondary" title="← Back to Summary" onClick={() => setSelectedClientId(null)} />
-        </div>
-      )}
     </div>
   );
 };

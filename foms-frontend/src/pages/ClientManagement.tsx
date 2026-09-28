@@ -10,6 +10,7 @@ import { useToast } from '../components/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { useAppData } from '../context/AppDataContext';
 import { TableContainer } from '../components/TableContainer';
+import { Dropdown } from '../components/Dropdown';
 import { Users, FileText, Phone, Mail, MapPin, Calendar as CalIcon, Hash, Settings, CreditCard } from 'lucide-react';
 import api from '../services/api';
 
@@ -18,15 +19,16 @@ export const ClientManagement: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user } = useAuth();
-  const { clients, invoices, updateClient, addClient } = useAppData();
-  
+  const { clients, invoices, payments, waybills, updateClient, addClient, addAuditLog } = useAppData();
+
   // List view state
   const [isAddingNew, setIsAddingNew] = useState(false);
-  
+
   // Form State (used for both Edit and Add)
   const [formData, setFormData] = useState({
     name: '',
     contactPerson: '',
+    contactNumber: '',
     address: '',
     rateType: 'Standard',
     billingSchedule: 'Monthly',
@@ -34,7 +36,8 @@ export const ClientManagement: React.FC = () => {
   });
 
   const [isEditMode, setIsEditMode] = useState(false);
-
+  const [selectedInvoiceForModal, setSelectedInvoiceForModal] = useState<any | null>(null);
+  const [selectedReceiptForModal, setSelectedReceiptForModal] = useState<any | null>(null);
   // Sync form data when editing client changes (for Detail View)
   useEffect(() => {
     if (id) {
@@ -43,6 +46,7 @@ export const ClientManagement: React.FC = () => {
         setFormData({
           name: client.name,
           contactPerson: client.contactPerson,
+          contactNumber: client.phone || '',
           address: client.address,
           rateType: 'Standard',
           billingSchedule: client.billingSchedule,
@@ -63,9 +67,23 @@ export const ClientManagement: React.FC = () => {
       updateClient(id, {
         name: formData.name,
         contactPerson: formData.contactPerson,
+        phone: formData.contactNumber,
         address: formData.address,
         billingSchedule: formData.billingSchedule as any,
         status: formData.status as any,
+      });
+      addAuditLog({
+        id: `AL-${Date.now()}`,
+        userId: user?.employeeId || 'U-000',
+        userFullName: user?.fullName || 'System',
+        userRole: user?.role || 'Accountant',
+        action: 'UPDATE_CLIENT',
+        module: 'ClientManagement',
+        recordId: id,
+        recordType: 'Client',
+        ipAddress: '127.0.0.1',
+        details: `Updated client profile: ${id}`,
+        timestamp: new Date().toISOString()
       });
       toast.success(`Client ${id} successfully updated.`);
       setIsEditMode(false);
@@ -76,16 +94,20 @@ export const ClientManagement: React.FC = () => {
     e.preventDefault();
     try {
       const payload = {
+        clientCode: `CLI-${Math.floor(1000 + Math.random() * 9000)}`,
         name: formData.name,
+        businessName: formData.name,
         contactPerson: formData.contactPerson,
+        contactNumber: formData.contactNumber,
+        email: `no-reply-${Math.floor(1000 + Math.random() * 9000)}@speedex.com`,
         address: formData.address,
-        billingSchedule: formData.billingSchedule,
-        status: formData.status,
+        tin: '',
+        creditLimit: 0
       };
-      
+
       const res = await api.post('/clients', payload);
       const newClient = res.data;
-      
+
       const clientRecord: Client = {
         id: newClient.id ?? newClient.clientCode ?? `CLI-${Date.now()}`,
         name: newClient.name ?? newClient.businessName ?? formData.name,
@@ -100,8 +122,21 @@ export const ClientManagement: React.FC = () => {
         vatRate: newClient.vatRate ?? 12,
         createdAt: newClient.dateRegistered ?? new Date().toISOString(),
       };
-      
+
       addClient(clientRecord);
+      addAuditLog({
+        id: `AL-${Date.now()}`,
+        userId: user?.employeeId || 'U-000',
+        userFullName: user?.fullName || 'System',
+        userRole: user?.role || 'Accountant',
+        action: 'CREATE_CLIENT',
+        module: 'ClientManagement',
+        recordId: clientRecord.id,
+        recordType: 'Client',
+        ipAddress: '127.0.0.1',
+        details: `Created new client: ${clientRecord.id}`,
+        timestamp: new Date().toISOString()
+      });
       toast.success(`Client successfully created.`);
       setIsAddingNew(false);
     } catch (err) {
@@ -115,21 +150,20 @@ export const ClientManagement: React.FC = () => {
     if (!editingClient) return <div>Client not found</div>;
 
     const billedInvoices = invoices.filter(inv => inv.clientId === editingClient.id);
+
     const totalBilled = billedInvoices.reduce((sum, inv) => sum + inv.totalAmount, 0);
     const totalPaid = billedInvoices.filter(inv => inv.status === 'Paid').reduce((sum, inv) => sum + inv.totalAmount, 0);
     const currentBalance = totalBilled - totalPaid;
     const overdue = billedInvoices.filter(inv => inv.status === 'Overdue').reduce((sum, inv) => sum + inv.totalAmount, 0);
+    const clientPayments = payments.filter(p => p.clientId === editingClient.id);
 
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-        <div onClick={() => { navigate('/clients'); setIsEditMode(false); }} style={{ cursor: 'pointer', color: '#64748B', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: 600, width: 'fit-content' }}>
-          <i className="ti ti-arrow-left" style={{ fontSize: '16px' }}></i> Back to Clients
-        </div>
 
         {!isEditMode ? (
           // Redesigned View Mode
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            
+
             {/* Header Card */}
             <div style={{ background: '#0F172A', color: 'white', padding: '32px 24px', borderRadius: '12px' }}>
               <p style={{ margin: '0 0 8px', fontSize: '0.75rem', fontWeight: 600, color: '#94A3B8', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Company Code</p>
@@ -141,11 +175,16 @@ export const ClientManagement: React.FC = () => {
 
             {/* Client Profile */}
             <div style={{ background: '#fff', border: '1px solid #E2E8F0', padding: '24px', borderRadius: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '24px' }}>
-                <Users size={18} color="#64748B" />
-                <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0F172A' }}>Client Profile</h3>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Users size={18} color="#64748B" />
+                  <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0F172A' }}>Client Profile</h3>
+                </div>
+                {user?.role === 'Accountant' && (
+                  <Button variant="primary" title="Edit Details" onClick={() => setIsEditMode(true)} />
+                )}
               </div>
-              
+
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
                 {/* Row 1 */}
                 <div>
@@ -162,7 +201,7 @@ export const ClientManagement: React.FC = () => {
                     <p style={{ margin: 0, fontSize: '0.9rem', color: '#334155', fontWeight: 500 }}>{editingClient.phone}</p>
                   </div>
                 </div>
-                
+
                 {/* Row 2 */}
                 <div>
                   <p style={{ margin: '0 0 4px', fontSize: '0.75rem', fontWeight: 600, color: '#94A3B8', textTransform: 'uppercase' }}>Email</p>
@@ -175,7 +214,7 @@ export const ClientManagement: React.FC = () => {
                   <p style={{ margin: '0 0 4px', fontSize: '0.75rem', fontWeight: 600, color: '#94A3B8', textTransform: 'uppercase' }}>TIN</p>
                   <p style={{ margin: 0, fontSize: '0.9rem', color: '#334155', fontWeight: 500 }}>—</p>
                 </div>
-                
+
                 {/* Row 3 */}
                 <div style={{ gridColumn: '1 / -1' }}>
                   <p style={{ margin: '0 0 4px', fontSize: '0.75rem', fontWeight: 600, color: '#94A3B8', textTransform: 'uppercase' }}>Address</p>
@@ -184,7 +223,7 @@ export const ClientManagement: React.FC = () => {
                     <p style={{ margin: 0, fontSize: '0.9rem', color: '#334155', fontWeight: 500 }}>{editingClient.address}</p>
                   </div>
                 </div>
-                
+
                 {/* Row 4 */}
                 <div>
                   <p style={{ margin: '0 0 4px', fontSize: '0.75rem', fontWeight: 600, color: '#94A3B8', textTransform: 'uppercase' }}>Registered</p>
@@ -201,29 +240,48 @@ export const ClientManagement: React.FC = () => {
                 <FileText size={18} color="#F59E0B" />
                 <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0F172A' }}>Billing History</h3>
               </div>
-              <div style={{ borderRadius: '8px', overflow: 'hidden' }}>
+              <div style={{ borderRadius: '8px', overflow: 'visible' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                   <thead style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', borderTop: '1px solid #E2E8F0' }}>
                     <tr>
                       <th style={{ padding: '12px 16px', textAlign: 'left', color: '#475569', fontWeight: 600 }}>Invoice No.</th>
-                      <th style={{ padding: '12px 16px', textAlign: 'left', color: '#475569', fontWeight: 600 }}>Due Date</th>
-                      <th style={{ padding: '12px 16px', textAlign: 'left', color: '#475569', fontWeight: 600 }}>Amount</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'left', color: '#475569', fontWeight: 600 }}>Invoice Date</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'left', color: '#475569', fontWeight: 600 }}>Billing Period</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'left', color: '#475569', fontWeight: 600 }}>Waybill Count</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'left', color: '#475569', fontWeight: 600 }}>Total Amount</th>
                       <th style={{ padding: '12px 16px', textAlign: 'left', color: '#475569', fontWeight: 600 }}>Status</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'center', color: '#475569', fontWeight: 600 }}>Action</th>
                     </tr>
                   </thead>
                   <tbody>
                     {billedInvoices.length > 0 ? (
                       billedInvoices.map(inv => (
-                        <tr key={inv.id} style={{ borderBottom: '1px solid #E2E8F0' }}>
-                          <td style={{ padding: '12px 16px', color: '#2563EB', fontWeight: 500 }}>{inv.invoiceNumber}</td>
-                          <td style={{ padding: '12px 16px', color: '#475569' }}>{new Date(inv.dueDate).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })}</td>
-                          <td style={{ padding: '12px 16px', color: '#0F172A', fontWeight: 600 }}>PHP {inv.totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <tr key={inv.id} style={{ borderBottom: '1px solid #E2E8F0', background: 'transparent' }}>
+                          <td style={{ padding: '12px 16px', color: '#0F172A', fontWeight: 600 }}>
+                            {inv.invoiceNumber}
+                          </td>
+                          <td style={{ padding: '12px 16px', color: '#475569' }}>{new Date(inv.createdAt).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })}</td>
+                          <td style={{ padding: '12px 16px', color: '#475569' }}>{inv.billingPeriod}</td>
+                          <td style={{ padding: '12px 16px', color: '#475569' }}>{inv.waybillIds?.length || 0}</td>
+                          <td style={{ padding: '12px 16px', color: '#0F172A', fontWeight: 600 }}>₱ {inv.totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                           <td style={{ padding: '12px 16px' }}><StatusBadge status={inv.status} /></td>
+                          <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                            <Dropdown
+                              items={[
+                                {
+                                  key: 'view-details',
+                                  label: 'View Details',
+                                  icon: 'ti-eye',
+                                  onClick: () => setSelectedInvoiceForModal(inv)
+                                }
+                              ]}
+                            />
+                          </td>
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={4} style={{ padding: '20px', textAlign: 'center', color: '#94A3B8' }}>No billing history found for this client.</td>
+                        <td colSpan={7} style={{ padding: '20px', textAlign: 'center', color: '#94A3B8' }}>No billing history found for this client.</td>
                       </tr>
                     )}
                   </tbody>
@@ -231,33 +289,232 @@ export const ClientManagement: React.FC = () => {
               </div>
             </div>
 
+            {/* Payment Records Card */}
             {user?.role === 'Accountant' && (
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-                <Button variant="primary" title="Edit Details" onClick={() => setIsEditMode(true)} />
+              <div style={{ background: '#fff', border: '1px solid #E2E8F0', padding: '24px', borderRadius: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                  <CreditCard size={18} color="#10B981" />
+                  <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0F172A' }}>Payment Records</h3>
+                </div>
+                <div style={{ borderRadius: '8px', overflow: 'visible' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                    <thead style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', borderTop: '1px solid #E2E8F0' }}>
+                      <tr>
+                        <th style={{ padding: '12px 16px', textAlign: 'left', color: '#475569', fontWeight: 600 }}>Payment ID / OR No.</th>
+                        <th style={{ padding: '12px 16px', textAlign: 'left', color: '#475569', fontWeight: 600 }}>Payment Date</th>
+                        <th style={{ padding: '12px 16px', textAlign: 'left', color: '#475569', fontWeight: 600 }}>Invoice No.</th>
+                        <th style={{ padding: '12px 16px', textAlign: 'left', color: '#475569', fontWeight: 600 }}>Payment Method</th>
+                        <th style={{ padding: '12px 16px', textAlign: 'left', color: '#475569', fontWeight: 600 }}>Amount Paid</th>
+                        <th style={{ padding: '12px 16px', textAlign: 'left', color: '#475569', fontWeight: 600 }}>Status</th>
+                        <th style={{ padding: '12px 16px', textAlign: 'center', color: '#475569', fontWeight: 600 }}>Action / Receipt</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {clientPayments.length > 0 ? (
+                        clientPayments.map(pay => (
+                          <tr key={pay.id} style={{ borderBottom: '1px solid #E2E8F0' }}>
+                            <td style={{ padding: '12px 16px', color: '#0F172A', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              {pay.orNumber || pay.referenceNumber || pay.id} <FileText size={14} color="#94A3B8" />
+                            </td>
+                            <td style={{ padding: '12px 16px', color: '#475569' }}>{new Date(pay.recordedAt).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })}</td>
+                            <td style={{ padding: '12px 16px', color: '#475569' }}>{pay.invoiceNumber || pay.invoiceId || 'N/A'}</td>
+                            <td style={{ padding: '12px 16px', color: '#475569' }}>{pay.paymentMethod}</td>
+                            <td style={{ padding: '12px 16px', color: '#0F172A', fontWeight: 600 }}>₱ {pay.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                            <td style={{ padding: '12px 16px' }}><StatusBadge status="Paid" /></td>
+                            <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                              <Dropdown
+                                items={[
+                                  {
+                                    key: 'view-details',
+                                    label: 'View Details',
+                                    icon: 'ti-eye',
+                                    onClick: () => setSelectedReceiptForModal(pay)
+                                  }
+                                ]}
+                              />
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={7} style={{ padding: '20px', textAlign: 'center', color: '#94A3B8' }}>No payment records found for this client.</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
+            )}
+
+            {/* Modal for Invoice Details */}
+            {selectedInvoiceForModal && createPortal(
+              <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', zIndex: 99999, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' }} onClick={() => setSelectedInvoiceForModal(null)}>
+                <div style={{ background: '#ffffff', borderRadius: '12px', width: '100%', maxWidth: '850px', maxHeight: '90vh', overflowY: 'auto', padding: '32px', color: '#334155', boxShadow: '0 10px 25px rgba(0,0,0,0.3)' }} onClick={e => e.stopPropagation()}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+                    <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: '#0F172A' }}>Invoice Details</h3>
+                    <button onClick={() => setSelectedInvoiceForModal(null)} style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', fontSize: '1.5rem', display: 'flex', alignItems: 'center' }}><i className="ti ti-x" /></button>
+                  </div>
+
+                  {/* SHIPMENT DETAILS */}
+                  <div style={{ marginBottom: '32px' }}>
+                    <h4 style={{ margin: '0 0 16px 0', color: '#475569', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '8px', textTransform: 'uppercase', fontWeight: 600 }}>
+                      SHIPMENT DETAILS (Waybill Breakdown)
+                    </h4>
+                    <div style={{ border: '1px solid #E2E8F0', borderRadius: '8px', overflow: 'hidden' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                        <thead>
+                          <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
+                            <th style={{ padding: '12px 16px', textAlign: 'left', color: '#475569', fontWeight: 600 }}>Date</th>
+                            <th style={{ padding: '12px 16px', textAlign: 'left', color: '#475569', fontWeight: 600 }}>Waybill No.</th>
+                            <th style={{ padding: '12px 16px', textAlign: 'left', color: '#475569', fontWeight: 600 }}>Receiver</th>
+                            <th style={{ padding: '12px 16px', textAlign: 'left', color: '#475569', fontWeight: 600 }}>Destination</th>
+                            <th style={{ padding: '12px 16px', textAlign: 'left', color: '#475569', fontWeight: 600 }}>Weight (kg)</th>
+                            <th style={{ padding: '12px 16px', textAlign: 'left', color: '#475569', fontWeight: 600 }}>Amount (PHP)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {waybills.filter(wb => selectedInvoiceForModal.waybillIds?.includes(wb.id)).map(wb => (
+                            <tr key={wb.id} style={{ borderBottom: '1px solid #E2E8F0' }}>
+                              <td style={{ padding: '12px 16px', color: '#334155' }}>{new Date(wb.deliveryDate).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })}</td>
+                              <td style={{ padding: '12px 16px', color: '#0F172A', fontWeight: 500 }}>{wb.waybillNumber}</td>
+                              <td style={{ padding: '12px 16px', color: '#334155' }}>{wb.receiverName || 'N/A'}</td>
+                              <td style={{ padding: '12px 16px', color: '#334155' }}>{wb.destinationArea || (wb.receiverAddress ? wb.receiverAddress.split(',').pop()?.trim() : 'N/A')}</td>
+                              <td style={{ padding: '12px 16px', color: '#334155' }}>{wb.itemWeight ? wb.itemWeight.replace('kg', '').trim() : '-'}</td>
+                              <td style={{ padding: '12px 16px', color: '#334155' }}>{(selectedInvoiceForModal.amount / (selectedInvoiceForModal.waybillIds?.length || 1)).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                            </tr>
+                          ))}
+                          {(!selectedInvoiceForModal.waybillIds || selectedInvoiceForModal.waybillIds.length === 0) && (
+                            <tr>
+                              <td colSpan={6} style={{ padding: '16px', textAlign: 'center', color: '#94A3B8' }}>No waybill details found for this invoice.</td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* FINANCIAL SUMMARY */}
+                  <div>
+                    <h4 style={{ margin: '0 0 16px 0', color: '#475569', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '8px', textTransform: 'uppercase', fontWeight: 600 }}>
+                      FINANCIAL SUMMARY
+                    </h4>
+                    <div style={{ border: '1px solid #E2E8F0', borderRadius: '8px', overflow: 'hidden' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                        <thead>
+                          <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
+                            <th style={{ padding: '12px 16px', textAlign: 'left', color: '#475569', fontWeight: 600 }}>Financial Breakdown</th>
+                            <th style={{ padding: '12px 16px', textAlign: 'right', color: '#475569', fontWeight: 600 }}>Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr style={{ borderBottom: '1px solid #E2E8F0' }}>
+                            <td style={{ padding: '12px 16px', color: '#334155', fontWeight: 500 }}>Total Freight Subtotal</td>
+                            <td style={{ padding: '12px 16px', color: '#0F172A', textAlign: 'right', fontWeight: 600 }}>₱ {selectedInvoiceForModal.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                          </tr>
+                          <tr style={{ borderBottom: '1px solid #E2E8F0' }}>
+                            <td style={{ padding: '12px 16px', color: '#64748B', fontStyle: 'italic' }}>Add: Fuel Surcharge (5%)</td>
+                            <td style={{ padding: '12px 16px', color: '#334155', textAlign: 'right' }}>₱ {selectedInvoiceForModal.surchargeAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                          </tr>
+                          <tr style={{ borderBottom: '1px solid #E2E8F0' }}>
+                            <td style={{ padding: '12px 16px', color: '#64748B', fontStyle: 'italic' }}>Add: 12% VAT (if applicable)</td>
+                            <td style={{ padding: '12px 16px', color: '#334155', textAlign: 'right' }}>₱ {selectedInvoiceForModal.vatAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                          </tr>
+                          <tr style={{ background: '#F1F5F9' }}>
+                            <td style={{ padding: '16px', color: '#0F172A', fontWeight: 700, fontSize: '0.95rem' }}>TOTAL AMOUNT DUE</td>
+                            <td style={{ padding: '16px', color: '#2563EB', textAlign: 'right', fontWeight: 800, fontSize: '0.95rem' }}>₱ {selectedInvoiceForModal.totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </div>,
+              document.body
+            )}
+
+            {/* Modal for Official Receipt */}
+            {selectedReceiptForModal && createPortal(
+              <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', zIndex: 99999, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' }} onClick={() => setSelectedReceiptForModal(null)}>
+                <div style={{ background: '#ffffff', borderRadius: '12px', width: '100%', maxWidth: '850px', maxHeight: '90vh', overflowY: 'auto', padding: '32px', color: '#334155', boxShadow: '0 10px 25px rgba(0,0,0,0.3)', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
+
+                  {/* Top Bar with Download Button */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+                    <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: '#0F172A' }}>Official Receipt</h3>
+                    <div style={{ display: 'flex', gap: '12px' }}>
+                      <button style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#3B82F6', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '6px', fontWeight: 600, cursor: 'pointer', transition: 'background 0.2s' }} onMouseOver={e => e.currentTarget.style.background = '#2563EB'} onMouseOut={e => e.currentTarget.style.background = '#3B82F6'}>
+                        <i className="ti ti-download" /> Download
+                      </button>
+                      <button onClick={() => setSelectedReceiptForModal(null)} style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', fontSize: '1.5rem', display: 'flex', alignItems: 'center' }}><i className="ti ti-x" /></button>
+                    </div>
+                  </div>
+
+                  {/* Receipt Content */}
+                  <div style={{ border: '2px solid #E2E8F0', padding: '40px', borderRadius: '8px', position: 'relative', background: '#F8FAFC' }}>
+                    <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+                      <h2 style={{ margin: '0 0 8px 0', color: '#0F172A', fontSize: '1.5rem', fontWeight: 900, letterSpacing: '-0.5px' }}>FOMS COURIER & FORWARDER, INC.</h2>
+                      <p style={{ margin: 0, color: '#475569', fontSize: '0.9rem' }}>123 Logistics Way, Transport City, Metro Manila</p>
+                      <p style={{ margin: 0, color: '#475569', fontSize: '0.9rem' }}>VAT Reg. TIN: 000-123-456-000</p>
+                      <h3 style={{ marginTop: '32px', color: '#2563EB', letterSpacing: '3px', textTransform: 'uppercase', fontSize: '1.3rem', fontWeight: 800 }}>Official Receipt</h3>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '32px', borderBottom: '1px dashed #CBD5E1', paddingBottom: '24px' }}>
+                      <div>
+                        <p style={{ margin: '0 0 6px 0', fontSize: '0.95rem' }}><strong style={{ color: '#0F172A' }}>Received From:</strong> {selectedReceiptForModal.clientName || editingClient.name}</p>
+                        <p style={{ margin: '0 0 6px 0', fontSize: '0.95rem' }}><strong style={{ color: '#0F172A' }}>Address:</strong> {editingClient.address}</p>
+                        <p style={{ margin: '0 0 6px 0', fontSize: '0.95rem' }}><strong style={{ color: '#0F172A' }}>TIN:</strong> N/A</p>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <p style={{ margin: '0 0 6px 0', fontSize: '0.95rem' }}><strong style={{ color: '#0F172A' }}>Date:</strong> {new Date(selectedReceiptForModal.recordedAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
+                        <p style={{ margin: '0 0 6px 0', fontSize: '0.95rem' }}><strong style={{ color: '#0F172A' }}>O.R. No.:</strong> <span style={{ color: '#EF4444', fontWeight: 700, fontSize: '1.1rem' }}>{selectedReceiptForModal.orNumber || selectedReceiptForModal.referenceNumber || selectedReceiptForModal.id}</span></p>
+                        <p style={{ margin: '0 0 6px 0', fontSize: '0.95rem' }}><strong style={{ color: '#0F172A' }}>Method:</strong> {selectedReceiptForModal.paymentMethod}</p>
+                      </div>
+                    </div>
+
+                    <div style={{ marginBottom: '40px' }}>
+                      <p style={{ fontSize: '1.1rem', lineHeight: '1.8', color: '#334155' }}>
+                        Received the sum of <strong style={{ color: '#0F172A', fontSize: '1.2rem', textDecoration: 'underline' }}>PHP {selectedReceiptForModal.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong> in partial/full payment of <strong style={{ color: '#0F172A' }}>Invoice No. {selectedReceiptForModal.invoiceNumber || selectedReceiptForModal.invoiceId || 'N/A'}</strong>.
+                      </p>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '64px' }}>
+                      <div style={{ width: '250px', textAlign: 'center' }}>
+                        <div style={{ borderBottom: '1px solid #0F172A', marginBottom: '8px', paddingBottom: '4px' }}>
+                          <strong style={{ color: '#0F172A' }}>{selectedReceiptForModal.recordedBy || 'Authorized Signatory'}</strong>
+                        </div>
+                        <span style={{ fontSize: '0.85rem', color: '#64748B', textTransform: 'uppercase', letterSpacing: '1px' }}>Authorized Representative</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>,
+              document.body
             )}
           </div>
         ) : (
-              // Edit Mode
+          // Edit Mode
           <Card>
             <div style={{ padding: '24px' }}>
               <h3 style={{ margin: '0 0 24px', fontSize: '1rem', color: '#0F172A', fontWeight: 700 }}>Edit Client Record: {editingClient.id}</h3>
               <form onSubmit={handleEditSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#475569' }}>Client Name *</label>
+                  <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#475569' }}>Client Name <span style={{ color: '#EF4444' }}>*</span></label>
                   <input required type="text" name="name" value={formData.name} onChange={handleFormChange} style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #E2E8F0', background: '#F8FAFC' }} />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#475569' }}>Contact Person *</label>
+                  <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#475569' }}>Contact Person <span style={{ color: '#EF4444' }}>*</span></label>
                   <input required type="text" name="contactPerson" value={formData.contactPerson} onChange={handleFormChange} style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #E2E8F0', background: '#F8FAFC' }} />
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', gridColumn: '1 / -1' }}>
-                  <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#475569' }}>Address *</label>
-                  <input required type="text" name="address" value={formData.address} onChange={handleFormChange} style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #E2E8F0', background: '#F8FAFC' }} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#475569' }}>Contact Number <span style={{ color: '#EF4444' }}>*</span></label>
+                  <input required type="text" name="contactNumber" value={formData.contactNumber} onChange={handleFormChange} style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #E2E8F0', background: '#F8FAFC' }} />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#475569' }}>Rate Type *</label>
+                  <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#475569' }}>Rate Type <span style={{ color: '#EF4444' }}>*</span></label>
                   <input required type="text" name="rateType" value={formData.rateType} onChange={handleFormChange} style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #E2E8F0', background: '#F8FAFC' }} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', gridColumn: '1 / -1' }}>
+                  <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#475569' }}>Address <span style={{ color: '#EF4444' }}>*</span></label>
+                  <input required type="text" name="address" value={formData.address} onChange={handleFormChange} style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #E2E8F0', background: '#F8FAFC' }} />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#475569' }}>Billing Cycle</label>
@@ -288,14 +545,30 @@ export const ClientManagement: React.FC = () => {
 
   // --- List View ---
   const tableColumns = [
-    { key: 'id', label: 'CLIENT ID', sortable: true },
-    { key: 'name', label: 'CLIENT NAME', sortable: true, render: (row: Client) => (
-      <span onClick={() => navigate(`/clients/${row.id}`)} style={{ color: '#0F172A', fontWeight: 700, cursor: 'pointer', textDecoration: 'none' }}>
-        {row.name}
-      </span>
-    )},
-    { 
-      key: 'status', 
+    {
+      key: 'name', label: 'CLIENT NAME', sortable: true, render: (row: Client) => (
+        <span style={{ color: '#0F172A', fontWeight: 700, textDecoration: 'none' }}>
+          {row.name}
+        </span>
+      )
+    },
+    {
+      key: 'id', label: 'CLIENT ID', sortable: true, render: (row: Client) => {
+        if (row.id && row.id.length > 15 && row.id.includes('-')) {
+          // Simple hash to create a short CA-XXX format for UUIDs to make it look clean
+          let hash = 0;
+          for (let i = 0; i < row.id.length; i++) {
+            hash = ((hash << 5) - hash) + row.id.charCodeAt(i);
+            hash |= 0;
+          }
+          const shortNum = Math.abs(hash) % 900 + 100;
+          return `CA-${shortNum}`;
+        }
+        return row.id;
+      }
+    },
+    {
+      key: 'status',
       label: 'STATUS',
       render: (row: Client) => (
         <StatusBadge status={row.status} />
@@ -312,6 +585,7 @@ export const ClientManagement: React.FC = () => {
     setFormData({
       name: '',
       contactPerson: '',
+      contactNumber: '',
       address: '',
       rateType: 'Standard',
       billingSchedule: 'Monthly',
@@ -322,11 +596,11 @@ export const ClientManagement: React.FC = () => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      
+
       {/* Modal for ADD NEW CLIENT ONLY */}
       {isAddingNew && createPortal(
         <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
           background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(4px)',
           display: 'flex', justifyContent: 'center', alignItems: 'center',
           zIndex: 99999, padding: '20px'
@@ -339,24 +613,28 @@ export const ClientManagement: React.FC = () => {
               </div>
               <button onClick={() => setIsAddingNew(false)} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#94A3B8' }}>×</button>
             </div>
-            
+
             <div style={{ padding: '24px' }}>
               <form onSubmit={handleAddNewSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#475569' }}>Client Name *</label>
+                  <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#475569' }}>Client Name <span style={{ color: '#EF4444' }}>*</span></label>
                   <input required type="text" name="name" value={formData.name} onChange={handleFormChange} style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #E2E8F0', background: '#F8FAFC' }} />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#475569' }}>Contact Person *</label>
+                  <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#475569' }}>Contact Person <span style={{ color: '#EF4444' }}>*</span></label>
                   <input required type="text" name="contactPerson" value={formData.contactPerson} onChange={handleFormChange} style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #E2E8F0', background: '#F8FAFC' }} />
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', gridColumn: '1 / -1' }}>
-                  <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#475569' }}>Address *</label>
-                  <input required type="text" name="address" value={formData.address} onChange={handleFormChange} style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #E2E8F0', background: '#F8FAFC' }} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#475569' }}>Contact Number <span style={{ color: '#EF4444' }}>*</span></label>
+                  <input required type="text" name="contactNumber" value={formData.contactNumber} onChange={handleFormChange} style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #E2E8F0', background: '#F8FAFC' }} />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#475569' }}>Rate Type *</label>
+                  <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#475569' }}>Rate Type <span style={{ color: '#EF4444' }}>*</span></label>
                   <input required type="text" name="rateType" value={formData.rateType} onChange={handleFormChange} style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #E2E8F0', background: '#F8FAFC' }} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', gridColumn: '1 / -1' }}>
+                  <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#475569' }}>Address <span style={{ color: '#EF4444' }}>*</span></label>
+                  <input required type="text" name="address" value={formData.address} onChange={handleFormChange} style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #E2E8F0', background: '#F8FAFC' }} />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#475569' }}>Billing Cycle</label>
@@ -386,7 +664,7 @@ export const ClientManagement: React.FC = () => {
 
       {/* Data Table */}
       <TableContainer>
-        <DataTable 
+        <DataTable
           title={user?.role === 'Coordinator' ? "Client Search" : "Client Accounts"}
           data={clients}
           columns={tableColumns}

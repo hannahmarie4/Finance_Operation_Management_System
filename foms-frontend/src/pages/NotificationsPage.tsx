@@ -93,9 +93,9 @@ export const NotificationsPage: React.FC = () => {
                 <div key={date}>
                   <div className="notif-date-header">{date}</div>
                   {items.map((n: any) => (
-                    <div 
-                      key={n.id} 
-                      className={`notif-item ${selectedId === n.id ? "selected" : ""} ${!n.read ? "unread" : ""}`} 
+                    <div
+                      key={n.id}
+                      className={`notif-item ${selectedId === n.id ? "selected" : ""} ${!n.read ? "unread" : ""}`}
                       onClick={() => {
                         setSelectedId(n.id);
                         if (!n.read) toggleReadStatus(n.id);
@@ -103,15 +103,15 @@ export const NotificationsPage: React.FC = () => {
                       }}
                       style={{ cursor: n.link ? 'pointer' : 'default' }}
                     >
-                      <input 
-                        type="checkbox" 
-                        className="notif-checkbox" 
-                        checked={selectedIds.includes(n.id)} 
+                      <input
+                        type="checkbox"
+                        className="notif-checkbox"
+                        checked={selectedIds.includes(n.id)}
                         onChange={(e) => {
                           e.stopPropagation();
                           setSelectedIds(prev => prev.includes(n.id) ? prev.filter(id => id !== n.id) : [...prev, n.id]);
-                        }} 
-                        onClick={(e) => e.stopPropagation()} 
+                        }}
+                        onClick={(e) => e.stopPropagation()}
                       />
                       <div className="notif-item-content">
                         <div className="notif-item-header">
@@ -130,7 +130,7 @@ export const NotificationsPage: React.FC = () => {
           </div>
         </div>
       </div>
-      
+
       <ConfirmModal
         isOpen={showClearConfirm}
         title="Clear all notifications?"

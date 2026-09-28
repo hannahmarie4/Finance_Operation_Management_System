@@ -1,14 +1,15 @@
 /* Site Header and Topbar Layout */
 .site-header {
   height: 70px;
-  background: #ffffff;
+  background: linear-gradient(to bottom, #EFF6FF 0%, #FFFFFF 100%);
   border-bottom: 1px solid var(--border, #E2E8F0);
+  border-left: 4px solid #1E3A8A; /* Dark blue accent line */
   position: sticky;
   top: 0;
   z-index: 100; /* Enough to stay above table headers; modal overlay uses 10000 */
   display: flex;
   align-items: center;
-  padding: 0 28px; /* Page Padding Margin: 28px (per visualizer) */
+  padding: 0 24px; /* Slightly reduced padding to account for border */
 }
 
 .nav-bar {

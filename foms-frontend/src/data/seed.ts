@@ -46,7 +46,7 @@ export const SEEDED_USERS: SeededUser[] = [
   {
     employeeId: 'EMP-005',
     fullName: 'Joana Marie Ogaya',
-    role: 'Financial Manager',
+    role: 'Assistant of Finance Manager',
     avatarInitials: 'JO',
     password: 'Password@123',
   },
@@ -146,7 +146,7 @@ export const SEEDED_RATES: BillingRate[] = [
 
 // ─── Waybills ─────────────────────────────────────────────────────
 
-export type WaybillStatus = 'For Checking' | 'Validated' | 'Validated (CTC)' | 'Missing' | 'CTC Submitted' | 'Billed' | 'Failed' | 'Pending Validation' | 'Returned';
+export type WaybillStatus = 'For Checking' | 'Validated' | 'Validated (CTC)' | 'Missing' | 'CTC Submitted' | 'Billed' | 'Failed' | 'Pending Validation' | 'Returned' | 'Not Completed';
 
 export interface Waybill {
   id: string;
@@ -170,16 +170,42 @@ export interface Waybill {
   reason_for_missing?: string;
   invoiceId?: string | null;
   notes?: string;
+
+  // Extended Waybill Details
+  senderName?: string;
+  senderContact?: string;
+  senderAddress?: string;
+  receiverName?: string;
+  receiverContact?: string;
+  receiverAddress?: string;
+  itemDescription?: string;
+  itemQuantity?: number;
+  itemWeight?: string;
+  deliveryType?: 'Delivery' | 'Pick Up';
+  assignedCourier?: string;
+  specialInstructions?: string;
 }
 
 export const SEEDED_WAYBILLS: Waybill[] = [
-  { id: 'WB-001', waybillNumber: 'WB-2026-0001', clientCode: 'CL-001', deliveryDate: new Date().toISOString(), status: 'Validated', hasOriginalPOD: true, hasApprovedCTC: true, encodedBy: 'EMP-004', encodedAt: new Date().toISOString() },
-  { id: 'WB-002', waybillNumber: 'WB-2026-0002', clientCode: 'CL-001', deliveryDate: new Date().toISOString(), status: 'CTC Submitted', hasOriginalPOD: false, hasApprovedCTC: true, encodedBy: 'EMP-004', encodedAt: new Date().toISOString() },
-  { id: 'WB-003', waybillNumber: 'WB-2026-0003', clientCode: 'CL-002', deliveryDate: new Date().toISOString(), status: 'Validated', hasOriginalPOD: true, hasApprovedCTC: true, encodedBy: 'EMP-004', encodedAt: new Date().toISOString() },
-  { id: 'WB-004', waybillNumber: 'WB-2026-0004', clientCode: 'CL-003', deliveryDate: new Date().toISOString(), status: 'CTC Submitted', hasOriginalPOD: false, hasApprovedCTC: true, encodedBy: 'EMP-004', encodedAt: new Date().toISOString() },
-  { id: 'WB-E2E-001', waybillNumber: 'WB-E2E-001', clientCode: 'CA-001', deliveryDate: new Date().toISOString(), status: 'Validated', hasOriginalPOD: true, hasApprovedCTC: true, encodedBy: 'EMP-004', encodedAt: new Date().toISOString() },
-  { id: 'WB-E2E-002', waybillNumber: 'WB-E2E-002', clientCode: 'CA-001', deliveryDate: new Date().toISOString(), status: 'CTC Submitted', hasOriginalPOD: false, hasApprovedCTC: true, encodedBy: 'EMP-004', encodedAt: new Date().toISOString() },
-  { id: 'WB-E2E-003', waybillNumber: 'WB-E2E-003', clientCode: 'CA-002', deliveryDate: new Date().toISOString(), status: 'Validated', hasOriginalPOD: true, hasApprovedCTC: true, encodedBy: 'EMP-004', encodedAt: new Date().toISOString() }
+  { 
+    id: 'WB-001', waybillNumber: 'WB-2026-0001', clientCode: 'CL-001', deliveryDate: new Date().toISOString(), status: 'Validated', hasOriginalPOD: true, hasApprovedCTC: true, encodedBy: 'EMP-004', encodedAt: new Date().toISOString(),
+    senderName: 'Lazada Philippines', senderContact: '0917-123-4567', senderAddress: 'Rockwell Dr., Makati City',
+    receiverName: 'Juan Dela Cruz', receiverContact: '0999-888-7777', receiverAddress: '123 Sampaguita St., Quezon City',
+    itemDescription: 'Electronics & Gadgets', itemQuantity: 2, itemWeight: '1.5 kg',
+    deliveryType: 'Delivery', assignedCourier: 'Rider John Doe', specialInstructions: 'Fragile, please handle with care.'
+  },
+  { 
+    id: 'WB-002', waybillNumber: 'WB-2026-0002', clientCode: 'CL-001', deliveryDate: new Date().toISOString(), status: 'CTC Submitted', hasOriginalPOD: false, hasApprovedCTC: true, encodedBy: 'EMP-004', encodedAt: new Date().toISOString(),
+    senderName: 'Lazada Philippines', senderContact: '0917-123-4567', senderAddress: 'Rockwell Dr., Makati City',
+    receiverName: 'Maria Santos', receiverContact: '0918-222-3333', receiverAddress: '456 Mango Ave., Cebu City',
+    itemDescription: 'Clothing & Apparel', itemQuantity: 5, itemWeight: '2.0 kg',
+    deliveryType: 'Delivery', assignedCourier: 'Rider Jane Smith', specialInstructions: 'Leave at the front desk.'
+  },
+  { id: 'WB-003', waybillNumber: 'WB-2026-0003', clientCode: 'CL-002', deliveryDate: new Date().toISOString(), status: 'Validated', hasOriginalPOD: true, hasApprovedCTC: true, encodedBy: 'EMP-004', encodedAt: new Date().toISOString(), senderName: 'Shopee Express', senderContact: '0917-555-9876', senderAddress: 'Ayala Ave., Makati City', receiverName: 'Pedro Penduko', receiverContact: '0922-333-4444', receiverAddress: '789 Rizal St., Davao City', itemDescription: 'Home Appliances', itemQuantity: 1, itemWeight: '5.5 kg', deliveryType: 'Pick Up', assignedCourier: 'Rider Mark', specialInstructions: 'Heavy item.' },
+  { id: 'WB-004', waybillNumber: 'WB-2026-0004', clientCode: 'CL-003', deliveryDate: new Date().toISOString(), status: 'CTC Submitted', hasOriginalPOD: false, hasApprovedCTC: true, encodedBy: 'EMP-004', encodedAt: new Date().toISOString(), senderName: 'TikTok Shop', senderContact: '0917-333-4444', senderAddress: 'BGC High St., Taguig City', receiverName: 'Ana Gomez', receiverContact: '0919-444-5555', receiverAddress: '101 Mabini St., Manila', itemDescription: 'Cosmetics', itemQuantity: 10, itemWeight: '0.5 kg', deliveryType: 'Delivery', assignedCourier: 'Rider Paul', specialInstructions: 'Do not expose to direct sunlight.' },
+  { id: 'WB-E2E-001', waybillNumber: 'WB-E2E-001', clientCode: 'CA-001', deliveryDate: new Date().toISOString(), status: 'Validated', hasOriginalPOD: true, hasApprovedCTC: true, encodedBy: 'EMP-004', encodedAt: new Date().toISOString(), senderName: 'Lazada Account', senderContact: '0917-123-4567', senderAddress: 'Rockwell Dr., Makati City', receiverName: 'Customer A', receiverContact: '0900-000-0001', receiverAddress: 'Makati City, Metro Manila', itemDescription: 'General Merchandise', itemQuantity: 1, itemWeight: '1.0 kg', deliveryType: 'Delivery', assignedCourier: 'Rider A', specialInstructions: 'None' },
+  { id: 'WB-E2E-002', waybillNumber: 'WB-E2E-002', clientCode: 'CA-001', deliveryDate: new Date().toISOString(), status: 'CTC Submitted', hasOriginalPOD: false, hasApprovedCTC: true, encodedBy: 'EMP-004', encodedAt: new Date().toISOString(), senderName: 'Lazada Account', senderContact: '0917-123-4567', senderAddress: 'Rockwell Dr., Makati City', receiverName: 'Customer B', receiverContact: '0900-000-0002', receiverAddress: 'Cebu Business Park, Cebu City', itemDescription: 'General Merchandise', itemQuantity: 1, itemWeight: '1.0 kg', deliveryType: 'Delivery', assignedCourier: 'Rider B', specialInstructions: 'None' },
+  { id: 'WB-E2E-003', waybillNumber: 'WB-E2E-003', clientCode: 'CA-002', deliveryDate: new Date().toISOString(), status: 'Validated', hasOriginalPOD: true, hasApprovedCTC: true, encodedBy: 'EMP-004', encodedAt: new Date().toISOString(), senderName: 'Shopee Express Account', senderContact: '0917-555-9876', senderAddress: 'Ayala Ave., Makati City', receiverName: 'Customer C', receiverContact: '0900-000-0003', receiverAddress: 'BGC, Taguig City', itemDescription: 'General Merchandise', itemQuantity: 1, itemWeight: '1.0 kg', deliveryType: 'Pick Up', assignedCourier: 'Rider C', specialInstructions: 'None' }
 ];
 
 
@@ -197,18 +223,150 @@ export interface Invoice {
   totalAmount: number;
   billingSchedule: 'Monthly' | 'Semi-monthly' | 'Weekly';
   billingPeriod: string;
-  status: 'Draft' | 'Pending Approval' | 'Verified' | 'Needs Revision' | 'Finalized' | 'Paid' | 'Overdue';
+  status: 'Draft' | 'Pending Approval' | 'Needs Revision' | 'Approved' | 'Sent' | 'Paid' | 'Overdue';
+  paymentStatus?: 'Unpaid' | 'Due Soon' | 'Overdue' | 'Paid';
   createdBy: string;
   createdAt: string;
   dueDate: string;
   approvedBy?: string;
   approvedAt?: string;
   sentAt?: string;
+  finalizedAt?: string;
   notes?: string;
   proofFileUrl?: string;
+  clientReceiptDate?: string;
 }
 
-export const SEEDED_INVOICES: Invoice[] = [];
+export const SEEDED_INVOICES: Invoice[] = [
+  {
+    id: 'INV-001',
+    invoiceNumber: 'LZD-2026-0001',
+    clientId: 'CL-001',
+    waybillIds: ['WB-001', 'WB-002'],
+    amount: 15400,
+    vatAmount: 1848,
+    surchargeAmount: 0,
+    totalAmount: 17248,
+    billingSchedule: 'Monthly',
+    billingPeriod: 'Jan 2026',
+    status: 'Paid',
+    createdBy: 'EMP-003',
+    createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+    dueDate: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: 'INV-002',
+    invoiceNumber: 'LZD-2026-0002',
+    clientId: 'CL-001',
+    waybillIds: ['WB-003'],
+    amount: 8000,
+    vatAmount: 960,
+    surchargeAmount: 0,
+    totalAmount: 8960,
+    billingSchedule: 'Monthly',
+    billingPeriod: 'Feb 2026',
+    status: 'Approved',
+    createdBy: 'EMP-003',
+    createdAt: new Date().toISOString(),
+    dueDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: 'INV-003',
+    invoiceNumber: 'SHP-2026-0001',
+    clientId: 'CL-002',
+    waybillIds: ['WB-004'],
+    amount: 25000,
+    vatAmount: 3000,
+    surchargeAmount: 500,
+    totalAmount: 28500,
+    billingSchedule: 'Semi-monthly',
+    billingPeriod: 'Jan 1-15 2026',
+    status: 'Overdue',
+    createdBy: 'EMP-003',
+    createdAt: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString(),
+    dueDate: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: 'INV-004',
+    invoiceNumber: 'LZD-2026-0004',
+    clientId: 'CL-001',
+    waybillIds: ['WB-001'],
+    amount: 12000,
+    vatAmount: 1440,
+    surchargeAmount: 0,
+    totalAmount: 13440,
+    billingSchedule: 'Monthly',
+    billingPeriod: 'Mar 2026',
+    status: 'Sent',
+    createdBy: 'EMP-003',
+    createdAt: new Date().toISOString(),
+    dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: 'INV-CA001-1',
+    invoiceNumber: 'LZD-CA001-0001',
+    clientId: 'CA-001',
+    waybillIds: ['WB-E2E-001', 'WB-E2E-002'],
+    amount: 11200,
+    vatAmount: 1344,
+    surchargeAmount: 0,
+    totalAmount: 12544,
+    billingSchedule: 'Monthly',
+    billingPeriod: 'Aug 2026',
+    status: 'Sent',
+    createdBy: 'EMP-003',
+    createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+    dueDate: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: 'INV-CA001-2',
+    invoiceNumber: 'LZD-CA001-0002',
+    clientId: 'CA-001',
+    waybillIds: [], 
+    amount: 5000,
+    vatAmount: 600,
+    surchargeAmount: 0,
+    totalAmount: 5600,
+    billingSchedule: 'Monthly',
+    billingPeriod: 'Sep 2026',
+    status: 'Paid',
+    createdBy: 'EMP-003',
+    createdAt: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString(),
+    dueDate: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: 'INV-CA001-3',
+    invoiceNumber: 'LZD-CA001-0003',
+    clientId: 'CA-001',
+    waybillIds: [], 
+    amount: 7500,
+    vatAmount: 900,
+    surchargeAmount: 0,
+    totalAmount: 8400,
+    billingSchedule: 'Monthly',
+    billingPeriod: 'Oct 2026',
+    status: 'Overdue',
+    createdBy: 'EMP-003',
+    createdAt: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(),
+    dueDate: new Date(Date.now() - 75 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: 'INV-CA002-1',
+    invoiceNumber: 'SHP-CA002-0001',
+    clientId: 'CA-002',
+    waybillIds: ['WB-E2E-003'],
+    amount: 15000,
+    vatAmount: 1800,
+    surchargeAmount: 0,
+    totalAmount: 16800,
+    billingSchedule: 'Monthly',
+    billingPeriod: 'Aug 2026',
+    status: 'Approved',
+    createdBy: 'EMP-003',
+    createdAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
+    dueDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
+  }
+];
 
 
 // ─── Payments ────────────────────────────────────────────────────
@@ -231,9 +389,43 @@ export interface Payment {
   status: 'Pending Validation' | 'Validated' | 'Approved' | 'Rejected';
   notes?: string;
   orNumber?: string;
+  depositSlipDetails?: string;
+  bankTransferDetails?: string;
+  onlinePaymentDetails?: string;
 }
 
-export const SEEDED_PAYMENTS: Payment[] = [];
+export const SEEDED_PAYMENTS: Payment[] = [
+  {
+    id: 'PAY-001',
+    invoiceId: 'INV-001',
+    invoiceNumber: 'LZD-2026-0001',
+    clientId: 'CL-001',
+    clientName: 'Lazada Philippines',
+    amount: 15400,
+    paymentMethod: 'Bank Transfer',
+    referenceNumber: 'REF-889922',
+    bankConfirmed: false,
+    recordedBy: 'EMP-003',
+    recordedAt: new Date().toISOString(),
+    status: 'Pending Validation'
+  },
+  {
+    id: 'PAY-002',
+    invoiceId: 'INV-002',
+    invoiceNumber: 'SHP-2026-0002',
+    clientId: 'CL-002',
+    clientName: 'Shopee Express',
+    amount: 8500,
+    paymentMethod: 'Check',
+    referenceNumber: 'CHK-999888',
+    bankConfirmed: true,
+    recordedBy: 'EMP-003',
+    recordedAt: new Date().toISOString(),
+    validatedBy: 'EMP-002',
+    validatedAt: new Date().toISOString(),
+    status: 'Validated'
+  }
+];
 
 // ─── Accounts Receivable ──────────────────────────────────────────
 
@@ -309,7 +501,19 @@ export interface Receipt {
   issuedAt: string;
 }
 
-export const SEEDED_RECEIPTS: Receipt[] = [];
+export const SEEDED_RECEIPTS: Receipt[] = [
+  {
+    id: 'OR-001',
+    receiptNumber: 'OR-2026-0001',
+    invoiceId: 'INV-002',
+    paymentId: 'PAY-002',
+    clientId: 'CL-002',
+    amount: 8500,
+    referenceNumber: 'CHK-999888',
+    issuedBy: 'EMP-003',
+    issuedAt: new Date().toISOString()
+  }
+];
 
 // ─── SpeedPay Submissions ─────────────────────────────────────────
 
@@ -332,7 +536,36 @@ export interface SpeedPaySubmission {
   rejectionReason?: string;
 }
 
-export const SEEDED_SPEEDPAY: SpeedPaySubmission[] = [];
+export const SEEDED_SPEEDPAY: SpeedPaySubmission[] = [
+  {
+    id: 'SP-001',
+    invoiceId: 'INV-003',
+    invoiceNumber: 'TK-2026-0003',
+    clientName: 'TikTok Shop',
+    clientEmail: 'billing@tiktok.ph',
+    paymentMethod: 'GCash',
+    referenceNumber: 'GC-999000111',
+    amountPaid: 4500,
+    proofFileName: 'gcash_receipt.jpg',
+    submittedAt: new Date().toISOString(),
+    status: 'Pending Validation'
+  },
+  {
+    id: 'SP-002',
+    invoiceId: 'INV-004',
+    invoiceNumber: 'LZD-2026-0004',
+    clientName: 'Lazada Philippines',
+    clientEmail: 'finance@lazada.com.ph',
+    paymentMethod: 'BDO Online',
+    referenceNumber: 'BDO-555666777',
+    amountPaid: 12000,
+    proofFileName: 'bdo_transfer.png',
+    submittedAt: new Date().toISOString(),
+    status: 'Validated',
+    validatedBy: 'EMP-002',
+    validatedAt: new Date().toISOString()
+  }
+];
 
 // ─── Audit Trail ─────────────────────────────────────────────────
 
@@ -350,7 +583,73 @@ export interface AuditLog {
   ipAddress: string;
 }
 
-export const SEEDED_AUDIT_LOGS: AuditLog[] = [];
+export const SEEDED_AUDIT_LOGS: AuditLog[] = [
+  {
+    id: 'AL-1001',
+    timestamp: '2026-09-26T08:30:00Z',
+    userId: 'EMP-004',
+    userFullName: 'Hannah Estrera',
+    userRole: 'Coordinator',
+    action: 'CREATE_WAYBILL',
+    module: 'Operations',
+    recordId: 'WB-12345',
+    recordType: 'Waybill',
+    ipAddress: '192.168.1.15',
+    details: 'Created a new waybill for Lazada Account with 30kg shipment.'
+  },
+  {
+    id: 'AL-1002',
+    timestamp: '2026-09-26T09:15:22Z',
+    userId: 'EMP-003',
+    userFullName: 'Maria Mariel Jane Anonuevo',
+    userRole: 'Accountant',
+    action: 'GENERATE_INVOICE',
+    module: 'Billing',
+    recordId: 'INV-2026-001',
+    recordType: 'Invoice',
+    ipAddress: '192.168.1.42',
+    details: 'Generated invoice INV-2026-001 for Shopee Express.'
+  },
+  {
+    id: 'AL-1003',
+    timestamp: '2026-09-26T10:05:10Z',
+    userId: 'EMP-002',
+    userFullName: 'Misty',
+    userRole: 'Head Accountant',
+    action: 'APPROVE_PAYMENT',
+    module: 'Finance',
+    recordId: 'PAY-88221',
+    recordType: 'Payment',
+    ipAddress: '192.168.1.55',
+    details: 'Approved payment receipt PAY-88221 via Bank Transfer.'
+  },
+  {
+    id: 'AL-1004',
+    timestamp: '2026-09-26T11:45:00Z',
+    userId: 'EMP-005',
+    userFullName: 'Joana Marie Ogaya',
+    userRole: 'Assistant of Finance Manager',
+    action: 'UPDATE_CLIENT',
+    module: 'ClientManagement',
+    recordId: 'CL-002',
+    recordType: 'Client',
+    ipAddress: '192.168.1.60',
+    details: 'Updated billing schedule for Shopee Express to Semi-monthly.'
+  },
+  {
+    id: 'AL-1005',
+    timestamp: '2026-09-26T13:20:30Z',
+    userId: 'EMP-001',
+    userFullName: 'Crystalyn Joyce C. Fajardo',
+    userRole: 'Finance Manager',
+    action: 'GENERATE_REPORT',
+    module: 'Reports',
+    recordId: 'REP-SEP2026',
+    recordType: 'Report',
+    ipAddress: '192.168.1.100',
+    details: 'Generated and exported Monthly Revenue Report for September 2026.'
+  }
+];
 
 // ─── Role-Based Navigation Configuration ──────────────────────────
 
@@ -397,7 +696,6 @@ export const NAV_CONFIG: Record<UserRole, { groups: { label?: string; items: Nav
       {
         label: 'Invoicing',
         items: [
-          { label: 'Create Invoice', path: '/invoice-create', icon: 'ti ti-file-plus' },
           { label: 'Invoice List', path: '/invoicing-desk', icon: 'ti ti-file-invoice' },
         ],
       },
@@ -406,8 +704,15 @@ export const NAV_CONFIG: Record<UserRole, { groups: { label?: string; items: Nav
         items: [
           { label: 'Accounts Receivable', path: '/accounts-receivable', icon: 'ti ti-report-money' },
           { label: 'Payments', path: '/payments', icon: 'ti ti-cash' },
+          { label: 'Financial Adjustments', path: '/adjustments', icon: 'ti ti-adjustments-alt' },
           { label: 'SpeedPay Validation', path: '/speedpay-validation', icon: 'ti ti-device-mobile-message' },
           { label: 'Official Receipts', path: '/receipts', icon: 'ti ti-receipt' },
+        ],
+      },
+      {
+        label: 'Treasury & Cash Flow',
+        items: [
+          { label: 'Cash Flow', path: '/cash-flow', icon: 'ti ti-chart-arrows' },
         ],
       },
       {
@@ -432,6 +737,7 @@ export const NAV_CONFIG: Record<UserRole, { groups: { label?: string; items: Nav
           { label: 'Invoice Review', path: '/invoice-review', icon: 'ti ti-file-check' },
           { label: 'Accounts Receivable', path: '/accounts-receivable', icon: 'ti ti-report-money' },
           { label: 'Payment Validation', path: '/payments', icon: 'ti ti-cash' },
+          { label: 'Financial Adjustments', path: '/adjustments', icon: 'ti ti-adjustments-alt' },
           { label: 'SpeedPay Validation', path: '/speedpay-validation', icon: 'ti ti-device-mobile-message' },
         ],
       },
@@ -439,7 +745,7 @@ export const NAV_CONFIG: Record<UserRole, { groups: { label?: string; items: Nav
         label: 'Analytics & Control',
         items: [
           { label: 'Reports', path: '/reports', icon: 'ti ti-chart-bar' },
-          { label: 'Audit Trail', path: '/audit-trail', icon: 'ti ti-shield-check' },
+          { label: 'Audit Logs', path: '/audit-logs', icon: 'ti ti-list-details' },
         ],
       },
     ],
@@ -455,8 +761,14 @@ export const NAV_CONFIG: Record<UserRole, { groups: { label?: string; items: Nav
       {
         label: 'Liquidation & Validation',
         items: [
-          { label: 'Liquidation Reports', path: '/payments', icon: 'ti ti-cash' },
+          { label: 'Liquidation Reports', path: '/liquidations', icon: 'ti ti-cash' },
           { label: 'SpeedPay Validation', path: '/speedpay-validation', icon: 'ti ti-device-mobile-message' },
+        ],
+      },
+      {
+        label: 'Analytics & Control',
+        items: [
+          { label: 'Audit Logs', path: '/audit-logs', icon: 'ti ti-list-details' },
         ],
       },
     ],
@@ -472,7 +784,7 @@ export const NAV_CONFIG: Record<UserRole, { groups: { label?: string; items: Nav
       {
         label: 'Liquidation & Validation',
         items: [
-          { label: 'Liquidation Reports', path: '/payments', icon: 'ti ti-cash' },
+          { label: 'Liquidation Reports', path: '/liquidations', icon: 'ti ti-cash' },
           { label: 'SpeedPay Validation', path: '/speedpay-validation', icon: 'ti ti-device-mobile-message' },
         ],
       },
@@ -492,14 +804,16 @@ export const NAV_CONFIG: Record<UserRole, { groups: { label?: string; items: Nav
           { label: 'Invoice Review', path: '/invoice-review', icon: 'ti ti-file-check' },
           { label: 'Accounts Receivable', path: '/accounts-receivable', icon: 'ti ti-report-money' },
           { label: 'Payments & Cash Flow', path: '/payments', icon: 'ti ti-cash' },
+          { label: 'Financial Adjustments', path: '/adjustments', icon: 'ti ti-adjustments-alt' },
           { label: 'SpeedPay Validation', path: '/speedpay-validation', icon: 'ti ti-device-mobile-message' },
         ],
       },
+
       {
         label: 'Analytics & Control',
         items: [
           { label: 'Reports', path: '/reports', icon: 'ti ti-chart-bar' },
-          { label: 'Audit Trail', path: '/audit-trail', icon: 'ti ti-shield-check' },
+          { label: 'Audit Logs', path: '/audit-logs', icon: 'ti ti-list-details' },
         ],
       },
     ],
@@ -518,14 +832,16 @@ export const NAV_CONFIG: Record<UserRole, { groups: { label?: string; items: Nav
           { label: 'Invoice Review', path: '/invoice-review', icon: 'ti ti-file-check' },
           { label: 'Accounts Receivable', path: '/accounts-receivable', icon: 'ti ti-report-money' },
           { label: 'Payments & Cash Flow', path: '/payments', icon: 'ti ti-cash' },
+          { label: 'Financial Adjustments', path: '/adjustments', icon: 'ti ti-adjustments-alt' },
           { label: 'SpeedPay Validation', path: '/speedpay-validation', icon: 'ti ti-device-mobile-message' },
         ],
       },
+
       {
         label: 'Analytics & Control',
         items: [
           { label: 'Reports', path: '/reports', icon: 'ti ti-chart-bar' },
-          { label: 'Audit Trail', path: '/audit-trail', icon: 'ti ti-shield-check' },
+          { label: 'Audit Logs', path: '/audit-logs', icon: 'ti ti-list-details' },
         ],
       },
     ],
@@ -590,3 +906,174 @@ export const FOLLOW_UP_CHANNELS = ['Phone Call', 'Email', 'SMS'] as const;
 export const FOLLOW_UP_STATUSES = ['Billing Approved/Processing Check', 'Billing Under Review', 'Check Ready for Pick-up', 'Discrepancy Flagged by Client'] as const;
 
 export const SEEDED_FOLLOW_UP_RECORDS: FollowUpRecord[] = [];
+
+// ─── Liquidations ──────────────────────────────────────────────────
+
+export interface SpeedPayValidation {
+  id: string;
+  invoiceId: string;
+  clientId: string;
+  amountPaid: number;
+  paymentMethod: string;
+  referenceNumber: string;
+  receiptUrl: string;
+  status: 'Pending Validation' | 'Validated' | 'Rejected';
+  submittedAt: string;
+  remarks?: string;
+  screenshotUrl?: string;
+}
+
+// ─── Financial Adjustment ──────────────────────────────────────────
+
+export interface FinancialAdjustment {
+  id: string;
+  type: 'Adjustment' | 'Credit Memo';
+  amount: number;
+  reason: string;
+  referenceNo: string;
+  status: 'Draft' | 'Pending Approval' | 'Approved' | 'Rejected' | 'Recorded';
+  affectedRecordId: string;
+  clientId: string;
+  createdAt: string;
+  createdBy: string;
+  remarks?: string;
+}
+
+export const SEEDED_ADJUSTMENTS: FinancialAdjustment[] = [
+  {
+    id: 'ADJ-2026-001',
+    type: 'Adjustment',
+    amount: 1000.00,
+    reason: 'System pricing error on initial billing',
+    referenceNo: 'REF-ERR-001',
+    status: 'Approved',
+    affectedRecordId: 'INV-001',
+    clientId: 'CA-001',
+    createdAt: '2026-05-18T10:00:00Z',
+    createdBy: 'EMP-003'
+  },
+  {
+    id: 'CM-2026-001',
+    type: 'Credit Memo',
+    amount: 500.00,
+    reason: 'Promotional discount applied late',
+    referenceNo: 'PROMO-500',
+    status: 'Pending Approval',
+    affectedRecordId: 'INV-002',
+    clientId: 'CL-002',
+    createdAt: '2026-05-19T14:30:00Z',
+    createdBy: 'EMP-003'
+  }
+];
+
+// ─── Liquidations ──────────────────────────────────────────────────
+
+export interface LiquidationExpense {
+  type: 'Fuel' | 'Toll Fee' | 'Parking Fee' | 'Vehicle Maintenance' | 'Trip Expense' | 'Other';
+  description: string;
+  amount: number;
+}
+
+export interface Liquidation {
+  id: string;
+  reference: string;
+  amount: number;
+  submittedBy: string;
+  submittedAt: string;
+  status: 'Pending Validation' | 'Validated' | 'Returned';
+  documents: { name: string; url: string; size: string }[];
+  remarks?: string;
+  expenses: LiquidationExpense[];
+}
+
+export const SEEDED_LIQUIDATIONS: Liquidation[] = [
+  {
+    id: 'LIQ-2026-001',
+    reference: 'TRIP-MNL-CEB-001',
+    amount: 15450.00,
+    submittedBy: 'Operations Dept (Driver Juan)',
+    submittedAt: '2026-09-21T08:30:00Z',
+    status: 'Pending Validation',
+    expenses: [
+      { type: 'Fuel', description: 'Diesel refill at Shell SLEX', amount: 8500.00 },
+      { type: 'Toll Fee', description: 'SLEX and STAR Tollway fees', amount: 1450.00 },
+      { type: 'Trip Expense', description: 'Driver and helper meal allowance', amount: 5500.00 }
+    ],
+    documents: [
+      { name: 'shell_receipt_slex.jpg', url: 'https://via.placeholder.com/150', size: '250 KB' },
+      { name: 'toll_receipts_compiled.pdf', url: 'https://via.placeholder.com/150', size: '1.2 MB' },
+      { name: 'trip_allowance_sheet.pdf', url: 'https://via.placeholder.com/150', size: '500 KB' }
+    ]
+  },
+  {
+    id: 'LIQ-2026-002',
+    reference: 'VEH-MAINT-VAN01',
+    amount: 8200.00,
+    submittedBy: 'Logistics Fleet Team',
+    submittedAt: '2026-09-22T09:15:00Z',
+    status: 'Validated',
+    expenses: [
+      { type: 'Vehicle Maintenance', description: 'Change oil and brake pad replacement', amount: 8200.00 }
+    ],
+    documents: [
+      { name: 'mechanic_invoice.pdf', url: 'https://via.placeholder.com/150', size: '3.1 MB' }
+    ],
+    remarks: 'Validated against submitted invoice from auto repair shop.'
+  },
+  {
+    id: 'LIQ-2026-003',
+    reference: 'TRIP-NTH-045',
+    amount: 2400.00,
+    submittedBy: 'Operations Dept (Driver Marco)',
+    submittedAt: new Date().toISOString(),
+    status: 'Pending Validation',
+    expenses: [
+      { type: 'Fuel', description: 'Gasoline refill Petron NLEX', amount: 1500.00 },
+      { type: 'Toll Fee', description: 'NLEX toll fees', amount: 800.00 },
+      { type: 'Parking Fee', description: 'Client warehouse parking fee', amount: 100.00 }
+    ],
+    documents: [
+      { name: 'petron_receipt.jpg', url: 'https://via.placeholder.com/150', size: '400 KB' },
+      { name: 'nlex_toll.jpg', url: 'https://via.placeholder.com/150', size: '300 KB' }
+    ]
+  }
+];
+
+// ─── Cash Flow Records ───────────────────────────────────────────
+
+export interface CashFlowRecord {
+  id: string;
+  type: 'Inflow' | 'Outflow';
+  amount: number;
+  sourceReference: string;
+  date: string;
+  recordedBy: string;
+}
+
+export const SEEDED_CASH_FLOW_RECORDS: CashFlowRecord[] = [
+  { id: 'CF-001', type: 'Inflow', amount: 120000, sourceReference: 'Payments Jan', date: '2026-01-15T10:00:00Z', recordedBy: 'System' },
+  { id: 'CF-002', type: 'Outflow', amount: 80000, sourceReference: 'Expenses Jan', date: '2026-01-20T10:00:00Z', recordedBy: 'System' },
+  { id: 'CF-003', type: 'Inflow', amount: 150000, sourceReference: 'Payments Feb', date: '2026-02-15T10:00:00Z', recordedBy: 'System' },
+  { id: 'CF-004', type: 'Outflow', amount: 110000, sourceReference: 'Expenses Feb', date: '2026-02-20T10:00:00Z', recordedBy: 'System' },
+  { id: 'CF-005', type: 'Inflow', amount: 180000, sourceReference: 'Payments Mar', date: '2026-03-15T10:00:00Z', recordedBy: 'System' },
+  { id: 'CF-006', type: 'Outflow', amount: 130000, sourceReference: 'Expenses Mar', date: '2026-03-20T10:00:00Z', recordedBy: 'System' },
+  { id: 'CF-007', type: 'Inflow', amount: 140000, sourceReference: 'Payments Apr', date: '2026-04-15T10:00:00Z', recordedBy: 'System' },
+  { id: 'CF-008', type: 'Outflow', amount: 120000, sourceReference: 'Expenses Apr', date: '2026-04-20T10:00:00Z', recordedBy: 'System' },
+  { id: 'CF-009', type: 'Inflow', amount: 190000, sourceReference: 'Payments May', date: '2026-05-15T10:00:00Z', recordedBy: 'System' },
+  { id: 'CF-010', type: 'Outflow', amount: 150000, sourceReference: 'Expenses May', date: '2026-05-20T10:00:00Z', recordedBy: 'System' },
+  { id: 'CF-011', type: 'Inflow', amount: 210000, sourceReference: 'Payments Jun', date: '2026-06-15T10:00:00Z', recordedBy: 'System' },
+  { id: 'CF-012', type: 'Outflow', amount: 170000, sourceReference: 'Expenses Jun', date: '2026-06-20T10:00:00Z', recordedBy: 'System' },
+  { id: 'CF-013', type: 'Inflow', amount: 220000, sourceReference: 'Payments Jul', date: '2026-07-15T10:00:00Z', recordedBy: 'System' },
+  { id: 'CF-014', type: 'Outflow', amount: 180000, sourceReference: 'Expenses Jul', date: '2026-07-20T10:00:00Z', recordedBy: 'System' },
+  { id: 'CF-015', type: 'Inflow', amount: 200000, sourceReference: 'Payments Aug', date: '2026-08-15T10:00:00Z', recordedBy: 'System' },
+  { id: 'CF-016', type: 'Outflow', amount: 160000, sourceReference: 'Expenses Aug', date: '2026-08-20T10:00:00Z', recordedBy: 'System' },
+  // September Weekly breakdown
+  { id: 'CF-017', type: 'Inflow', amount: 45000, sourceReference: 'Payments W1 Sep', date: '2026-09-04T10:00:00Z', recordedBy: 'System' },
+  { id: 'CF-018', type: 'Outflow', amount: 30000, sourceReference: 'Expenses W1 Sep', date: '2026-09-05T10:00:00Z', recordedBy: 'System' },
+  { id: 'CF-019', type: 'Inflow', amount: 55000, sourceReference: 'Payments W2 Sep', date: '2026-09-11T10:00:00Z', recordedBy: 'System' },
+  { id: 'CF-020', type: 'Outflow', amount: 40000, sourceReference: 'Expenses W2 Sep', date: '2026-09-12T10:00:00Z', recordedBy: 'System' },
+  { id: 'CF-021', type: 'Inflow', amount: 65000, sourceReference: 'Payments W3 Sep', date: '2026-09-18T10:00:00Z', recordedBy: 'System' },
+  { id: 'CF-022', type: 'Outflow', amount: 50000, sourceReference: 'Expenses W3 Sep', date: '2026-09-19T10:00:00Z', recordedBy: 'System' },
+  { id: 'CF-023', type: 'Inflow', amount: 55000, sourceReference: 'Payments W4 Sep', date: '2026-09-25T10:00:00Z', recordedBy: 'System' },
+  { id: 'CF-024', type: 'Outflow', amount: 60000, sourceReference: 'Expenses W4 Sep', date: '2026-09-26T10:00:00Z', recordedBy: 'System' },
+];

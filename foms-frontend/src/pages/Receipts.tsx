@@ -8,6 +8,9 @@ import { Button } from '../components/Buttons';
 import { useAppData } from '../context/AppDataContext';
 import { TableContainer } from '../components/TableContainer';
 import { ClientInfoCard } from '../components/ClientInfoCard';
+import { useToast } from '../components/ToastContext';
+// @ts-ignore
+import html2pdf from 'html2pdf.js';
 
 export const Receipts: React.FC = () => {
   const { id: clientIdParam } = useParams();
@@ -15,6 +18,7 @@ export const Receipts: React.FC = () => {
   const receiptIdParam = searchParams.get('receiptId');
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { toast } = useToast();
 
   const { receipts, clients, invoices, payments } = useAppData();
 
@@ -25,16 +29,16 @@ export const Receipts: React.FC = () => {
     const raw = receipts.find(r => r.id === receiptIdParam);
     if (!raw) return <div>Receipt not found</div>;
 
-    const client  = clients.find(c => c.id === raw.clientId);
+    const client = clients.find(c => c.id === raw.clientId);
     const invoice = invoices.find(i => i.id === raw.invoiceId);
     const payment = payments.find(p => p.id === raw.paymentId);
 
     const or = {
       ...raw,
-      clientName:      client?.name                         ?? 'Unknown',
-      clientCode:      raw.clientId                         || '—',
-      invoiceNumber:   invoice?.invoiceNumber               ?? raw.invoiceId,
-      paymentMethod:   payment?.paymentMethod               ?? 'N/A',
+      clientName: client?.name ?? 'Unknown',
+      clientCode: raw.clientId || '—',
+      invoiceNumber: invoice?.invoiceNumber ?? raw.invoiceId,
+      paymentMethod: payment?.paymentMethod ?? 'N/A',
       referenceNumber: payment?.referenceNumber ?? raw.referenceNumber ?? 'N/A',
     };
 
@@ -43,17 +47,17 @@ export const Receipts: React.FC = () => {
     // ── Number → words ──────────────────────────────────────────
     function numberToWords(amount: number): string {
       if (amount === 0) return 'Zero Pesos Only';
-      const ones = ['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine',
-        'Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen'];
-      const tens = ['','','Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety'];
+      const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine',
+        'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+      const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
       function conv(n: number): string {
-        if (n < 20)      return ones[n];
-        if (n < 100)     return tens[Math.floor(n/10)] + (n%10 ? ' '+ones[n%10] : '');
-        if (n < 1000)    return ones[Math.floor(n/100)] + ' Hundred' + (n%100 ? ' '+conv(n%100) : '');
-        if (n < 1000000) return conv(Math.floor(n/1000)) + ' Thousand' + (n%1000 ? ' '+conv(n%1000) : '');
-        return conv(Math.floor(n/1000000)) + ' Million' + (n%1000000 ? ' '+conv(n%1000000) : '');
+        if (n < 20) return ones[n];
+        if (n < 100) return tens[Math.floor(n / 10)] + (n % 10 ? ' ' + ones[n % 10] : '');
+        if (n < 1000) return ones[Math.floor(n / 100)] + ' Hundred' + (n % 100 ? ' ' + conv(n % 100) : '');
+        if (n < 1000000) return conv(Math.floor(n / 1000)) + ' Thousand' + (n % 1000 ? ' ' + conv(n % 1000) : '');
+        return conv(Math.floor(n / 1000000)) + ' Million' + (n % 1000000 ? ' ' + conv(n % 1000000) : '');
       }
-      const pesos    = Math.floor(amount);
+      const pesos = Math.floor(amount);
       const centavos = Math.round((amount - pesos) * 100);
       let result = conv(pesos) + ' Pesos';
       if (centavos > 0) result += ' and ' + conv(centavos) + '/100 Centavos';
@@ -66,7 +70,7 @@ export const Receipts: React.FC = () => {
         month: 'long', day: 'numeric', year: 'numeric',
       });
       const amountFormatted = `&#8369;${or.amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
-      const amountWords     = numberToWords(or.amount);
+      const amountWords = numberToWords(or.amount);
 
       const html = `<!DOCTYPE html>
 <html lang="en">
@@ -182,7 +186,7 @@ export const Receipts: React.FC = () => {
       <tr><td>Amount in Words:</td><td>${amountWords}</td></tr>
       <tr><td>Payment Method:</td><td>${or.paymentMethod}</td></tr>
       <tr><td>Payment Reference No.:</td><td>${or.referenceNumber}</td></tr>
-      <tr><td>Payment Status:</td><td>Validated</td></tr>
+      <tr><td>Payment Status:</td><td>Issued OR</td></tr>
       <tr><td>Invoice Status:</td><td>Paid</td></tr>
       <tr><td>Outstanding Balance:</td><td>&#8369;0.00</td></tr>
     </tbody>
@@ -212,11 +216,35 @@ export const Receipts: React.FC = () => {
 </body>
 </html>`;
 
-      const win = window.open('', '_blank', 'width=900,height=750');
-      if (win) {
-        win.document.write(html);
-        win.document.close();
+      toast.info(`Generating PDF for receipt ${or.receiptNumber}...`, 'Please wait');
+
+      const opt = {
+        margin: 0,
+        filename: `${or.receiptNumber}.pdf`,
+        image: { type: 'jpeg' as 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, windowWidth: 820 },
+        jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' as 'portrait' }
+      };
+
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = html;
+
+      // Remove the print script so it doesn't trigger in the iframe html2pdf creates
+      const scriptTags = tempDiv.getElementsByTagName('script');
+      for (let i = scriptTags.length - 1; i >= 0; i--) {
+        scriptTags[i].remove();
       }
+
+      document.body.appendChild(tempDiv);
+
+      html2pdf().from(tempDiv).set(opt).save().then(() => {
+        document.body.removeChild(tempDiv);
+        toast.success('Receipt PDF Downloaded successfully!', 'Success');
+      }).catch((err: any) => {
+        document.body.removeChild(tempDiv);
+        toast.error('Failed to generate PDF.', 'Error');
+        console.error('PDF Generation Error:', err);
+      });
     };
 
     // ── Card form layout (same as original) ─────────────────────
@@ -238,101 +266,120 @@ export const Receipts: React.FC = () => {
 
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-        <div
-          onClick={() => navigate(`/receipts/${clientIdParam}`)}
-          style={{ cursor: 'pointer', color: '#64748B', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: 600, width: 'fit-content' }}
-        >
-          <i className="ti ti-arrow-left" style={{ fontSize: '16px' }} /> Back to Receipts
-        </div>
 
         <Card>
-          <div style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '24px', position: 'relative' }}>
-            {/* APPROVED stamp */}
-            <div style={{
-              position: 'absolute', top: '40px', right: '40px',
-              border: '4px solid rgba(16,185,129,0.4)', color: 'rgba(16,185,129,0.4)',
-              padding: '8px 24px', borderRadius: '8px', fontWeight: 900,
-              fontSize: '32px', letterSpacing: '0.2em', textTransform: 'uppercase',
-              transform: 'rotate(15deg)', pointerEvents: 'none', zIndex: 10,
-            }}>
-              APPROVED
-            </div>
-
-            <h3 style={{ margin: '0 0 -8px', fontSize: '1rem', color: '#0F172A', fontWeight: 700 }}>
-              Official Receipt Details
-            </h3>
-
-            {/* Row 1 — OR Number + Date Issued */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <label style={labelStyle}>OR NUMBER</label>
-                <input type="text" value={or.receiptNumber} disabled style={inputStyle('#FCD34D')} />
+          <div style={{ padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+            <div style={{ display: 'flex', gap: '24px' }}>
+              <div>
+                <span style={{ display: 'block', fontSize: '0.75rem', fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase', marginBottom: '4px', letterSpacing: '0.05em' }}>PAYMENT STATUS</span>
+                <StatusBadge status="Issued OR" />
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <label style={labelStyle}>DATE ISSUED</label>
-                <input
-                  type="text"
-                  value={new Date(or.issuedAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
-                  disabled
-                  style={inputStyle()}
-                />
+              <div>
+                <span style={{ display: 'block', fontSize: '0.75rem', fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase', marginBottom: '4px', letterSpacing: '0.05em' }}>INVOICE STATUS</span>
+                <StatusBadge status="Paid" />
+              </div>
+              <div>
+                <span style={{ display: 'block', fontSize: '0.75rem', fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase', marginBottom: '4px', letterSpacing: '0.05em' }}>DATE ISSUED</span>
+                <span style={{ color: '#0F172A', fontWeight: 700, fontSize: '0.95rem' }}>{new Date(or.issuedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
               </div>
             </div>
-
-            {/* Row 2 — Client Name + Invoice No. */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <label style={labelStyle}>CLIENT NAME</label>
-                <input type="text" value={or.clientName} disabled style={inputStyle()} />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <label style={labelStyle}>LINKED INVOICE NO.</label>
-                <input type="text" value={or.invoiceNumber} disabled style={inputStyle()} />
-              </div>
-            </div>
-
-            {/* Row 3 — Payment Method + Reference Number */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <label style={labelStyle}>PAYMENT METHOD</label>
-                <input type="text" value={or.paymentMethod} disabled style={inputStyle()} />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <label style={labelStyle}>REFERENCE NUMBER</label>
-                <input type="text" value={or.referenceNumber} disabled style={{ ...inputStyle(), fontFamily: 'monospace' }} />
-              </div>
-            </div>
-
-            {/* Row 4 — Amount + Payment ID */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <label style={labelStyle}>AMOUNT RECEIVED</label>
-                <input
-                  type="text"
-                  value={`₱${or.amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`}
-                  disabled
-                  style={inputStyle('#10B981')}
-                />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <label style={labelStyle}>LINKED PAYMENT ID</label>
-                <input type="text" value={or.paymentId} disabled style={{ ...inputStyle(), fontWeight: 600 }} />
-              </div>
-            </div>
-
-            {/* Row 5 — Validated / Issued By */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <label style={labelStyle}>VALIDATED / ISSUED BY</label>
-              <input type="text" value={issuedByName} disabled style={{ ...inputStyle(), fontStyle: 'italic', color: '#64748B' }} />
-            </div>
-
-            <hr style={{ border: 0, borderTop: '1px solid #E2E8F0', margin: 0 }} />
-
-            {/* Action buttons */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '16px' }}>
+            <div style={{ display: 'flex', gap: '12px' }}>
               <Button title="Close" variant="secondary" onClick={() => navigate(`/receipts/${clientIdParam}`)} />
               <Button title="Print / PDF" variant="primary" icon="ti-printer" onClick={handlePrint} />
             </div>
+          </div>
+        </Card>
+
+        <Card>
+          <div style={{ padding: '32px', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+            {/* ── PAID Stamp ── */}
+            <div style={{
+              position: 'absolute', top: '35%', left: '50%',
+              transform: 'translate(-50%, -50%) rotate(-20deg)', pointerEvents: 'none',
+              border: '6px solid rgba(220, 38, 38, 0.15)', color: 'rgba(220, 38, 38, 0.15)',
+              padding: '10px 30px', fontSize: '5rem', fontWeight: 900,
+              textTransform: 'uppercase', letterSpacing: '0.1em', zIndex: 0
+            }}>
+              PAID
+            </div>
+
+            {/* ── Header ── */}
+            <div style={{ textAlign: 'center', marginBottom: '32px', position: 'relative', zIndex: 1 }}>
+              <h2 style={{ margin: '0 0 4px', fontSize: '1.3rem', fontWeight: 800, color: '#0F172A' }}>Speedex Courier & Forwarder, Inc.</h2>
+              <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748B' }}>123 Rizal St, Brgy. Poblacion, Cebu City</p>
+              <h1 style={{ margin: '24px 0 16px', fontSize: '1.8rem', fontWeight: 800, letterSpacing: '0.3em', textTransform: 'uppercase', color: '#0F172A' }}>
+                RECEIPT
+              </h1>
+            </div>
+
+            {/* ── Details ── */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '32px', fontSize: '0.85rem', position: 'relative', zIndex: 1 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '6px 16px', color: '#0F172A' }}>
+                <span style={{ color: '#64748B' }}>Receipt #:</span> <strong>{or.receiptNumber}</strong>
+                <span style={{ color: '#64748B' }}>Issue Date:</span> <strong>{new Date(or.issuedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</strong>
+                <span style={{ color: '#64748B' }}>Payment Method:</span> <strong>{or.paymentMethod}</strong>
+                <span style={{ color: '#64748B' }}>Reference #:</span> <strong>{or.referenceNumber}</strong>
+              </div>
+              <div style={{ textAlign: 'right', color: '#0F172A' }}>
+                <span style={{ color: '#64748B', display: 'block', marginBottom: '4px' }}>Received From:</span>
+                <strong style={{ fontSize: '1rem' }}>{or.clientName}</strong>
+                <p style={{ margin: '4px 0 0', color: '#475569' }}>Code: {or.clientCode}</p>
+                <p style={{ margin: '4px 0 0', color: '#475569' }}>Invoice No: {or.invoiceNumber}</p>
+              </div>
+            </div>
+
+            {/* ── Table ── */}
+            <div style={{ marginBottom: '32px', position: 'relative', zIndex: 1 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr>
+                    <th style={{ textAlign: 'left', padding: '12px 6px', borderTop: '2px dashed #CBD5E1', borderBottom: '2px dashed #CBD5E1', fontSize: '0.8rem', color: '#0F172A', fontWeight: 700 }}>Description</th>
+                    <th style={{ textAlign: 'right', padding: '12px 6px', borderTop: '2px dashed #CBD5E1', borderBottom: '2px dashed #CBD5E1', fontSize: '0.8rem', color: '#0F172A', fontWeight: 700 }}>Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td style={{ padding: '10px 6px', fontSize: '0.85rem', color: '#0F172A', fontWeight: 600 }}>Payment for Invoice {or.invoiceNumber}</td>
+                    <td style={{ padding: '10px 6px', fontSize: '0.9rem', color: '#0F172A', textAlign: 'right', fontWeight: 700 }}>₱{or.amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
+                  </tr>
+                </tbody>
+              </table>
+              <div style={{ borderTop: '2px dashed #CBD5E1', marginTop: '4px' }}></div>
+            </div>
+
+            {/* ── Summary Totals ── */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', position: 'relative', zIndex: 1 }}>
+              <div style={{ width: '320px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 8px', marginTop: '4px', borderTop: '2px dashed #CBD5E1' }}>
+                  <span style={{ fontSize: '0.95rem', color: '#0F172A', fontWeight: 800 }}>Amount Received</span>
+                  <span style={{ fontSize: '1.1rem', color: '#0F172A', fontWeight: 900 }}>₱{or.amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* ── Amount in Words ── */}
+            <div style={{ background: '#F8FAFC', padding: '12px 16px', borderRadius: 8, marginTop: '16px', textAlign: 'center', position: 'relative', zIndex: 1 }}>
+              <span style={{ color: '#64748B', fontSize: '0.75rem', display: 'block', marginBottom: '4px' }}>AMOUNT IN WORDS</span>
+              <strong style={{ color: '#0F172A', fontSize: '0.9rem' }}>{numberToWords(or.amount)}</strong>
+            </div>
+
+            {/* ── Footer ── */}
+            <div style={{ marginTop: '48px', textAlign: 'center', position: 'relative', zIndex: 1 }}>
+              <p style={{ margin: '0 0 24px', fontSize: '1rem', color: '#0F172A', fontWeight: 600 }}>Thank you!</p>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderTop: '1px solid #E2E8F0', paddingTop: '16px' }}>
+                <div style={{ textAlign: 'left' }}>
+                  <p style={{ margin: 0, fontSize: '0.75rem', color: '#64748B' }}>System-generated receipt from Speedex FOMS.</p>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ borderTop: '1px solid #0F172A', paddingTop: 6, minWidth: 140 }}>
+                    <p style={{ margin: 0, fontSize: '0.85rem', color: '#0F172A', fontWeight: 700, textAlign: 'center', marginBottom: 2 }}>{issuedByName}</p>
+                    <p style={{ margin: 0, fontSize: '0.75rem', color: '#475569', fontWeight: 600, textAlign: 'center' }}>Authorized Signatory</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+
           </div>
         </Card>
       </div>
@@ -353,18 +400,18 @@ export const Receipts: React.FC = () => {
         const pmt = payments.find(p => p.id === r.paymentId);
         return {
           ...r,
-          invoiceNumber:   inv?.invoiceNumber   ?? r.invoiceId,
-          paymentMethod:   pmt?.paymentMethod   ?? 'N/A',
+          invoiceNumber: inv?.invoiceNumber ?? r.invoiceId,
+          paymentMethod: pmt?.paymentMethod ?? 'N/A',
           referenceNumber: pmt?.referenceNumber ?? 'N/A',
         };
       });
 
     const columns = [
-      { key: 'receiptNumber',   label: 'OR NUMBER',         sortable: true },
-      { key: 'invoiceNumber',   label: 'LINKED INVOICE' },
+      { key: 'receiptNumber', label: 'OR NUMBER', sortable: true },
+      { key: 'invoiceNumber', label: 'LINKED INVOICE' },
       { key: 'referenceNumber', label: 'PAYMENT REFERENCE' },
-      { key: 'amount',    label: 'AMOUNT',      render: (row: any) => `₱${row.amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` },
-      { key: 'issuedAt',  label: 'DATE ISSUED', render: (row: any) => new Date(row.issuedAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) },
+      { key: 'amount', label: 'AMOUNT', render: (row: any) => `₱${row.amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` },
+      { key: 'issuedAt', label: 'DATE ISSUED', render: (row: any) => new Date(row.issuedAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) },
     ];
 
     const actions = [
@@ -373,9 +420,6 @@ export const Receipts: React.FC = () => {
 
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-        <div onClick={() => navigate('/receipts')} style={{ cursor: 'pointer', color: '#64748B', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: 600, width: 'fit-content' }}>
-          <i className="ti ti-arrow-left" style={{ fontSize: '16px' }} /> Back to Receipts
-        </div>
 
         <ClientInfoCard client={client} />
 
@@ -403,16 +447,14 @@ export const Receipts: React.FC = () => {
   // ─────────────────────────────────────────────────────────────
   const relevantClientIds = new Set<string>();
   receipts.forEach(r => relevantClientIds.add(r.clientId));
-  payments.filter(p => p.status === 'Validated').forEach(p => relevantClientIds.add(p.clientId));
+  (payments as any[]).filter(p => p.status === 'Issued OR').forEach(p => relevantClientIds.add(p.clientId));
 
   const listData = Array.from(relevantClientIds).map(clientId => {
     const client = clients.find(c => c.id === clientId);
-    const clientPayments = payments.filter(p => p.clientId === clientId && p.status === 'Validated');
-    const hasPending = clientPayments.some(p => !receipts.some(r => r.paymentId === p.id));
     return {
       id: clientId,
       clientName: client?.name ?? 'Unknown',
-      status: hasPending ? 'Pending' : 'Issued',
+      status: 'Issued OR',
     };
   });
 
@@ -422,13 +464,18 @@ export const Receipts: React.FC = () => {
         <DataTable
           data={listData}
           columns={[
-            { key: 'id',         label: 'CLIENT ID',   sortable: true },
-            { key: 'clientName', label: 'CLIENT NAME', sortable: true, render: (row: any) => (
-              <span onClick={() => navigate(`/receipts/${row.id}`)} style={{ color: '#0F172A', fontWeight: 700, cursor: 'pointer' }}>
-                {row.clientName}
-              </span>
-            )},
+            { key: 'id', label: 'CLIENT ID', sortable: true },
+            {
+              key: 'clientName', label: 'CLIENT NAME', sortable: true, render: (row: any) => (
+                <span style={{ color: '#0F172A' }}>
+                  {row.clientName}
+                </span>
+              )
+            },
             { key: 'status', label: 'STATUS', render: (row: any) => <StatusBadge status={row.status} /> },
+          ]}
+          actions={[
+            { label: 'View Details', icon: 'ti-eye', onClick: (row: any) => navigate(`/receipts/${row.id}`) }
           ]}
           rowKey="id"
           title="Official Receipts"
@@ -438,11 +485,6 @@ export const Receipts: React.FC = () => {
           exportable={false}
           columnToggle={true}
           densityToggle={true}
-          filters={[{
-            key: 'status', label: 'All Statuses',
-            options: [{ label: 'Pending', value: 'Pending' }, { label: 'Issued', value: 'Issued' }],
-            filterFn: (row: any, val: string) => row.status === val,
-          }]}
         />
       </TableContainer>
     </div>

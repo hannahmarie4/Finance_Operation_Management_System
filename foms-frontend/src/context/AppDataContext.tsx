@@ -21,6 +21,8 @@ import {
   SEEDED_AUDIT_LOGS,
   SEEDED_FOLLOW_UP_RECORDS,
   Waybill,
+  FinancialAdjustment,
+  SEEDED_ADJUSTMENTS,
   Invoice,
   Payment,
   Receipt,
@@ -29,9 +31,31 @@ import {
   ARRecord,
   AuditLog,
   FollowUpRecord,
+  Liquidation,
+  SEEDED_LIQUIDATIONS,
+  CashFlowRecord,
+  SEEDED_CASH_FLOW_RECORDS,
 } from '../data/seed';
 
 // ─── Backend → Frontend map helpers ──────────────────────────────
+
+function getEmployeeName(userId: string, defaultName: string): string {
+  if (userId === 'EMP-001') return 'Crystalyn Joyce C. Fajardo';
+  if (userId === 'EMP-002') return 'Misty';
+  if (userId === 'EMP-003') return 'Maria Mariel Jane Anonuevo';
+  if (userId === 'EMP-004') return 'Hannah Estrera';
+  if (userId === 'EMP-005') return 'Joana Marie Ogaya';
+  return (defaultName === 'System' || !defaultName) ? 'Crystalyn Joyce C. Fajardo' : defaultName;
+}
+
+function getEmployeeRole(userId: string, defaultRole: string): string {
+  if (userId === 'EMP-001') return 'Finance Manager';
+  if (userId === 'EMP-002') return 'Head Accountant';
+  if (userId === 'EMP-003') return 'Accountant';
+  if (userId === 'EMP-004') return 'Coordinator';
+  if (userId === 'EMP-005') return 'Assistant of Finance Manager';
+  return (defaultRole === 'System' || !defaultRole) ? 'Finance Manager' : defaultRole;
+}
 
 function mapClient(c: any): Client {
   return {
@@ -52,7 +76,7 @@ function mapClient(c: any): Client {
 
 function mapInvoice(inv: any): Invoice {
   // Derive frontend status from backend paymentStatus (DB truth)
-  let status: Invoice['status'] = 'Finalized';
+  let status: Invoice['status'] = 'Sent';
   const ps = (inv.paymentStatus ?? '').toLowerCase();
   const pvs = (inv.paymentValidationStatus ?? '').toLowerCase();
   if (ps === 'paid') {
@@ -62,7 +86,7 @@ function mapInvoice(inv: any): Invoice {
   } else if (pvs.includes('pending')) {
     status = 'Pending Approval';
   } else if (pvs === 'returned for correction') {
-    status = 'Draft';
+    status = 'Needs Revision';
   }
   return {
     id: inv.id,
@@ -137,20 +161,25 @@ function mapSpeedPay(s: any): SpeedPaySubmission {
 
 // ─── Helper: compute AR records live from invoices + payments ─────
 
-function computeArRecords(invoices: Invoice[], payments: Payment[]): ARRecord[] {
+function computeArRecords(invoices: Invoice[], payments: Payment[], financialAdjustments: FinancialAdjustment[] = []): ARRecord[] {
   return invoices
-    .filter(inv => ['Finalized', 'Overdue', 'Verified', 'Sent', 'Pending Approval', 'Paid', 'Draft', 'Unpaid'].includes(inv.status))
+    .filter(inv => ['Sent', 'Overdue', 'Paid'].includes(inv.status))
     .map((inv, i) => {
       const now = new Date();
       const due = new Date(inv.dueDate);
       const diffDays = Math.floor((now.getTime() - due.getTime()) / (1000 * 60 * 60 * 24));
       const daysUntilDue = Math.floor((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
-      const paid = payments
-        .filter(p => p.invoiceId === inv.id && (p.status === 'Validated' || p.status === 'Approved'))
-        .reduce((s, p) => s + p.amount, 0);
+      const invoicePayments = payments.filter(p => p.invoiceId === inv.id && (p.status === 'Validated' || p.status === 'Approved'));
+      const amountPaid = invoicePayments.reduce((sum, p) => sum + p.amount, 0);
 
-      let outstandingBalance = Math.max(0, inv.totalAmount - paid);
+      const invoiceAdjustments = financialAdjustments.filter(adj => 
+        adj.affectedRecordId === inv.id && adj.status === 'Approved'
+      );
+      const totalAdjustments = invoiceAdjustments.reduce((sum, adj) => sum + adj.amount, 0);
+
+      let outstandingBalance = inv.totalAmount - amountPaid - totalAdjustments;
+      if (outstandingBalance < 0) outstandingBalance = 0;
 
       let bracket: ARRecord['agingBracket'] = 'Current';
       let status: ARRecord['status'] = 'Current';
@@ -178,7 +207,7 @@ function computeArRecords(invoices: Invoice[], payments: Payment[]): ARRecord[] 
         invoiceDate: inv.createdAt,
         dueDate: inv.dueDate,
         originalAmount: inv.totalAmount,
-        paidAmount: paid,
+        paidAmount: amountPaid,
         outstandingBalance,
         agingBracket: bracket,
         agingDays: Math.abs(diffDays),
@@ -200,6 +229,9 @@ export interface AppDataContextValue {
   arRecords: ARRecord[]; // derived, always in sync
   auditLogs: AuditLog[];
   followUpRecords: FollowUpRecord[];
+  liquidations: Liquidation[];
+  cashFlowRecords: CashFlowRecord[];
+  financialAdjustments: FinancialAdjustment[];
 
   // DB Refresh actions — call after any mutation to re-sync from DB
   refreshPayments: () => Promise<void>;
@@ -236,6 +268,16 @@ export interface AppDataContextValue {
 
   // Audit log
   addAuditLog: (log: AuditLog) => void;
+
+  // Liquidations
+  updateLiquidation: (id: string, changes: Partial<Liquidation>) => void;
+
+  // Financial Adjustments
+  addAdjustment: (adjustment: FinancialAdjustment) => void;
+  updateAdjustment: (id: string, changes: Partial<FinancialAdjustment>) => void;
+
+  // Cash Flow
+  addCashFlowRecord: (record: CashFlowRecord) => void;
 }
 
 const AppDataContext = createContext<AppDataContextValue | null>(null);
@@ -244,13 +286,26 @@ const AppDataContext = createContext<AppDataContextValue | null>(null);
 
 export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [waybills, setWaybills] = useState<Waybill[]>(SEEDED_WAYBILLS);
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [receipts, setReceipts] = useState<Receipt[]>([]);
-  const [speedPay, setSpeedPay] = useState<SpeedPaySubmission[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>(SEEDED_INVOICES);
+  const [payments, setPayments] = useState<Payment[]>(SEEDED_PAYMENTS);
+  const [receipts, setReceipts] = useState<Receipt[]>(SEEDED_RECEIPTS);
+  const [speedPay, setSpeedPay] = useState<SpeedPaySubmission[]>(SEEDED_SPEEDPAY);
   const [clients, setClients] = useState<Client[]>(SEEDED_CLIENTS);
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
-  const [followUpRecords, setFollowUpRecords] = useState<FollowUpRecord[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(SEEDED_AUDIT_LOGS);
+  const [followUpRecords, setFollowUpRecords] = useState<FollowUpRecord[]>(SEEDED_FOLLOW_UP_RECORDS);
+  const [liquidations, setLiquidations] = useState<Liquidation[]>(SEEDED_LIQUIDATIONS);
+  
+  // Financial Adjustments State
+  const [financialAdjustments, setFinancialAdjustments] = useState<FinancialAdjustment[]>(() => {
+    try {
+      const saved = localStorage.getItem('foms_financial_adjustments');
+      return saved ? JSON.parse(saved) : SEEDED_ADJUSTMENTS;
+    } catch {
+      return SEEDED_ADJUSTMENTS;
+    }
+  });
+
+  const [cashFlowRecords, setCashFlowRecords] = useState<CashFlowRecord[]>(SEEDED_CASH_FLOW_RECORDS);
 
   // ── Refresh functions — REPLACE state from DB (never merge) ──────
   const refreshClients = useCallback(async () => {
@@ -273,7 +328,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     try {
       const res = await api.get('/payments');
       const mapped: Payment[] = res.data.map(mapPayment);
-      setPayments(mapped);
+      if (mapped.length > 0) setPayments(mapped);
     } catch { /* keep current state */ }
   }, []);
 
@@ -281,7 +336,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     try {
       const res = await api.get('/speedpay/submissions');
       const mapped: SpeedPaySubmission[] = res.data.map(mapSpeedPay);
-      setSpeedPay(mapped);
+      if (mapped.length > 0) setSpeedPay(mapped);
     } catch { /* keep current state */ }
   }, []);
 
@@ -299,7 +354,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         issuedBy: r.issuedBy ?? 'System',
         issuedAt: r.issuedDate ?? r.issuedAt ?? new Date().toISOString(),
       }));
-      setReceipts(mapped);
+      if (mapped.length > 0) setReceipts(mapped);
     } catch { /* keep current state */ }
   }, []);
 
@@ -356,9 +411,9 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         const mapped: AuditLog[] = res.data.map((a: any) => ({
           id: a.id ?? a.auditLogId,
           timestamp: a.timestamp ?? a.createdAt ?? new Date().toISOString(),
-          userId: a.userId ?? 'SYS',
-          userFullName: a.userFullName ?? 'System',
-          userRole: a.userRole ?? 'System',
+          userId: a.userId ?? 'EMP-001',
+          userFullName: getEmployeeName(a.userId, a.userFullName),
+          userRole: getEmployeeRole(a.userId, a.userRole),
           action: a.action ?? 'Unknown',
           module: a.module ?? 'System',
           recordId: a.recordId ?? '',
@@ -366,15 +421,28 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
           details: a.details ?? '',
           ipAddress: a.ipAddress ?? '127.0.0.1'
         }));
-        if (mapped.length > 0) setAuditLogs(mapped);
+        if (mapped.length > 0) {
+          setAuditLogs([...mapped, ...SEEDED_AUDIT_LOGS]);
+        } else {
+          setAuditLogs([...SEEDED_AUDIT_LOGS]);
+        }
       })
-      .catch(() => { /* keep static seed as fallback */ });
+      .catch(() => {
+        setAuditLogs([...SEEDED_AUDIT_LOGS]);
+      });
   }, []);
+
+  // Save financial adjustments to localStorage on change
+  useEffect(() => {
+    try {
+      localStorage.setItem('foms_financial_adjustments', JSON.stringify(financialAdjustments));
+    } catch { /* ignore */ }
+  }, [financialAdjustments]);
 
   // AR records are always computed live — never stale
   const arRecords = useMemo(
-    () => computeArRecords(invoices, payments),
-    [invoices, payments]
+    () => computeArRecords(invoices, payments, financialAdjustments),
+    [invoices, payments, financialAdjustments]
   );
 
   // ── Waybill Actions ──
@@ -445,6 +513,22 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     setAuditLogs(prev => [log, ...prev]);
   }, []);
 
+  const updateLiquidation = useCallback((id: string, changes: Partial<Liquidation>) => {
+    setLiquidations(prev => prev.map(l => l.id === id ? { ...l, ...changes } : l));
+  }, []);
+
+  const addAdjustment = useCallback((adjustment: FinancialAdjustment) => {
+    setFinancialAdjustments(prev => [...prev, adjustment]);
+  }, []);
+
+  const updateAdjustment = useCallback((id: string, changes: Partial<FinancialAdjustment>) => {
+    setFinancialAdjustments(prev => prev.map(a => a.id === id ? { ...a, ...changes } : a));
+  }, []);
+
+  const addCashFlowRecord = useCallback((record: CashFlowRecord) => {
+    setCashFlowRecords(prev => [record, ...prev]);
+  }, []);
+
   const value: AppDataContextValue = {
     waybills,
     invoices,
@@ -455,6 +539,9 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     arRecords,
     auditLogs,
     followUpRecords,
+    liquidations,
+    cashFlowRecords,
+    financialAdjustments,
     refreshPayments,
     refreshInvoices,
     refreshSpeedPay,
@@ -473,6 +560,10 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     addClient,
     addFollowUpRecord,
     addAuditLog,
+    updateLiquidation,
+    addAdjustment,
+    updateAdjustment,
+    addCashFlowRecord,
   };
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;

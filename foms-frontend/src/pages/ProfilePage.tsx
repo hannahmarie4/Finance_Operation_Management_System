@@ -11,20 +11,20 @@ export const ProfilePage: React.FC = () => {
 
   const loginHistoryFeed = useMemo(() => {
     if (!user.loginHistory) return [];
-    
+
     const devices = [
       'MacBook Pro / 192.168.1.45',
       'iPhone 15 Pro / 112.44.21.9',
       'Windows Desktop / 192.168.1.12',
       'iPad Pro / 10.0.0.15'
     ];
-    
+
     return user.loginHistory.map((isoString, index) => {
       const d = new Date(isoString);
       const hash = Array.from(isoString).reduce((acc, char) => acc + char.charCodeAt(0), 0);
       const deviceName = devices[hash % devices.length];
       const relTime = relativeTime(isoString);
-      
+
       return {
         id: index.toString(),
         rawDate: d,
