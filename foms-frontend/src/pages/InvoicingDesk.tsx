@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { DataTable } from '../components/DataTable';
 import { StatusBadge } from '../components/StatusBadge';
@@ -71,8 +72,8 @@ export const InvoicingDesk: React.FC = () => {
       ? invoices.filter(i => i.clientId === selectedClientId)
       : invoices;
 
-    // Only show invoices that are pre-sent (once sent, they move to Accounts Receivable)
-    const activeInvoices = base.filter(i => ['Draft', 'Needs Revision', 'Pending Approval', 'Approved'].includes(i.status));
+    // Show only active invoices (in creation/approval phase) for the Invoice List
+    const activeInvoices = base.filter(inv => ['Draft', 'Needs Revision', 'Pending Approval', 'Approved'].includes(inv.status));
 
     return activeInvoices.map(inv => {
       const client = clients.find(c => c.id === inv.clientId);
@@ -282,11 +283,17 @@ export const InvoicingDesk: React.FC = () => {
   ];
 
   // ── Invoice Detail View ─────────────────────────────────────────────────────
+  let invoiceModal = null;
   if (viewInvoice && actionParam !== 'download') {
     const derivedPs = derivePaymentStatus(viewInvoice);
 
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+    invoiceModal = createPortal(
+      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+        <div style={{ backgroundColor: '#F8FAFC', borderRadius: '12px', padding: '32px', width: '100%', maxWidth: '1000px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)', position: 'relative' }}>
+          <button onClick={() => navigate('/invoicing-desk')} style={{ position: 'absolute', top: '16px', right: '16px', background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#64748B' }}>
+            <i className="ti ti-x" />
+          </button>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', marginTop: '16px' }}>
         <style>{`
           @media print {
             .app-layout, .sidebar, .global-header, .main-area,
@@ -365,7 +372,6 @@ export const InvoicingDesk: React.FC = () => {
               {viewInvoice.status === 'Sent' && derivedPs !== 'Paid' && (
                 <>
                   <Button title="Set Receipt Date" variant="secondary" icon="ti-calendar-event" onClick={() => handleAction(viewInvoice!.id, 'SetReceiptDate')} />
-                  <Button title="Mark as Paid" variant="success" icon="ti-cash" onClick={() => handleAction(viewInvoice!.id, 'MarkPaid')} />
                 </>
               )}
               {viewInvoice.status === 'Paid' && (
@@ -388,6 +394,9 @@ export const InvoicingDesk: React.FC = () => {
           </div>
         </Card>
       </div>
+      </div>
+      </div>,
+      document.body
     );
   }
 
@@ -432,7 +441,7 @@ export const InvoicingDesk: React.FC = () => {
           columns={tableColumns.filter(c => !['invoiceNumber', 'waybillCount'].includes(c.key as string))}
           actions={actions}
           rowKey="id"
-          createButtons={[{ label: 'Create Invoice', icon: 'ti-file-plus', onClick: () => navigate('/invoice-create') }]}
+
           searchPlaceholder="Search by client..."
           searchFields={['clientName']}
           emptyMessage="No invoices found."
@@ -462,6 +471,7 @@ export const InvoicingDesk: React.FC = () => {
           </div>
         </div>
       )}
+      {invoiceModal}
     </div>
   );
 };

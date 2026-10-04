@@ -35,6 +35,10 @@ import {
   SEEDED_LIQUIDATIONS,
   CashFlowRecord,
   SEEDED_CASH_FLOW_RECORDS,
+  BillingRate,
+  SEEDED_RATES,
+  BillingRecord,
+  SEEDED_BILLING_RECORDS,
 } from '../data/seed';
 
 // ─── Backend → Frontend map helpers ──────────────────────────────
@@ -232,6 +236,8 @@ export interface AppDataContextValue {
   liquidations: Liquidation[];
   cashFlowRecords: CashFlowRecord[];
   financialAdjustments: FinancialAdjustment[];
+  billingRates: BillingRate[];
+  billingRecords: BillingRecord[];
 
   // DB Refresh actions — call after any mutation to re-sync from DB
   refreshPayments: () => Promise<void>;
@@ -278,6 +284,12 @@ export interface AppDataContextValue {
 
   // Cash Flow
   addCashFlowRecord: (record: CashFlowRecord) => void;
+
+  // Billing Rates & Records
+  addBillingRate: (rate: BillingRate) => void;
+  updateBillingRate: (id: string, changes: Partial<BillingRate>) => void;
+  addBillingRecord: (record: BillingRecord) => void;
+  updateBillingRecord: (id: string, changes: Partial<BillingRecord>) => void;
 }
 
 const AppDataContext = createContext<AppDataContextValue | null>(null);
@@ -306,6 +318,9 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   });
 
   const [cashFlowRecords, setCashFlowRecords] = useState<CashFlowRecord[]>(SEEDED_CASH_FLOW_RECORDS);
+
+  const [billingRates, setBillingRates] = useState<BillingRate[]>(SEEDED_RATES);
+  const [billingRecords, setBillingRecords] = useState<BillingRecord[]>(SEEDED_BILLING_RECORDS);
 
   // ── Refresh functions — REPLACE state from DB (never merge) ──────
   const refreshClients = useCallback(async () => {
@@ -373,7 +388,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
           waybillNumber: w.waybillNumber ?? w.id,
           clientCode: w.clientId ?? w.clientCode ?? 'CLI-001',
           deliveryDate: w.deliveryDate ?? new Date().toISOString().split('T')[0],
-          status: (w.status === 'Validated' || w.status === 'Validated (CTC)' || w.status === 'CTC Submitted') ? w.status : 'Validated',
+          status: (w.status === 'Validated' || w.status === 'Validated (CTC)' || w.status === 'Pending') ? w.status : 'Validated',
           hasOriginalPOD: w.hasOriginalPOD ?? false,
           hasApprovedCTC: w.hasApprovedCTC ?? false,
           encodedBy: w.encodedBy ?? 'EMP-004',
@@ -529,6 +544,22 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     setCashFlowRecords(prev => [record, ...prev]);
   }, []);
 
+  const addBillingRate = useCallback((rate: BillingRate) => {
+    setBillingRates(prev => [...prev, rate]);
+  }, []);
+
+  const updateBillingRate = useCallback((id: string, changes: Partial<BillingRate>) => {
+    setBillingRates(prev => prev.map(r => r.id === id ? { ...r, ...changes } : r));
+  }, []);
+
+  const addBillingRecord = useCallback((record: BillingRecord) => {
+    setBillingRecords(prev => [record, ...prev]);
+  }, []);
+
+  const updateBillingRecord = useCallback((id: string, changes: Partial<BillingRecord>) => {
+    setBillingRecords(prev => prev.map(r => r.id === id ? { ...r, ...changes } : r));
+  }, []);
+
   const value: AppDataContextValue = {
     waybills,
     invoices,
@@ -542,6 +573,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     liquidations,
     cashFlowRecords,
     financialAdjustments,
+    billingRates,
+    billingRecords,
     refreshPayments,
     refreshInvoices,
     refreshSpeedPay,
@@ -564,6 +597,10 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     addAdjustment,
     updateAdjustment,
     addCashFlowRecord,
+    addBillingRate,
+    updateBillingRate,
+    addBillingRecord,
+    updateBillingRecord,
   };
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;

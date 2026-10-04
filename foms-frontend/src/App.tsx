@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ToastProvider } from "./components/ToastContext";
 import ToastBar from "./components/ToastBar";
@@ -23,9 +23,11 @@ import Waybills from "./pages/Waybills";
 import RateConfiguration from "./pages/RateConfiguration";
 import InvoicingDesk from "./pages/InvoicingDesk";
 import InvoiceCreation from "./pages/InvoiceCreation";
+import BillingValidation from "./pages/BillingValidation";
 
 // ── Head Accountant Pages ────────────────────────────────────────
 import InvoiceReview from "./pages/InvoiceReview";
+import Settlements from "./pages/Settlements";
 
 // ── Asst. Finance Manager Pages ──────────────────────────────────
 import FinanceMaster from "./pages/FinanceMaster";
@@ -46,7 +48,52 @@ import FinancialAdjustments from "./pages/FinancialAdjustments";
 import SpeedPay from "./pages/SpeedPay";
 import SpeedPayValidation from "./pages/SpeedPayValidation";
 
+// ── Finance Manager: Duplicate Detection ────────────────────────
+import AIDuplicateScan from "./pages/AIDuplicateScan";
+import UniqueDocuments from "./pages/UniqueDocuments";
+import FlaggedDuplicates from "./pages/FlaggedDuplicates";
+import ReviewHistory from "./pages/ReviewHistory";
+import ForReview from "./pages/ForReview";
+import CollectionPriorities from "./pages/CollectionPriorities";
+
 function App() {
+  useEffect(() => {
+    const handleMouseDown = (e: MouseEvent) => {
+      const btn = (e.target as HTMLElement).closest('button');
+      if (btn && (btn.innerText.trim().toLowerCase() === 'cancel' || btn.title.toLowerCase() === 'cancel' || btn.innerText.trim().toLowerCase() === 'close' || btn.title.toLowerCase() === 'close')) {
+        btn.style.outline = '2px solid #22C55E';
+        btn.style.outlineOffset = '2px';
+        btn.dataset.greenOutline = 'true';
+      }
+    };
+    const handleMouseUp = (e: MouseEvent) => {
+      const btn = (e.target as HTMLElement).closest('button');
+      if (btn && btn.dataset.greenOutline) {
+        setTimeout(() => {
+          btn.style.outline = '';
+          btn.style.outlineOffset = '';
+          delete btn.dataset.greenOutline;
+        }, 150);
+      }
+    };
+    const handleMouseOut = (e: MouseEvent) => {
+      const btn = (e.target as HTMLElement).closest('button');
+      if (btn && btn.dataset.greenOutline) {
+        btn.style.outline = '';
+        btn.style.outlineOffset = '';
+        delete btn.dataset.greenOutline;
+      }
+    };
+    document.addEventListener('mousedown', handleMouseDown);
+    document.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener('mouseout', handleMouseOut);
+    return () => {
+      document.removeEventListener('mousedown', handleMouseDown);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('mouseout', handleMouseOut);
+    };
+  }, []);
+
   return (
     <BrowserRouter>
       <AppDataProvider>
@@ -107,6 +154,15 @@ function App() {
                 }
               />
 
+              {/* ── Accountant & Validation ───────────────────── */}
+              <Route
+                path="/billing-validation"
+                element={
+                  <ProtectedRoute allowedRoles={['Accountant', 'Head Accountant', 'Finance Manager']}>
+                    <BillingValidation />
+                  </ProtectedRoute>
+                }
+              />
               {/* ── Accountant Only ───────────────────────────── */}
               <Route
                 path="/rate-configuration"
@@ -225,6 +281,14 @@ function App() {
                 }
               />
               <Route
+                path="/settlements"
+                element={
+                  <ProtectedRoute allowedRoles={['Finance Manager', 'Financial Manager', 'Assistant of Finance Manager', 'Assistant of Financial Manager']}>
+                    <Settlements />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
                 path="/liquidations"
                 element={
                   <ProtectedRoute allowedRoles={['Assistant of Finance Manager', 'Assistant of Financial Manager']}>
@@ -284,6 +348,56 @@ function App() {
                   <SpeedPayValidation />
                 </ProtectedRoute>
               } />
+
+              {/* ── Finance Manager, Head Accountant, Coordinator, Accountant, Asst FM: Duplicate Detection ── */}
+              <Route
+                path="/duplicate-scan"
+                element={
+                  <ProtectedRoute allowedRoles={['Finance Manager', 'Financial Manager', 'Head Accountant', 'Coordinator', 'Accountant', 'Assistant of Finance Manager', 'Assistant of Financial Manager']}>
+                    <AIDuplicateScan />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/unique-documents"
+                element={
+                  <ProtectedRoute allowedRoles={['Finance Manager', 'Financial Manager', 'Head Accountant', 'Coordinator', 'Accountant', 'Assistant of Finance Manager', 'Assistant of Financial Manager']}>
+                    <UniqueDocuments />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/flagged-duplicates"
+                element={
+                  <ProtectedRoute allowedRoles={['Finance Manager', 'Financial Manager', 'Head Accountant', 'Coordinator', 'Accountant', 'Assistant of Finance Manager', 'Assistant of Financial Manager']}>
+                    <FlaggedDuplicates />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/review-history"
+                element={
+                  <ProtectedRoute allowedRoles={['Finance Manager', 'Financial Manager', 'Head Accountant', 'Coordinator', 'Accountant', 'Assistant of Finance Manager', 'Assistant of Financial Manager']}>
+                    <ReviewHistory />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/for-review"
+                element={
+                  <ProtectedRoute allowedRoles={['Finance Manager', 'Financial Manager', 'Head Accountant']}>
+                    <ForReview />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/collection-priorities"
+                element={
+                  <ProtectedRoute allowedRoles={['Finance Manager', 'Financial Manager', 'Head Accountant', 'Coordinator', 'Accountant', 'Assistant of Finance Manager', 'Assistant of Financial Manager']}>
+                    <CollectionPriorities />
+                  </ProtectedRoute>
+                }
+              />
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
             </Route>
 

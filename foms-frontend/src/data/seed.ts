@@ -128,25 +128,60 @@ export const SEEDED_CLIENTS: Client[] = [
 export interface BillingRate {
   id: string;
   clientId: string;
-  region: string;
-  baseRate: number;
+  region: 'NCR' | 'Luzon' | 'Visayas' | 'Mindanao' | 'ODA';
+  minimumWeight: number;
+  minimumRate: number;
+  excessRate: number;
+  valuationRate: number;
+  fuelSurchargeRate: number;
   vatRate: number;
-  surchargeRate: number;
   effectiveDate: string;
+  status: 'Active' | 'Inactive';
 }
 
 export const SEEDED_RATES: BillingRate[] = [
-  { id: 'RATE-001', clientId: 'CL-001', region: 'Metro Manila', baseRate: 800, vatRate: 0.12, surchargeRate: 0.05, effectiveDate: '2025-01-01' },
-  { id: 'RATE-002', clientId: 'CL-002', region: 'Metro Manila', baseRate: 1100, vatRate: 0.12, surchargeRate: 0.05, effectiveDate: '2025-01-01' },
-  { id: 'RATE-003', clientId: 'CL-003', region: 'Metro Manila', baseRate: 950, vatRate: 0.12, surchargeRate: 0.05, effectiveDate: '2025-01-01' },
-  { id: 'RATE-004', clientId: 'CA-001', region: 'Metro Manila', baseRate: 500, vatRate: 0.12, surchargeRate: 0.05, effectiveDate: '2025-01-01' },
-  { id: 'RATE-005', clientId: 'CA-002', region: 'Metro Manila', baseRate: 300, vatRate: 0.12, surchargeRate: 0.05, effectiveDate: '2025-01-01' },
-  { id: 'RATE-006', clientId: 'CA-003', region: 'Metro Manila', baseRate: 600, vatRate: 0.12, surchargeRate: 0.05, effectiveDate: '2025-01-01' },
+  { id: 'RATE-001', clientId: 'CL-001', region: 'NCR', minimumWeight: 5, minimumRate: 100, excessRate: 25, valuationRate: 0.01, fuelSurchargeRate: 0.15, vatRate: 0.12, effectiveDate: '2024-01-01', status: 'Active' },
+  { id: 'RATE-002', clientId: 'CL-001', region: 'Luzon', minimumWeight: 5, minimumRate: 130, excessRate: 45, valuationRate: 0.01, fuelSurchargeRate: 0.15, vatRate: 0.12, effectiveDate: '2024-01-01', status: 'Active' },
+  { id: 'RATE-003', clientId: 'CL-001', region: 'Visayas', minimumWeight: 5, minimumRate: 150, excessRate: 50, valuationRate: 0.01, fuelSurchargeRate: 0.15, vatRate: 0.12, effectiveDate: '2024-01-01', status: 'Active' },
+  { id: 'RATE-004', clientId: 'CL-001', region: 'Mindanao', minimumWeight: 5, minimumRate: 150, excessRate: 50, valuationRate: 0.01, fuelSurchargeRate: 0.15, vatRate: 0.12, effectiveDate: '2024-01-01', status: 'Active' },
+  { id: 'RATE-005', clientId: 'CL-001', region: 'ODA', minimumWeight: 0, minimumRate: 500, excessRate: 0, valuationRate: 0.01, fuelSurchargeRate: 0.15, vatRate: 0.12, effectiveDate: '2024-01-01', status: 'Active' },
 ];
+
+// ─── Billing Records ──────────────────────────────────────────────
+
+export type BillingRecordStatus = 'Pending Review' | 'Approved' | 'Returned';
+
+export interface BillingRecord {
+  id: string;
+  waybillId: string;
+  clientId: string;
+  rateId: string; // Rate configuration used
+  
+  volumeWeight: number;
+  actualWeight: number;
+  chargeableWeight: number;
+  
+  freightCost: number;
+  valuation: number;
+  odaCharge: number;
+  subtotal: number;
+  vat: number;
+  fuelSurcharge: number;
+  grandTotal: number;
+
+  status: BillingRecordStatus;
+  remarks?: string;
+  computedBy: string;
+  computedAt: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
+}
+
+export const SEEDED_BILLING_RECORDS: BillingRecord[] = [];
 
 // ─── Waybills ─────────────────────────────────────────────────────
 
-export type WaybillStatus = 'For Checking' | 'Validated' | 'Validated (CTC)' | 'Missing' | 'CTC Submitted' | 'Billed' | 'Failed' | 'Pending Validation' | 'Returned' | 'Not Completed';
+export type WaybillStatus = 'For Checking' | 'Validated' | 'Validated (CTC)' | 'Missing' | 'Pending' | 'Billed' | 'Failed' | 'Pending Validation' | 'Returned' | 'Not Completed';
 
 export interface Waybill {
   id: string;
@@ -179,11 +214,14 @@ export interface Waybill {
   receiverContact?: string;
   receiverAddress?: string;
   itemDescription?: string;
-  itemQuantity?: number;
-  itemWeight?: string;
+  itemQuantity?: number; // Number of boxes
+  itemWeight?: string | number; // Actual weight in kg
+  itemDimensions?: { length: number; width: number; height: number };
   deliveryType?: 'Delivery' | 'Pick Up';
   assignedCourier?: string;
   specialInstructions?: string;
+  declaredValue?: number;
+  isODA?: boolean; // Outside Delivery Area
 }
 
 export const SEEDED_WAYBILLS: Waybill[] = [
@@ -195,16 +233,16 @@ export const SEEDED_WAYBILLS: Waybill[] = [
     deliveryType: 'Delivery', assignedCourier: 'Rider John Doe', specialInstructions: 'Fragile, please handle with care.'
   },
   { 
-    id: 'WB-002', waybillNumber: 'WB-2026-0002', clientCode: 'CL-001', deliveryDate: new Date().toISOString(), status: 'CTC Submitted', hasOriginalPOD: false, hasApprovedCTC: true, encodedBy: 'EMP-004', encodedAt: new Date().toISOString(),
+    id: 'WB-002', waybillNumber: 'WB-2026-0002', clientCode: 'CL-001', deliveryDate: new Date().toISOString(), status: 'Pending', is_ctc: false, hasOriginalPOD: true, hasApprovedCTC: false, encodedBy: 'EMP-004', encodedAt: new Date().toISOString(), pod_image_url: 'https://images.unsplash.com/photo-1586281380349-632531db7ed4?q=80&w=600&auto=format&fit=crop',
     senderName: 'Lazada Philippines', senderContact: '0917-123-4567', senderAddress: 'Rockwell Dr., Makati City',
     receiverName: 'Maria Santos', receiverContact: '0918-222-3333', receiverAddress: '456 Mango Ave., Cebu City',
     itemDescription: 'Clothing & Apparel', itemQuantity: 5, itemWeight: '2.0 kg',
     deliveryType: 'Delivery', assignedCourier: 'Rider Jane Smith', specialInstructions: 'Leave at the front desk.'
   },
-  { id: 'WB-003', waybillNumber: 'WB-2026-0003', clientCode: 'CL-002', deliveryDate: new Date().toISOString(), status: 'Validated', hasOriginalPOD: true, hasApprovedCTC: true, encodedBy: 'EMP-004', encodedAt: new Date().toISOString(), senderName: 'Shopee Express', senderContact: '0917-555-9876', senderAddress: 'Ayala Ave., Makati City', receiverName: 'Pedro Penduko', receiverContact: '0922-333-4444', receiverAddress: '789 Rizal St., Davao City', itemDescription: 'Home Appliances', itemQuantity: 1, itemWeight: '5.5 kg', deliveryType: 'Pick Up', assignedCourier: 'Rider Mark', specialInstructions: 'Heavy item.' },
-  { id: 'WB-004', waybillNumber: 'WB-2026-0004', clientCode: 'CL-003', deliveryDate: new Date().toISOString(), status: 'CTC Submitted', hasOriginalPOD: false, hasApprovedCTC: true, encodedBy: 'EMP-004', encodedAt: new Date().toISOString(), senderName: 'TikTok Shop', senderContact: '0917-333-4444', senderAddress: 'BGC High St., Taguig City', receiverName: 'Ana Gomez', receiverContact: '0919-444-5555', receiverAddress: '101 Mabini St., Manila', itemDescription: 'Cosmetics', itemQuantity: 10, itemWeight: '0.5 kg', deliveryType: 'Delivery', assignedCourier: 'Rider Paul', specialInstructions: 'Do not expose to direct sunlight.' },
+  { id: 'WB-003', waybillNumber: 'WB-2026-0003', clientCode: 'CL-001', deliveryDate: new Date().toISOString(), status: 'Missing', hasOriginalPOD: false, hasApprovedCTC: false, encodedBy: 'EMP-004', encodedAt: new Date().toISOString(), senderName: 'Shopee Express', senderContact: '0917-555-9876', senderAddress: 'Ayala Ave., Makati City', receiverName: 'Pedro Penduko', receiverContact: '0922-333-4444', receiverAddress: '789 Rizal St., Davao City', itemDescription: 'Home Appliances', itemQuantity: 1, itemWeight: '5.5 kg', deliveryType: 'Pick Up', assignedCourier: 'Rider Mark', specialInstructions: 'Heavy item.' },
+  { id: 'WB-004', waybillNumber: 'WB-2026-0004', clientCode: 'CL-003', deliveryDate: new Date().toISOString(), status: 'Pending', is_ctc: false, hasOriginalPOD: true, hasApprovedCTC: false, encodedBy: 'EMP-004', encodedAt: new Date().toISOString(), pod_image_url: 'https://images.unsplash.com/photo-1586281380349-632531db7ed4?q=80&w=600&auto=format&fit=crop', senderName: 'TikTok Shop', senderContact: '0917-333-4444', senderAddress: 'BGC High St., Taguig City', receiverName: 'Ana Gomez', receiverContact: '0919-444-5555', receiverAddress: '101 Mabini St., Manila', itemDescription: 'Cosmetics', itemQuantity: 10, itemWeight: '0.5 kg', deliveryType: 'Delivery', assignedCourier: 'Rider Paul', specialInstructions: 'Do not expose to direct sunlight.' },
   { id: 'WB-E2E-001', waybillNumber: 'WB-E2E-001', clientCode: 'CA-001', deliveryDate: new Date().toISOString(), status: 'Validated', hasOriginalPOD: true, hasApprovedCTC: true, encodedBy: 'EMP-004', encodedAt: new Date().toISOString(), senderName: 'Lazada Account', senderContact: '0917-123-4567', senderAddress: 'Rockwell Dr., Makati City', receiverName: 'Customer A', receiverContact: '0900-000-0001', receiverAddress: 'Makati City, Metro Manila', itemDescription: 'General Merchandise', itemQuantity: 1, itemWeight: '1.0 kg', deliveryType: 'Delivery', assignedCourier: 'Rider A', specialInstructions: 'None' },
-  { id: 'WB-E2E-002', waybillNumber: 'WB-E2E-002', clientCode: 'CA-001', deliveryDate: new Date().toISOString(), status: 'CTC Submitted', hasOriginalPOD: false, hasApprovedCTC: true, encodedBy: 'EMP-004', encodedAt: new Date().toISOString(), senderName: 'Lazada Account', senderContact: '0917-123-4567', senderAddress: 'Rockwell Dr., Makati City', receiverName: 'Customer B', receiverContact: '0900-000-0002', receiverAddress: 'Cebu Business Park, Cebu City', itemDescription: 'General Merchandise', itemQuantity: 1, itemWeight: '1.0 kg', deliveryType: 'Delivery', assignedCourier: 'Rider B', specialInstructions: 'None' },
+  { id: 'WB-E2E-002', waybillNumber: 'WB-E2E-002', clientCode: 'CA-001', deliveryDate: new Date().toISOString(), status: 'Pending', is_ctc: false, hasOriginalPOD: true, hasApprovedCTC: false, encodedBy: 'EMP-004', encodedAt: new Date().toISOString(), pod_image_url: 'https://images.unsplash.com/photo-1586281380349-632531db7ed4?q=80&w=600&auto=format&fit=crop', senderName: 'Lazada Account', senderContact: '0917-123-4567', senderAddress: 'Rockwell Dr., Makati City', receiverName: 'Customer B', receiverContact: '0900-000-0002', receiverAddress: 'Cebu Business Park, Cebu City', itemDescription: 'General Merchandise', itemQuantity: 1, itemWeight: '1.0 kg', deliveryType: 'Delivery', assignedCourier: 'Rider B', specialInstructions: 'None' },
   { id: 'WB-E2E-003', waybillNumber: 'WB-E2E-003', clientCode: 'CA-002', deliveryDate: new Date().toISOString(), status: 'Validated', hasOriginalPOD: true, hasApprovedCTC: true, encodedBy: 'EMP-004', encodedAt: new Date().toISOString(), senderName: 'Shopee Express Account', senderContact: '0917-555-9876', senderAddress: 'Ayala Ave., Makati City', receiverName: 'Customer C', receiverContact: '0900-000-0003', receiverAddress: 'BGC, Taguig City', itemDescription: 'General Merchandise', itemQuantity: 1, itemWeight: '1.0 kg', deliveryType: 'Pick Up', assignedCourier: 'Rider C', specialInstructions: 'None' }
 ];
 
@@ -235,6 +273,7 @@ export interface Invoice {
   notes?: string;
   proofFileUrl?: string;
   clientReceiptDate?: string;
+  appliedRates?: any[];
 }
 
 export const SEEDED_INVOICES: Invoice[] = [
@@ -657,6 +696,7 @@ export interface NavLinkConfig {
   label: string;
   path: string;
   icon: string;
+  badge?: { text: string; bg: string; color: string };
   children?: { label: string; path: string }[];
 }
 
@@ -676,6 +716,20 @@ export const NAV_CONFIG: Record<UserRole, { groups: { label?: string; items: Nav
           { label: 'Waybill / POD Records', path: '/waybills', icon: 'ti ti-file-import' },
         ],
       },
+      {
+        label: 'Duplicate Detection',
+        items: [
+          { label: 'Unique Documents', path: '/unique-documents', icon: 'ti ti-file-check' },
+          { label: 'Flagged Duplicates', path: '/flagged-duplicates', icon: 'ti ti-alert-triangle' },
+          { label: 'Review History', path: '/review-history', icon: 'ti ti-history' },
+        ],
+      },
+      {
+        label: 'Collection Intelligence',
+        items: [
+          { label: 'Collection Priorities', path: '/collection-priorities', icon: 'ti ti-target' },
+        ]
+      },
     ],
   },
   'Accountant': {
@@ -687,15 +741,15 @@ export const NAV_CONFIG: Record<UserRole, { groups: { label?: string; items: Nav
         ],
       },
       {
-        label: 'Operations & Validation',
+        label: 'Client Management',
         items: [
           { label: 'Client Accounts', path: '/clients', icon: 'ti ti-users' },
-          { label: 'Billing Rates', path: '/rate-configuration', icon: 'ti ti-calculator' },
         ],
       },
       {
         label: 'Invoicing',
         items: [
+          { label: 'Create Invoice', path: '/invoice-create', icon: 'ti ti-file-plus' },
           { label: 'Invoice List', path: '/invoicing-desk', icon: 'ti ti-file-invoice' },
         ],
       },
@@ -714,6 +768,20 @@ export const NAV_CONFIG: Record<UserRole, { groups: { label?: string; items: Nav
         items: [
           { label: 'Cash Flow', path: '/cash-flow', icon: 'ti ti-chart-arrows' },
         ],
+      },
+      {
+        label: 'Duplicate Detection',
+        items: [
+          { label: 'Unique Documents', path: '/unique-documents', icon: 'ti ti-file-check' },
+          { label: 'Flagged Duplicates', path: '/flagged-duplicates', icon: 'ti ti-alert-triangle' },
+          { label: 'Review History', path: '/review-history', icon: 'ti ti-history' },
+        ],
+      },
+      {
+        label: 'Collection Intelligence',
+        items: [
+          { label: 'Collection Priorities', path: '/collection-priorities', icon: 'ti ti-target' },
+        ]
       },
       {
         label: 'Analytics',
@@ -742,6 +810,20 @@ export const NAV_CONFIG: Record<UserRole, { groups: { label?: string; items: Nav
         ],
       },
       {
+        label: 'Duplicate Detection',
+        items: [
+          { label: 'Unique Documents', path: '/unique-documents', icon: 'ti ti-file-check' },
+          { label: 'Flagged Duplicates', path: '/flagged-duplicates', icon: 'ti ti-alert-triangle' },
+          { label: 'Review History', path: '/review-history', icon: 'ti ti-history' },
+        ],
+      },
+      {
+        label: 'Collection Intelligence',
+        items: [
+          { label: 'For Review', path: '/for-review', icon: 'ti ti-clipboard-list' },
+        ]
+      },
+      {
         label: 'Analytics & Control',
         items: [
           { label: 'Reports', path: '/reports', icon: 'ti ti-chart-bar' },
@@ -764,6 +846,20 @@ export const NAV_CONFIG: Record<UserRole, { groups: { label?: string; items: Nav
           { label: 'Liquidation Reports', path: '/liquidations', icon: 'ti ti-cash' },
           { label: 'SpeedPay Validation', path: '/speedpay-validation', icon: 'ti ti-device-mobile-message' },
         ],
+      },
+      {
+        label: 'Duplicate Detection',
+        items: [
+          { label: 'Unique Documents', path: '/unique-documents', icon: 'ti ti-file-check' },
+          { label: 'Flagged Duplicates', path: '/flagged-duplicates', icon: 'ti ti-alert-triangle' },
+          { label: 'Review History', path: '/review-history', icon: 'ti ti-history' },
+        ],
+      },
+      {
+        label: 'Collection Intelligence',
+        items: [
+          { label: 'Collection Priorities', path: '/collection-priorities', icon: 'ti ti-target' },
+        ]
       },
       {
         label: 'Analytics & Control',
@@ -804,11 +900,26 @@ export const NAV_CONFIG: Record<UserRole, { groups: { label?: string; items: Nav
           { label: 'Invoice Review', path: '/invoice-review', icon: 'ti ti-file-check' },
           { label: 'Accounts Receivable', path: '/accounts-receivable', icon: 'ti ti-report-money' },
           { label: 'Payments & Cash Flow', path: '/payments', icon: 'ti ti-cash' },
+          { label: 'Settlement Validation', path: '/settlements', icon: 'ti ti-calculator' },
           { label: 'Financial Adjustments', path: '/adjustments', icon: 'ti ti-adjustments-alt' },
           { label: 'SpeedPay Validation', path: '/speedpay-validation', icon: 'ti ti-device-mobile-message' },
         ],
       },
 
+      {
+        label: 'Duplicate Detection',
+        items: [
+          { label: 'Unique Documents', path: '/unique-documents', icon: 'ti ti-file-check' },
+          { label: 'Flagged Duplicates', path: '/flagged-duplicates', icon: 'ti ti-alert-triangle' },
+          { label: 'Review History', path: '/review-history', icon: 'ti ti-history' },
+        ],
+      },
+      {
+        label: 'Collection Intelligence',
+        items: [
+          { label: 'For Review', path: '/for-review', icon: 'ti ti-clipboard-list' },
+        ]
+      },
       {
         label: 'Analytics & Control',
         items: [
@@ -832,6 +943,7 @@ export const NAV_CONFIG: Record<UserRole, { groups: { label?: string; items: Nav
           { label: 'Invoice Review', path: '/invoice-review', icon: 'ti ti-file-check' },
           { label: 'Accounts Receivable', path: '/accounts-receivable', icon: 'ti ti-report-money' },
           { label: 'Payments & Cash Flow', path: '/payments', icon: 'ti ti-cash' },
+          { label: 'Settlement Validation', path: '/settlements', icon: 'ti ti-calculator' },
           { label: 'Financial Adjustments', path: '/adjustments', icon: 'ti ti-adjustments-alt' },
           { label: 'SpeedPay Validation', path: '/speedpay-validation', icon: 'ti ti-device-mobile-message' },
         ],
@@ -1051,29 +1163,29 @@ export interface CashFlowRecord {
 }
 
 export const SEEDED_CASH_FLOW_RECORDS: CashFlowRecord[] = [
-  { id: 'CF-001', type: 'Inflow', amount: 120000, sourceReference: 'Payments Jan', date: '2026-01-15T10:00:00Z', recordedBy: 'System' },
-  { id: 'CF-002', type: 'Outflow', amount: 80000, sourceReference: 'Expenses Jan', date: '2026-01-20T10:00:00Z', recordedBy: 'System' },
-  { id: 'CF-003', type: 'Inflow', amount: 150000, sourceReference: 'Payments Feb', date: '2026-02-15T10:00:00Z', recordedBy: 'System' },
-  { id: 'CF-004', type: 'Outflow', amount: 110000, sourceReference: 'Expenses Feb', date: '2026-02-20T10:00:00Z', recordedBy: 'System' },
-  { id: 'CF-005', type: 'Inflow', amount: 180000, sourceReference: 'Payments Mar', date: '2026-03-15T10:00:00Z', recordedBy: 'System' },
-  { id: 'CF-006', type: 'Outflow', amount: 130000, sourceReference: 'Expenses Mar', date: '2026-03-20T10:00:00Z', recordedBy: 'System' },
-  { id: 'CF-007', type: 'Inflow', amount: 140000, sourceReference: 'Payments Apr', date: '2026-04-15T10:00:00Z', recordedBy: 'System' },
-  { id: 'CF-008', type: 'Outflow', amount: 120000, sourceReference: 'Expenses Apr', date: '2026-04-20T10:00:00Z', recordedBy: 'System' },
-  { id: 'CF-009', type: 'Inflow', amount: 190000, sourceReference: 'Payments May', date: '2026-05-15T10:00:00Z', recordedBy: 'System' },
-  { id: 'CF-010', type: 'Outflow', amount: 150000, sourceReference: 'Expenses May', date: '2026-05-20T10:00:00Z', recordedBy: 'System' },
-  { id: 'CF-011', type: 'Inflow', amount: 210000, sourceReference: 'Payments Jun', date: '2026-06-15T10:00:00Z', recordedBy: 'System' },
-  { id: 'CF-012', type: 'Outflow', amount: 170000, sourceReference: 'Expenses Jun', date: '2026-06-20T10:00:00Z', recordedBy: 'System' },
-  { id: 'CF-013', type: 'Inflow', amount: 220000, sourceReference: 'Payments Jul', date: '2026-07-15T10:00:00Z', recordedBy: 'System' },
-  { id: 'CF-014', type: 'Outflow', amount: 180000, sourceReference: 'Expenses Jul', date: '2026-07-20T10:00:00Z', recordedBy: 'System' },
-  { id: 'CF-015', type: 'Inflow', amount: 200000, sourceReference: 'Payments Aug', date: '2026-08-15T10:00:00Z', recordedBy: 'System' },
-  { id: 'CF-016', type: 'Outflow', amount: 160000, sourceReference: 'Expenses Aug', date: '2026-08-20T10:00:00Z', recordedBy: 'System' },
+  { id: 'CF-001', type: 'Inflow', amount: 120000, sourceReference: 'Lazada Philippines', date: '2026-01-15T10:00:00Z', recordedBy: 'System' },
+  { id: 'CF-002', type: 'Outflow', amount: 80000, sourceReference: 'Shell SLEX (Fuel)', date: '2026-01-20T10:00:00Z', recordedBy: 'System' },
+  { id: 'CF-003', type: 'Inflow', amount: 150000, sourceReference: 'Shopee Express', date: '2026-02-15T10:00:00Z', recordedBy: 'System' },
+  { id: 'CF-004', type: 'Outflow', amount: 110000, sourceReference: 'Meralco (Utilities)', date: '2026-02-20T10:00:00Z', recordedBy: 'System' },
+  { id: 'CF-005', type: 'Inflow', amount: 180000, sourceReference: 'TikTok Shop', date: '2026-03-15T10:00:00Z', recordedBy: 'System' },
+  { id: 'CF-006', type: 'Outflow', amount: 130000, sourceReference: 'PLDT (Internet)', date: '2026-03-20T10:00:00Z', recordedBy: 'System' },
+  { id: 'CF-007', type: 'Inflow', amount: 140000, sourceReference: 'Lazada Philippines', date: '2026-04-15T10:00:00Z', recordedBy: 'System' },
+  { id: 'CF-008', type: 'Outflow', amount: 120000, sourceReference: 'Auto Repair Shop (Vehicle Maintenance)', date: '2026-04-20T10:00:00Z', recordedBy: 'System' },
+  { id: 'CF-009', type: 'Inflow', amount: 190000, sourceReference: 'Shopee Express', date: '2026-05-15T10:00:00Z', recordedBy: 'System' },
+  { id: 'CF-010', type: 'Outflow', amount: 150000, sourceReference: 'Office Supplies Inc.', date: '2026-05-20T10:00:00Z', recordedBy: 'System' },
+  { id: 'CF-011', type: 'Inflow', amount: 210000, sourceReference: 'TikTok Shop', date: '2026-06-15T10:00:00Z', recordedBy: 'System' },
+  { id: 'CF-012', type: 'Outflow', amount: 170000, sourceReference: 'SLEX Tollway Corp', date: '2026-06-20T10:00:00Z', recordedBy: 'System' },
+  { id: 'CF-013', type: 'Inflow', amount: 220000, sourceReference: 'Lazada Philippines', date: '2026-07-15T10:00:00Z', recordedBy: 'System' },
+  { id: 'CF-014', type: 'Outflow', amount: 180000, sourceReference: 'Petron NLEX (Fuel)', date: '2026-07-20T10:00:00Z', recordedBy: 'System' },
+  { id: 'CF-015', type: 'Inflow', amount: 200000, sourceReference: 'Shopee Express', date: '2026-08-15T10:00:00Z', recordedBy: 'System' },
+  { id: 'CF-016', type: 'Outflow', amount: 160000, sourceReference: 'Meralco (Utilities)', date: '2026-08-20T10:00:00Z', recordedBy: 'System' },
   // September Weekly breakdown
-  { id: 'CF-017', type: 'Inflow', amount: 45000, sourceReference: 'Payments W1 Sep', date: '2026-09-04T10:00:00Z', recordedBy: 'System' },
-  { id: 'CF-018', type: 'Outflow', amount: 30000, sourceReference: 'Expenses W1 Sep', date: '2026-09-05T10:00:00Z', recordedBy: 'System' },
-  { id: 'CF-019', type: 'Inflow', amount: 55000, sourceReference: 'Payments W2 Sep', date: '2026-09-11T10:00:00Z', recordedBy: 'System' },
-  { id: 'CF-020', type: 'Outflow', amount: 40000, sourceReference: 'Expenses W2 Sep', date: '2026-09-12T10:00:00Z', recordedBy: 'System' },
-  { id: 'CF-021', type: 'Inflow', amount: 65000, sourceReference: 'Payments W3 Sep', date: '2026-09-18T10:00:00Z', recordedBy: 'System' },
-  { id: 'CF-022', type: 'Outflow', amount: 50000, sourceReference: 'Expenses W3 Sep', date: '2026-09-19T10:00:00Z', recordedBy: 'System' },
-  { id: 'CF-023', type: 'Inflow', amount: 55000, sourceReference: 'Payments W4 Sep', date: '2026-09-25T10:00:00Z', recordedBy: 'System' },
-  { id: 'CF-024', type: 'Outflow', amount: 60000, sourceReference: 'Expenses W4 Sep', date: '2026-09-26T10:00:00Z', recordedBy: 'System' },
+  { id: 'CF-017', type: 'Inflow', amount: 45000, sourceReference: 'TikTok Shop', date: '2026-09-04T10:00:00Z', recordedBy: 'System' },
+  { id: 'CF-018', type: 'Outflow', amount: 30000, sourceReference: 'Shell SLEX (Fuel)', date: '2026-09-05T10:00:00Z', recordedBy: 'System' },
+  { id: 'CF-019', type: 'Inflow', amount: 55000, sourceReference: 'Lazada Philippines', date: '2026-09-11T10:00:00Z', recordedBy: 'System' },
+  { id: 'CF-020', type: 'Outflow', amount: 40000, sourceReference: 'Auto Repair Shop (Vehicle Maintenance)', date: '2026-09-12T10:00:00Z', recordedBy: 'System' },
+  { id: 'CF-021', type: 'Inflow', amount: 65000, sourceReference: 'Shopee Express', date: '2026-09-18T10:00:00Z', recordedBy: 'System' },
+  { id: 'CF-022', type: 'Outflow', amount: 50000, sourceReference: 'Petron NLEX (Fuel)', date: '2026-09-19T10:00:00Z', recordedBy: 'System' },
+  { id: 'CF-023', type: 'Inflow', amount: 55000, sourceReference: 'TikTok Shop', date: '2026-09-25T10:00:00Z', recordedBy: 'System' },
+  { id: 'CF-024', type: 'Outflow', amount: 60000, sourceReference: 'PLDT (Internet)', date: '2026-09-26T10:00:00Z', recordedBy: 'System' },
 ];

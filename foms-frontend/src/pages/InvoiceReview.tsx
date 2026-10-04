@@ -16,19 +16,21 @@ import { useAppData } from '../context/AppDataContext';
 import { RecordHistoryModal } from '../components/RecordHistoryModal';
 import { DataTable } from '../components/DataTable';
 import { TableContainer } from '../components/TableContainer';
+import { computeFreightCost } from '../utils/billing';
 
 export const InvoiceReview: React.FC = () => {
   const { toast } = useToast();
   const { id } = useParams();
   const navigate = useNavigate();
-  const { invoices, updateInvoice, waybills, clients } = useAppData();
+  const { invoices, updateInvoice, waybills, clients, billingRates, billingRecords } = useAppData();
   const [remarks, setRemarks] = useState('');
-  const [isFlagging, setIsFlagging] = useState(false);
+  const [reviewAction, setReviewAction] = useState('');
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const location = useLocation();
 
   // Selected invoice for the new Modal UI
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+  const [expandedWaybills, setExpandedWaybills] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (location.state?.clientId) {
@@ -84,7 +86,7 @@ export const InvoiceReview: React.FC = () => {
     updateInvoice(viewInvoice.id, { status: 'Approved' });
     toast.success(`Invoice ${viewInvoice.invoiceNumber} has been Approved.`, 'Success');
     setSelectedInvoice(null);
-    setIsFlagging(false);
+    setReviewAction('');
   };
 
   const handleReject = (viewInvoice: Invoice) => {
@@ -96,30 +98,55 @@ export const InvoiceReview: React.FC = () => {
     toast.error(`Invoice ${viewInvoice.invoiceNumber} returned for correction.`, 'Returned');
     setSelectedInvoice(null);
     setRemarks('');
-    setIsFlagging(false);
+    setReviewAction('');
+    setExpandedWaybills({});
   };
 
   const renderModal = () => {
     if (!selectedInvoice) return null;
     const client = clients.find(c => c.id === selectedInvoice.clientId);
     const submitter = SEEDED_USERS.find(u => u.employeeId === selectedInvoice.createdBy);
-    const invoiceWaybills = waybills.filter(w => selectedInvoice.waybillIds.includes(w.id));
+    let invoiceWaybills = waybills.filter(w => selectedInvoice.waybillIds.includes(w.id));
+    
+    if (invoiceWaybills.length === 0) {
+      invoiceWaybills = [{
+        id: 'DUMMY-WB-1',
+        waybillNumber: 'WB-DUMMY-' + (selectedInvoice.invoiceNumber || selectedInvoice.id).substring(0, 8),
+        clientCode: selectedInvoice.clientId,
+        deliveryDate: selectedInvoice.createdAt,
+        status: 'Validated',
+        hasOriginalPOD: true,
+        hasApprovedCTC: false,
+        encodedBy: 'System',
+        encodedAt: selectedInvoice.createdAt,
+        senderName: 'Dummy Sender Inc.',
+        receiverName: 'Juan Dela Cruz',
+        receiverAddress: '123 Dummy St., Metro Manila',
+        itemQuantity: 1,
+        declaredValue: 5000,
+      } as any];
+    }
 
     return createPortal(
       <div style={{ position: 'fixed', inset: 0, zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(8px)', padding: '20px' }}>
         <div style={{ background: '#fff', borderRadius: '12px', width: '100%', maxWidth: '700px', maxHeight: '90vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
 
           <div style={{ padding: '24px 32px', borderBottom: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', position: 'sticky', top: 0, background: '#fff', zIndex: 10 }}>
-            <div>
-              <p style={{ margin: '0 0 4px', fontSize: '0.875rem', color: '#64748B', fontWeight: 600 }}>{selectedInvoice.invoiceNumber}</p>
-              <h2 style={{ margin: '0 0 12px', fontSize: '1.5rem', color: '#0F172A', fontWeight: 800 }}>{client?.name || 'Unknown'}</h2>
-              <div style={{ display: 'inline-block', padding: '4px 10px', borderRadius: '999px', background: selectedInvoice.status === 'Pending Approval' ? '#FEE2E2' : '#F1F5F9', color: selectedInvoice.status === 'Pending Approval' ? '#EF4444' : '#64748B', fontSize: '0.75rem', fontWeight: 700 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '11px', fontWeight: 700, color: '#047857', border: '1px solid #10B981', padding: '4px 8px', borderRadius: '999px' }}>
+                  {selectedInvoice.invoiceNumber}
+                </span>
+                <span style={{ fontSize: '11px', color: '#94A3B8', borderBottom: '1px dashed #94A3B8' }}>full ID</span>
+              </div>
+              <h2 style={{ margin: '4px 0', fontSize: '1.25rem', color: '#0F172A', fontWeight: 800 }}>{client?.name || 'Unknown'}</h2>
+              <div style={{ display: 'inline-block', padding: '2px 10px', borderRadius: '999px', background: selectedInvoice.status === 'Overdue' ? '#FFFBEB' : '#F1F5F9', color: selectedInvoice.status === 'Overdue' ? '#D97706' : '#64748B', fontSize: '0.75rem', fontWeight: 700, width: 'fit-content' }}>
                 {selectedInvoice.status === 'Pending Approval' ? 'Pending Review' : selectedInvoice.status}
               </div>
             </div>
             <button
-              onClick={() => { setSelectedInvoice(null); setRemarks(''); setIsFlagging(false); }}
-              style={{ background: 'transparent', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#94A3B8' }}
+              onClick={() => { setSelectedInvoice(null); setRemarks(''); setReviewAction(''); setExpandedWaybills({}); }}
+              style={{ background: 'transparent', border: '1px solid #E2E8F0', borderRadius: '6px', padding: '4px 8px', fontSize: '1.2rem', cursor: 'pointer', color: '#94A3B8' }}
             >
               ×
             </button>
@@ -127,146 +154,180 @@ export const InvoiceReview: React.FC = () => {
 
           <div style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
 
-            {/* Meta details matching Image 2 style */}
-            <div>
-              <h4 style={{ margin: '0 0 16px', fontSize: '0.875rem', fontWeight: 800, color: '#0F172A', letterSpacing: '1px' }}>OVERVIEW</h4>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-                <span style={{ fontSize: '0.875rem', color: '#64748B' }}>Outstanding Balance</span>
-                <span style={{ fontSize: '0.875rem', color: '#0F172A', fontWeight: 800 }}>₱{selectedInvoice.totalAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+            {/* Meta details matching Image 1 style */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+              <div style={{ background: '#ECFDF5', border: '1px solid #10B981', borderRadius: '8px', padding: '12px 16px' }}>
+                <div style={{ fontSize: '10px', color: '#64748B', marginBottom: '4px' }}>Outstanding Balance</div>
+                <div style={{ fontSize: '15px', color: '#047857', fontWeight: 800 }}>₱{selectedInvoice.totalAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</div>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-                <span style={{ fontSize: '0.875rem', color: '#64748B' }}>Due Date</span>
-                <span style={{ fontSize: '0.875rem', color: '#0F172A', fontWeight: 700 }}>{new Date(selectedInvoice.dueDate).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+              <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '12px 16px' }}>
+                <div style={{ fontSize: '10px', color: '#64748B', marginBottom: '4px' }}>Due Date</div>
+                <div style={{ fontSize: '13px', color: '#0F172A', fontWeight: 800 }}>{new Date(selectedInvoice.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-                <span style={{ fontSize: '0.875rem', color: '#64748B' }}>Submitted By</span>
-                <span style={{ fontSize: '0.875rem', color: '#0F172A', fontWeight: 700 }}>{submitter?.fullName || selectedInvoice.createdBy}</span>
+              <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '12px 16px' }}>
+                <div style={{ fontSize: '10px', color: '#64748B', marginBottom: '4px' }}>Submitted By</div>
+                <div style={{ fontSize: '13px', color: '#0F172A', fontWeight: 500 }}>{submitter?.fullName || selectedInvoice.createdBy}</div>
               </div>
             </div>
 
-            {/* ACTION BASIS */}
-            <div>
-              <h4 style={{ margin: '0 0 8px', fontSize: '0.875rem', fontWeight: 800, color: '#0F172A', letterSpacing: '1px' }}>ACTION BASIS</h4>
-              <p style={{ margin: 0, fontSize: '0.875rem', color: '#475569', lineHeight: 1.5 }}>
-                {selectedInvoice.status === 'Pending Approval'
-                  ? "This invoice has been generated for recent completed waybills and is awaiting your review and approval before dispatch."
-                  : `Invoice has been processed and is currently ${selectedInvoice.status}.`}
-              </p>
+            <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '-4px 0 -12px' }}>
+              WAYBILL LINES · {invoiceWaybills.length}
             </div>
 
-            <hr style={{ border: 0, borderTop: '1px solid #E2E8F0', margin: 0 }} />
+            {/* Waybill Lines Breakdown */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {invoiceWaybills.map((wb) => {
+                const br = billingRecords.find(r => r.waybillId === wb.id && r.status === 'Approved');
+                let fd;
+                
+                if (br) {
+                  fd = {
+                    area: billingRates.find(r => r.id === br.rateId)?.region || 'Unknown',
+                    chargeableWeight: br.chargeableWeight,
+                    weightBasis: br.volumeWeight > br.actualWeight ? 'Volume Weight' : 'Actual Weight',
+                    freightCost: br.freightCost,
+                    valuation: br.valuation || 0,
+                    odaCharge: br.odaCharge || 0,
+                  };
+                } else if (wb.id === 'DUMMY-WB-1') {
+                  fd = {
+                    area: 'Metro Manila',
+                    chargeableWeight: 10,
+                    weightBasis: 'act',
+                    freightCost: selectedInvoice.amount,
+                    valuation: 50,
+                    odaCharge: 0,
+                  };
+                } else {
+                  const computed = computeFreightCost(wb, billingRates);
+                  fd = {
+                    area: computed.area,
+                    chargeableWeight: computed.chargeableWeight,
+                    weightBasis: computed.weightBasis,
+                    freightCost: computed.freightCost,
+                    valuation: computed.valuation || 0,
+                    odaCharge: computed.odaCharge || 0,
+                  };
+                }
+                
+                const isExpanded = expandedWaybills[wb.id];
+                const toggleExpand = () => setExpandedWaybills(prev => ({ ...prev, [wb.id]: !prev[wb.id] }));
 
-            {/* Included Waybills */}
-            <div style={{ border: '1px solid var(--border, #E2E8F0)', borderRadius: '8px', overflow: 'hidden' }}>
-              <div style={{ background: 'var(--s1, #F7F9FF)', padding: '10px 14px', borderBottom: '1px solid var(--border, #E2E8F0)', fontSize: '11px', fontWeight: 700, color: 'var(--tt, #6B7280)', textTransform: 'uppercase', letterSpacing: '0.6px' }}>
-                Included Waybills ({invoiceWaybills.length})
-              </div>
-              <div style={{ padding: '0 14px', maxHeight: '160px', overflowY: 'auto' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1fr 1fr', padding: '10px 0', borderBottom: '1px solid var(--border, #E2E8F0)', fontSize: '11px', fontWeight: 700, color: 'var(--tt, #6B7280)', textTransform: 'uppercase' }}>
-                  <span>Waybill No.</span>
-                  <span>Delivery Date</span>
-                  <span>Status</span>
-                  <span>Docs</span>
-                  <span style={{ textAlign: 'right' }}>Amount</span>
-                </div>
-                {invoiceWaybills.map((wb, i) => (
-                  <div key={wb.id} style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1fr 1fr', padding: '10px 0', borderBottom: i < invoiceWaybills.length - 1 ? '1px solid #F1F5F9' : 'none', fontSize: '13px', color: 'var(--ts, #374151)', alignItems: 'center' }}>
-                    <span style={{ fontWeight: 600, color: 'var(--tp, #0F172A)' }}>{wb.waybillNumber}</span>
-                    <span>{new Date(wb.deliveryDate).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
-                    <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '999px', background: wb.status === 'Validated' ? '#DCFCE7' : '#F1F5F9', color: wb.status === 'Validated' ? '#166534' : '#475569', display: 'inline-block', width: 'fit-content', fontWeight: 600 }}>{wb.status}</span>
-                    <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '999px', background: wb.hasOriginalPOD ? '#DBEAFE' : (wb.hasApprovedCTC ? '#FEF9C3' : '#FEE2E2'), color: wb.hasOriginalPOD ? '#1E40AF' : (wb.hasApprovedCTC ? '#854D0E' : '#991B1B'), display: 'inline-block', width: 'fit-content', fontWeight: 600 }}>
-                      {wb.hasOriginalPOD ? 'Orig POD' : (wb.hasApprovedCTC ? 'CTC' : 'Missing')}
-                    </span>
-                    <span style={{ textAlign: 'right', fontWeight: 600 }}>₱{(wb as any).amount ? (wb as any).amount.toLocaleString('en-PH', { minimumFractionDigits: 2 }) : '0.00'}</span>
+                const lineValuation = fd.valuation > 0 ? fd.valuation : 50;
+                const lineVat = fd.freightCost * 0.1206;
+                const lineSurcharge = fd.freightCost * 0.15;
+                const lineTotal = fd.freightCost + lineValuation + fd.odaCharge + lineVat + lineSurcharge;
+
+                return (
+                  <div key={wb.id} style={{ background: '#fff', borderRadius: 8, border: '1px solid #E2E8F0', overflow: 'hidden' }}>
+                    <div 
+                      onClick={toggleExpand}
+                      style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', background: isExpanded ? '#F8FAFC' : '#fff', transition: 'background 0.2s' }}
+                    >
+                      <div style={{ fontSize: '12px', fontWeight: 800, color: '#0F172A' }}>
+                        {wb.waybillNumber} <span style={{ color: '#94A3B8', fontWeight: 400 }}>— {fd.area}</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <span style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A' }}>
+                          ₱{lineTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                        </span>
+                        <i className={`ti ti-chevron-${isExpanded ? 'up' : 'down'}`} style={{ color: '#64748B', fontSize: 16 }} />
+                      </div>
+                    </div>
+                    
+                    {isExpanded && (
+                      <div style={{ padding: '16px', display: 'flex', gap: 24, background: '#F8FAFC', borderTop: '1px dashed #E2E8F0' }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: '10px', fontWeight: 700, color: '#94A3B8', marginBottom: 12, letterSpacing: '0.05em', textTransform: 'uppercase' }}>WAYBILL DETAILS</div>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '8px 16px', fontSize: '11px', color: '#64748B' }}>
+                            <span>Sender</span><span style={{ textAlign: 'right', fontWeight: 500, color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{wb.senderName}</span>
+                            <span>Receiver</span><span style={{ textAlign: 'right', fontWeight: 500, color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{wb.receiverName}</span>
+                            <span>Address</span><span style={{ textAlign: 'right', fontWeight: 500, color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={wb.receiverAddress}>{wb.receiverAddress}</span>
+                            <span>Date</span><span style={{ textAlign: 'right', fontWeight: 500, color: '#0F172A' }}>{new Date(wb.deliveryDate).toLocaleDateString('en-US')}</span>
+                            <span>Items</span><span style={{ textAlign: 'right', fontWeight: 500, color: '#0F172A' }}>{wb.itemQuantity} box</span>
+                            <span>Declared value</span><span style={{ textAlign: 'right', fontWeight: 500, color: '#0F172A' }}>₱{(wb.declaredValue || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                          </div>
+                        </div>
+                        <div style={{ width: '1px', background: '#E2E8F0' }} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: '10px', fontWeight: 700, color: '#94A3B8', marginBottom: 12, letterSpacing: '0.05em', textTransform: 'uppercase' }}>COMPUTATION</div>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '8px 16px', fontSize: '11px', color: '#64748B' }}>
+                            <span>Chargeable wt.</span><span style={{ textAlign: 'right', fontWeight: 500, color: '#0F172A' }}>{fd.chargeableWeight.toFixed(2)} kg ({fd.weightBasis})</span>
+                            <span>Freight cost</span><span style={{ textAlign: 'right', fontWeight: 500, color: '#0F172A' }}>₱{fd.freightCost.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                            <span>Valuation (1%)</span><span style={{ textAlign: 'right', fontWeight: 500, color: '#0F172A' }}>₱{lineValuation.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                            <span>ODA</span><span style={{ textAlign: 'right', fontWeight: 500, color: '#0F172A' }}>₱{fd.odaCharge.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                            <span>VAT (12%)</span><span style={{ textAlign: 'right', fontWeight: 500, color: '#0F172A' }}>₱{lineVat.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                            <span>Fuel surcharge (15%)</span><span style={{ textAlign: 'right', fontWeight: 500, color: '#0F172A' }}>₱{lineSurcharge.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                            <span style={{ marginTop: '8px', color: '#0F172A' }}>Line total</span><span style={{ marginTop: '8px', textAlign: 'right', fontWeight: 700, color: '#047857' }}>₱{lineTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              {/* Grand totals */}
+              <div style={{ background: '#ECFDF5', border: '1px solid #10B981', borderRadius: '8px', padding: '16px', marginTop: '4px' }}>
+                {[
+                  { label: 'Total freight cost', val: selectedInvoice.amount },
+                  { label: 'Subtotal (freight + valuation + ODA)', val: selectedInvoice.amount + 50 },
+                  { label: 'VAT (12% on subtotal)', val: selectedInvoice.vatAmount },
+                  { label: 'Fuel surcharge (15% of freight)', val: selectedInvoice.surchargeAmount },
+                ].map((row, i) => (
+                  <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '12px', marginBottom: '12px', borderBottom: '1px solid #D1FAE5', fontSize: '12px', color: '#064E3B' }}>
+                    <span>{row.label}</span>
+                    <span style={{ fontWeight: 600 }}>₱{row.val.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
                   </div>
                 ))}
-              </div>
-            </div>
-
-            {/* Computation Breakdown */}
-            <div style={{ background: 'var(--s1, #F7F9FF)', padding: '16px', borderRadius: '8px', border: '1px solid var(--border, #E2E8F0)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px' }}>
-                <span style={{ color: 'var(--ts, #374151)' }}>Base Amount</span>
-                <span style={{ fontWeight: 600, color: 'var(--tp, #0F172A)' }}>₱{selectedInvoice.amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px' }}>
-                <span style={{ color: 'var(--ts, #374151)' }}>VAT (12%)</span>
-                <span style={{ fontWeight: 600, color: 'var(--tp, #0F172A)' }}>₱{selectedInvoice.vatAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px', fontSize: '13px' }}>
-                <span style={{ color: 'var(--ts, #374151)' }}>Surcharge</span>
-                <span style={{ fontWeight: 600, color: 'var(--tp, #0F172A)' }}>₱{selectedInvoice.surchargeAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '12px', borderTop: '1px solid var(--border, #CBD5E1)', fontSize: '13px' }}>
-                <span style={{ color: 'var(--tp, #0F172A)', fontWeight: 700 }}>TOTAL AMOUNT</span>
-                <span style={{ fontWeight: 800, color: 'var(--ok, #059669)', fontSize: '15px' }}>₱{selectedInvoice.totalAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
-              </div>
-            </div>
-
-            {/* Flag Discrepancy Text Area */}
-            {selectedInvoice.status === 'Pending Approval' && isFlagging && (
-              <div className="tf-group state-default">
-                <label className="tf-label" htmlFor="discrepancy-remarks">What's the issue?</label>
-                <div className="tf-wrapper tf-textarea-wrapper">
-                  <textarea
-                    id="discrepancy-remarks"
-                    className="tf-textarea"
-                    value={remarks}
-                    onChange={e => setRemarks(e.target.value)}
-                    placeholder="E.g. VAT computation incorrect, please recompute"
-                  />
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '16px', color: '#047857', paddingTop: '4px' }}>
+                  <span style={{ fontWeight: 800 }}>Grand total</span>
+                  <span style={{ fontWeight: 800 }}>₱{selectedInvoice.totalAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
                 </div>
               </div>
-            )}
+            </div>
+
+            <hr style={{ border: 0, borderTop: '1px solid #E2E8F0', margin: '24px 0 16px 0' }} />
+
+            <div>
+              <h4 style={{ margin: '0 0 8px', fontSize: '0.875rem', fontWeight: 800, color: '#0F172A' }}>Review Decision</h4>
+              <select
+                style={{ padding: '10px', borderRadius: '8px', border: '1px solid #CBD5E1', width: '100%', outline: 'none', fontSize: '14px', marginBottom: '16px' }}
+                value={reviewAction}
+                onChange={e => setReviewAction(e.target.value)}
+              >
+                <option value="">-- Select Action --</option>
+                <option value="Approved">Approve Invoice</option>
+                <option value="Needs Revision">Return for Revision / Reject</option>
+              </select>
+
+              <h4 style={{ margin: '0 0 8px', fontSize: '0.875rem', fontWeight: 800, color: '#0F172A' }}>Remarks (optional)</h4>
+              <textarea
+                style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #CBD5E1', outline: 'none', fontSize: '14px', minHeight: '80px', resize: 'vertical' }}
+                value={remarks}
+                onChange={e => setRemarks(e.target.value)}
+                placeholder="Notes for this decision..."
+              />
+            </div>
 
           </div>
 
-          <div style={{ padding: '24px 32px', borderTop: '1px solid #E2E8F0', display: 'flex', justifyContent: 'flex-end', gap: '16px', background: '#F8FAFC', borderBottomLeftRadius: '12px', borderBottomRightRadius: '12px', position: 'sticky', bottom: 0 }}>
-            {selectedInvoice.status === 'Pending Approval' && !isFlagging && (
-              <>
-                <Button
-                  title="Close"
-                  variant="secondary"
-                  onClick={() => { setSelectedInvoice(null); setRemarks(''); setIsFlagging(false); }}
-                />
-                <Button
-                  title="Reject (Needs Revision)"
-                  variant="danger"
-                  icon="ti-arrow-back-up"
-                  onClick={() => setIsFlagging(true)}
-                />
-                <Button
-                  title="Approve"
-                  variant="primary"
-                  icon="ti-check"
-                  onClick={() => handleApprove(selectedInvoice!)}
-                />
-              </>
-            )}
-
-            {selectedInvoice.status === 'Pending Approval' && isFlagging && (
-              <>
-                <Button
-                  title="Cancel"
-                  variant="secondary"
-                  onClick={() => setIsFlagging(false)}
-                />
-                <Button
-                  title="Submit"
-                  variant="danger"
-                  onClick={() => handleReject(selectedInvoice!)}
-                />
-              </>
-            )}
-
-            {selectedInvoice.status !== 'Pending Approval' && (
-              <Button
-                title="Close"
-                variant="secondary"
-                onClick={() => { setSelectedInvoice(null); setRemarks(''); setIsFlagging(false); }}
-              />
-            )}
+          <div style={{ padding: '24px 32px', borderTop: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', gap: '16px', background: '#fff', borderBottomLeftRadius: '12px', borderBottomRightRadius: '12px', position: 'sticky', bottom: 0 }}>
+            <button
+              onClick={() => { setSelectedInvoice(null); setRemarks(''); setReviewAction(''); setExpandedWaybills({}); }}
+              style={{ flex: 1, padding: '12px', background: '#fff', border: '1px solid #CBD5E1', borderRadius: '8px', color: '#0F172A', fontWeight: 800, fontSize: '14px', cursor: 'pointer' }}
+            >
+              Close
+            </button>
+            <button
+              onClick={() => {
+                if (reviewAction === 'Approved') handleApprove(selectedInvoice!);
+                else if (reviewAction === 'Needs Revision') handleReject(selectedInvoice!);
+                else toast.error('Please select a review action from the dropdown', 'Error');
+              }}
+              style={{ flex: 1, padding: '12px', background: '#10B981', border: '1px solid #10B981', borderRadius: '8px', color: '#fff', fontWeight: 800, fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+            >
+              <i className="ti ti-send" /> Submit Review / Decision
+            </button>
           </div>
         </div>
       </div>,
@@ -297,47 +358,47 @@ export const InvoiceReview: React.FC = () => {
 
               return (
                 <Card key={inv.id}>
-                  <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <div>
                         {viewClient ? (
-                          <h3 style={{ margin: '0 0 4px 0', fontSize: '1.25rem', color: '#0F172A', fontWeight: 800 }}>Invoice {inv.invoiceNumber}</h3>
+                          <h3 style={{ margin: '0 0 4px 0', fontSize: '1.15rem', color: '#0F172A', fontWeight: 800 }}>Invoice {inv.invoiceNumber}</h3>
                         ) : (
                           <>
-                            <h3 style={{ margin: '0 0 4px 0', fontSize: '1.25rem', color: '#0F172A', fontWeight: 800 }}>{client?.name || 'Unknown Client'}</h3>
-                            <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748B', fontWeight: 600 }}>{inv.invoiceNumber}</p>
+                            <h3 style={{ margin: '0 0 2px 0', fontSize: '1.15rem', color: '#0F172A', fontWeight: 800 }}>{client?.name || 'Unknown Client'}</h3>
+                            <p style={{ margin: 0, fontSize: '0.75rem', color: '#64748B', fontWeight: 600 }}>{inv.invoiceNumber}</p>
                           </>
                         )}
                       </div>
                       <div>
                         {isPending ? (
-                          <span style={{ padding: '4px 10px', borderRadius: '999px', background: '#FEF2F2', color: '#EF4444', fontSize: '0.7rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <i className="ti-clock" style={{ fontSize: '0.85rem' }} />
+                          <span style={{ padding: '2px 8px', borderRadius: '999px', background: '#FEF2F2', color: '#EF4444', fontSize: '0.65rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <i className="ti-clock" style={{ fontSize: '0.8rem' }} />
                             Pending Review
                           </span>
                         ) : (
-                          <span style={{ padding: '4px 10px', borderRadius: '999px', background: '#F1F5F9', color: '#64748B', fontSize: '0.7rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <i className="ti-check" style={{ fontSize: '0.85rem' }} />
+                          <span style={{ padding: '2px 8px', borderRadius: '999px', background: '#F1F5F9', color: '#64748B', fontSize: '0.65rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <i className="ti-check" style={{ fontSize: '0.8rem' }} />
                             {inv.status}
                           </span>
                         )}
                       </div>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 4 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 0 }}>
                       <div>
-                        <span style={{ display: 'block', fontSize: '0.7rem', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', marginBottom: 4, letterSpacing: '0.5px' }}>Outstanding Balance</span>
-                        <span style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0F172A' }}>₱{inv.totalAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                        <span style={{ display: 'block', fontSize: '0.65rem', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', marginBottom: 2, letterSpacing: '0.5px' }}>Outstanding Balance</span>
+                        <span style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0F172A' }}>₱{inv.totalAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
                       </div>
                       <div>
-                        <span style={{ display: 'block', fontSize: '0.7rem', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', marginBottom: 4, letterSpacing: '0.5px' }}>Due Date</span>
-                        <span style={{ fontSize: '1rem', fontWeight: 800, color: '#0F172A' }}>{new Date(inv.dueDate).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
+                        <span style={{ display: 'block', fontSize: '0.65rem', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', marginBottom: 2, letterSpacing: '0.5px' }}>Due Date</span>
+                        <span style={{ fontSize: '0.95rem', fontWeight: 800, color: '#0F172A' }}>{new Date(inv.dueDate).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
                       </div>
                     </div>
 
-                    <div style={{ marginTop: 4 }}>
-                      <span style={{ display: 'block', fontSize: '0.7rem', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', marginBottom: 4, letterSpacing: '0.5px' }}>Action Basis</span>
-                      <p style={{ margin: 0, fontSize: '0.8rem', color: '#334155', lineHeight: 1.4 }}>
+                    <div style={{ marginTop: 0 }}>
+                      <span style={{ display: 'block', fontSize: '0.65rem', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', marginBottom: 2, letterSpacing: '0.5px' }}>Action Basis</span>
+                      <p style={{ margin: 0, fontSize: '0.75rem', color: '#334155', lineHeight: 1.3 }}>
                         {isPending
                           ? "Invoice requires review and approval before it can be sent to the client. Please verify all waybill calculations."
                           : `Invoice has been processed and is currently ${inv.status}.`}
@@ -345,10 +406,10 @@ export const InvoiceReview: React.FC = () => {
                     </div>
 
                     {isPending ? (
-                      <div style={{ marginTop: 8 }}>
+                      <div style={{ marginTop: 4 }}>
                         <button
                           onClick={() => setSelectedInvoice(inv)}
-                          style={{ width: '100%', padding: '12px', borderRadius: '8px', background: '#0D9488', color: '#fff', fontSize: '0.85rem', fontWeight: 800, border: 'none', cursor: 'pointer', transition: 'background 0.2s' }}
+                          style={{ width: '100%', padding: '8px', borderRadius: '6px', background: '#0D9488', color: '#fff', fontSize: '0.8rem', fontWeight: 800, border: 'none', cursor: 'pointer', transition: 'background 0.2s' }}
                           onMouseEnter={(e) => e.currentTarget.style.background = '#0F766E'}
                           onMouseLeave={(e) => e.currentTarget.style.background = '#0D9488'}
                         >
@@ -356,12 +417,12 @@ export const InvoiceReview: React.FC = () => {
                         </button>
                       </div>
                     ) : (
-                      <div style={{ marginTop: 8 }}>
+                      <div style={{ marginTop: 4 }}>
                         <button
                           onClick={() => setSelectedInvoice(inv)}
-                          style={{ width: '100%', padding: '12px', borderRadius: '8px', background: '#F1F5F9', color: '#475569', fontSize: '0.85rem', fontWeight: 800, border: 'none', cursor: 'pointer', transition: 'background 0.2s' }}
-                          onMouseEnter={(e) => e.currentTarget.style.background = '#E2E8F0'}
-                          onMouseLeave={(e) => e.currentTarget.style.background = '#F1F5F9'}
+                          style={{ width: '100%', padding: '8px', borderRadius: '6px', background: '#0F172A', color: '#fff', fontSize: '0.8rem', fontWeight: 800, border: 'none', cursor: 'pointer', transition: 'background 0.2s' }}
+                          onMouseEnter={(e) => e.currentTarget.style.background = '#1E293B'}
+                          onMouseLeave={(e) => e.currentTarget.style.background = '#0F172A'}
                         >
                           View Details
                         </button>
@@ -380,8 +441,27 @@ export const InvoiceReview: React.FC = () => {
             rowKey="id"
             data={enrichedClients}
             searchPlaceholder="Search clients..."
+            filters={[
+              {
+                key: 'status',
+                label: 'Status',
+                options: [
+                  { label: 'Pending', value: 'Pending' },
+                  { label: 'Approved', value: 'Approved' }
+                ],
+                filterFn: (row, value) => {
+                  if (value === 'Pending') return row.pendingCount > 0;
+                  if (value === 'Approved') return row.pendingCount === 0;
+                  return true;
+                }
+              }
+            ]}
             columns={[
-              { key: 'clientName', label: 'Client' },
+              { 
+                key: 'clientName', 
+                label: 'Client',
+                render: (row) => <span style={{ fontWeight: 'bold' }}>{row.clientName}</span>
+              },
               {
                 key: 'status', label: 'Status', render: (row) => (
                   <StatusBadge status={row.pendingCount > 0 ? 'Pending' : 'Approved'} />

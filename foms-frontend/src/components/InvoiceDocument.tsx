@@ -1,6 +1,7 @@
 import React from 'react';
 import { Invoice, SEEDED_RATES } from '../data/seed';
 import { useAppData } from '../context/AppDataContext';
+import { computeFreightCost } from '../utils/billing';
 
 interface WaybillLineItem {
   id: string;
@@ -15,19 +16,32 @@ interface WaybillLineItem {
 }
 
 export const InvoiceDocument: React.FC<{ invoice: Invoice; compact?: boolean }> = ({ invoice, compact = false }) => {
-  const { clients, waybills: allWaybills } = useAppData();
+  const { clients, waybills: allWaybills, billingRates } = useAppData();
 
   const client = clients.find(c => c.id === invoice.clientId);
-  const rawWaybills = invoice.waybillIds.map(id => allWaybills.find(w => w.id === id)).filter(Boolean) as any[];
+  const rawWaybills = (invoice.waybillIds || []).map(id => allWaybills.find(w => w.id === id)).filter(Boolean) as any[];
 
   // ── Build per-waybill line items using real rate config ──────────
   const lineItems: WaybillLineItem[] = rawWaybills.map(wb => {
-    const rate = SEEDED_RATES.find(r => r.clientId === wb.clientCode);
-    const baseRate = rate?.baseRate ?? invoice.amount / Math.max(rawWaybills.length, 1);
-    const vatRate = client?.vatRate ?? rate?.vatRate ?? 0.12;
-    const surchargeRate = rate?.surchargeRate ?? 0;
-    const vatAmount = baseRate * vatRate;
-    const surcharge = baseRate * surchargeRate;
+    let breakdown = null;
+    const ratesToUse = invoice.appliedRates && invoice.appliedRates.length > 0 ? invoice.appliedRates : billingRates;
+    try {
+      breakdown = computeFreightCost(wb, ratesToUse);
+    } catch (e) {
+      // Missing rate fallback
+    }
+
+    // Try to get specific rates
+    const activeRate = billingRates.find(r => r.clientId === wb.clientCode && r.status === 'Active');
+    const vatRate = activeRate?.vatRate ?? client?.vatRate ?? 0.12;
+    const surchargeRate = activeRate?.fuelSurchargeRate ?? 0.15;
+
+    // Use computed or fallback to legacy division
+    const baseRate = breakdown ? breakdown.freightCost + breakdown.valuation + breakdown.odaCharge : (invoice.amount / Math.max(rawWaybills.length, 1));
+    const vatAmount = breakdown ? breakdown.vat : baseRate * vatRate;
+    const surcharge = breakdown ? breakdown.fuelSurcharge : baseRate * surchargeRate;
+    const lineTotal = breakdown ? breakdown.grandTotal : baseRate + vatAmount + surcharge;
+
     return {
       id: wb.id,
       waybillNumber: wb.waybillNumber,
@@ -35,7 +49,7 @@ export const InvoiceDocument: React.FC<{ invoice: Invoice; compact?: boolean }> 
       baseRate,
       vatAmount,
       surcharge,
-      lineTotal: baseRate + vatAmount + surcharge,
+      lineTotal,
       vatRate,
       surchargeRate,
     };
@@ -53,8 +67,9 @@ export const InvoiceDocument: React.FC<{ invoice: Invoice; compact?: boolean }> 
     : invoice.surchargeAmount;
   const totalDue = subtotal + totalVat + totalSurcharge;
 
-  const vatRateDisplay = client?.vatRate ?? SEEDED_RATES.find(r => r.clientId === invoice.clientId)?.vatRate ?? 0.12;
-  const surchargeRateDisplay = SEEDED_RATES.find(r => r.clientId === invoice.clientId)?.surchargeRate ?? 0;
+  const activeInvoiceRate = billingRates.find(r => r.clientId === invoice.clientId && r.status === 'Active');
+  const vatRateDisplay = client?.vatRate ?? activeInvoiceRate?.vatRate ?? 0.12;
+  const surchargeRateDisplay = activeInvoiceRate?.fuelSurchargeRate ?? 0;
 
   // ── Zero/negative detection ──────────────────────────────────────
   const hasZeroAmount = totalDue <= 0;

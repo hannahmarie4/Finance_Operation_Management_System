@@ -115,9 +115,14 @@ export const TopHeader: React.FC = () => {
         zIndex: 10,
         fontFamily: '"Inter", sans-serif'
       }}>
-        <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: '#0F172A' }}>
-          {getPageTitle()}
-        </h2>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+            <span style={{ fontSize: '11px', fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.08em' }}>SPEEDPAY</span>
+            <ChevronRight size={12} color="#94A3B8" strokeWidth={2.5} />
+            <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{getPageTitle()}</span>
+          </div>
+          <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 800, color: '#0F172A', lineHeight: 1.2 }}>{getPageTitle()}</h2>
+        </div>
         
         <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
           {/* Date and Time Pill */}

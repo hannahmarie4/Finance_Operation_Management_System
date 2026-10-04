@@ -65,6 +65,12 @@ const ReportsContent: React.FC = () => {
   const [clientSearch, setClientSearch] = useState('');
   const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false);
 
+  // Compile Parameters state
+  const [compileLedgerType, setCompileLedgerType] = useState('Duplicate Alert Summary');
+  const [compileSearch, setCompileSearch] = useState('');
+  const [compileDateRange, setCompileDateRange] = useState('Last 30 Days');
+  const [compileStatus, setCompileStatus] = useState('All Statuses');
+
   const applyScheduleDates = (schedule: 'Weekly' | 'Semi-monthly' | 'Monthly' | '') => {
     setScheduleFilter(schedule);
     setIsGenerated(false);
@@ -458,115 +464,127 @@ const ReportsContent: React.FC = () => {
   );
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 24, alignItems: 'start' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-      {/* ── Filter Controls (Left Sidebar) ── */}
-      <div style={{ background: '#F8FAFC', borderRadius: 12, padding: '24px 20px', border: '1px solid #E2E8F0', position: 'sticky', top: 24 }}>
-        <h3 style={{ margin: '0 0 4px', color: '#0F172A', fontSize: '1.1rem', fontWeight: 800 }}>Report Configuration</h3>
-        <p style={{ margin: '0 0 24px', color: '#64748B', fontSize: '0.8rem', lineHeight: 1.4 }}>Select options to quickly adjust standard bounds</p>
+      {/* ══ Compile Parameters (single full-width card) ══ */}
+      <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #E2E8F0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', overflow: 'hidden' }}>
 
-        <label style={{ fontSize: '0.7rem', fontWeight: 800, color: '#475569', display: 'block', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>CLIENT</label>
-        <div style={{ marginBottom: 24, position: 'relative' }}>
-          <div
-            onClick={() => !isGenerated && setIsClientDropdownOpen(!isClientDropdownOpen)}
-            style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid #E2E8F0', fontSize: '0.9rem', color: '#0F172A', background: isGenerated ? '#F1F5F9' : '#fff', cursor: isGenerated ? 'not-allowed' : 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-          >
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {selectedClientId ? clients.find(c => c.id === selectedClientId)?.name : 'All Clients'}
-            </span>
-            <i className={`ti ti-chevron-${isClientDropdownOpen ? 'up' : 'down'}`} style={{ color: '#94A3B8', flexShrink: 0, marginLeft: 8 }}></i>
+        {/* Header row: title left, export buttons right */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 24px', borderBottom: '1px solid #F1F5F9' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <i className="ti ti-filter" style={{ fontSize: '15px', color: '#0D9488' }} />
+            <span style={{ fontSize: '0.875rem', fontWeight: 800, color: '#0F172A' }}>Compile Parameters</span>
           </div>
+          {/* Export buttons */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button
+              onClick={() => window.print()}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', background: '#fff', border: '1px solid #CBD5E1', borderRadius: 8, fontSize: '0.82rem', fontWeight: 600, color: '#0F172A', cursor: 'pointer', transition: 'background 0.15s', whiteSpace: 'nowrap' }}
+              onMouseEnter={e => (e.currentTarget.style.background = '#F8FAFC')}
+              onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
+              <i className="ti ti-printer" style={{ fontSize: '15px' }} /> Print
+            </button>
+            <button
+              onClick={() => {}}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', background: '#fff', border: '1px solid #CBD5E1', borderRadius: 8, fontSize: '0.82rem', fontWeight: 600, color: '#0F172A', cursor: 'pointer', transition: 'background 0.15s', whiteSpace: 'nowrap' }}
+              onMouseEnter={e => (e.currentTarget.style.background = '#F8FAFC')}
+              onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
+              <i className="ti ti-download" style={{ fontSize: '15px' }} /> Export CSV
+            </button>
+            <button
+              onClick={() => {}}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 18px', background: '#0D9488', border: 'none', borderRadius: 8, fontSize: '0.82rem', fontWeight: 700, color: '#fff', cursor: 'pointer', transition: 'background 0.15s', whiteSpace: 'nowrap', boxShadow: '0 2px 6px rgba(13,148,136,0.25)' }}
+              onMouseEnter={e => (e.currentTarget.style.background = '#0F766E')}
+              onMouseLeave={e => (e.currentTarget.style.background = '#0D9488')}>
+              <i className="ti ti-file-description" style={{ fontSize: '15px' }} /> Export Formal PDF
+            </button>
+          </div>
+        </div>
 
-          {isClientDropdownOpen && !isGenerated && (
-            <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4, background: '#fff', border: '1px solid #E2E8F0', borderRadius: 8, boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05)', zIndex: 50, maxHeight: 280, display: 'flex', flexDirection: 'column' }}>
-              <div style={{ padding: '8px', borderBottom: '1px solid #E2E8F0', background: '#F8FAFC', borderTopLeftRadius: 8, borderTopRightRadius: 8 }}>
-                <div style={{ position: 'relative' }}>
-                  <i className="ti ti-search" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#64748B', fontSize: '0.9rem' }}></i>
-                  <input
-                    type="text"
-                    placeholder="Search clients..."
-                    value={clientSearch}
-                    onChange={(e) => setClientSearch(e.target.value)}
-                    style={{ width: '100%', padding: '8px 10px 8px 30px', borderRadius: 6, border: '1px solid #CBD5E1', fontSize: '0.85rem', outline: 'none', background: '#fff' }}
-                    onClick={e => e.stopPropagation()}
-                  />
-                </div>
-              </div>
-              <div style={{ overflowY: 'auto', flex: 1, padding: '4px 0' }}>
-                <div
-                  onClick={() => {
-                    navigate(`/reports?tab=${reportType}`);
-                    setIsClientDropdownOpen(false);
-                    setClientSearch('');
-                    setIsGenerated(false);
-                  }}
-                  style={{ padding: '10px 16px', fontSize: '0.85rem', cursor: 'pointer', background: !selectedClientId ? '#F0FDF4' : 'transparent', fontWeight: !selectedClientId ? 700 : 400, color: !selectedClientId ? '#065F46' : '#0F172A', transition: 'background 0.2s' }}
-                  onMouseEnter={e => { if (selectedClientId) e.currentTarget.style.background = '#F8FAFC'; }}
-                  onMouseLeave={e => { if (selectedClientId) e.currentTarget.style.background = 'transparent'; }}
-                >
-                  All Clients
-                </div>
-                {filteredClientsForDropdown.length > 0 ? filteredClientsForDropdown.map(c => (
-                  <div
-                    key={c.id}
-                    onClick={() => {
-                      navigate(`/reports/${c.id}?tab=${reportType}`);
-                      setIsClientDropdownOpen(false);
-                      setClientSearch('');
-                      setIsGenerated(false);
-                    }}
-                    style={{ padding: '10px 16px', fontSize: '0.85rem', cursor: 'pointer', background: selectedClientId === c.id ? '#F0FDF4' : 'transparent', fontWeight: selectedClientId === c.id ? 700 : 400, color: selectedClientId === c.id ? '#065F46' : '#0F172A', transition: 'background 0.2s' }}
-                    onMouseEnter={e => { if (selectedClientId !== c.id) e.currentTarget.style.background = '#F8FAFC'; }}
-                    onMouseLeave={e => { if (selectedClientId !== c.id) e.currentTarget.style.background = 'transparent'; }}
-                  >
-                    {c.name}
-                  </div>
-                )) : (
-                  <div style={{ padding: '16px 14px', fontSize: '0.85rem', color: '#64748B', textAlign: 'center' }}>No clients found matching "{clientSearch}"</div>
-                )}
-              </div>
+        {/* Fields row */}
+        <div style={{ padding: '18px 24px', display: 'flex', alignItems: 'flex-end', gap: 14, flexWrap: 'wrap' }}>
+
+          {/* Report Ledger Type — now includes all report types */}
+          <div style={{ flex: '1 1 220px', minWidth: 200 }}>
+            <label style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748B', display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Report Ledger Type</label>
+            <div style={{ position: 'relative' }}>
+              <select value={compileLedgerType} onChange={e => { setCompileLedgerType(e.target.value); setReportType(e.target.value === 'Aging of Accounts' ? 'aging' : e.target.value === 'Invoice Summary' ? 'invoices' : e.target.value === 'Collection Summary' ? 'collections' : 'duplicate'); }}
+                style={{ width: '100%', appearance: 'none', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '9px 32px 9px 12px', fontSize: '0.85rem', color: '#0F172A', cursor: 'pointer', outline: 'none' }}>
+                <optgroup label="── Financial Reports ──">
+                  <option value="Aging of Accounts">Aging of Accounts</option>
+                  <option value="Invoice Summary">Invoice Summary</option>
+                  <option value="Collection Summary">Collection Summary</option>
+                </optgroup>
+                <optgroup label="── Duplicate Detection ──">
+                  <option value="Duplicate Alert Summary">Duplicate Alert Summary</option>
+                  <option value="Unique Document Ledger">Unique Document Ledger</option>
+                  <option value="Flagged Duplicates Log">Flagged Duplicates Log</option>
+                  <option value="Review History Audit">Review History Audit</option>
+                </optgroup>
+              </select>
+              <i className="ti ti-chevron-down" style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: '#64748B', fontSize: '13px', pointerEvents: 'none' }} />
             </div>
-          )}
-        </div>
+          </div>
 
-        <label style={{ fontSize: '0.7rem', fontWeight: 800, color: '#475569', display: 'block', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>REPORT TYPE</label>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 24 }}>
-          <div style={{ position: 'relative' }} onMouseEnter={() => !isGenerated && setHoveredReportType('aging')} onMouseLeave={() => setHoveredReportType(null)}>
-            <ReportTypeOption value="aging" label="Aging of Accounts" subLabel="Outstanding AR by age" current={reportType} onChange={(v: string) => { setReportType(v); setIsGenerated(false); }} disabled={isGenerated} />
-            {hoveredReportType === 'aging' && <BillingScheduleFilter />}
+          {/* Search Keyword */}
+          <div style={{ flex: '1 1 200px', minWidth: 180 }}>
+            <label style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748B', display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Search Keyword (e.g. Client, Key)</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '8px 12px' }}>
+              <i className="ti ti-search" style={{ color: '#94A3B8', fontSize: '14px', flexShrink: 0 }} />
+              <input value={compileSearch} onChange={e => setCompileSearch(e.target.value)} placeholder="Type to filter results..."
+                style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: '0.85rem', color: '#0F172A', width: '100%' }} />
+            </div>
           </div>
-          <div style={{ position: 'relative' }} onMouseEnter={() => !isGenerated && setHoveredReportType('invoices')} onMouseLeave={() => setHoveredReportType(null)}>
-            <ReportTypeOption value="invoices" label="Invoice Summary" subLabel="Total billed and status" current={reportType} onChange={(v: string) => { setReportType(v); setIsGenerated(false); }} disabled={isGenerated} />
-            {hoveredReportType === 'invoices' && <BillingScheduleFilter />}
+
+          {/* Date Range Snapshot */}
+          <div style={{ flex: '1 1 160px', minWidth: 150 }}>
+            <label style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748B', display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Date Range Snapshot</label>
+            <div style={{ position: 'relative' }}>
+              <i className="ti ti-calendar" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#64748B', fontSize: '14px', pointerEvents: 'none' }} />
+              <select value={compileDateRange} onChange={e => setCompileDateRange(e.target.value)}
+                style={{ width: '100%', appearance: 'none', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '9px 32px 9px 34px', fontSize: '0.85rem', color: '#0F172A', cursor: 'pointer', outline: 'none' }}>
+                <option>Last 7 Days</option>
+                <option>Last 30 Days</option>
+                <option>Last 90 Days</option>
+                <option>This Month</option>
+                <option>This Year</option>
+                <option>All Time</option>
+              </select>
+              <i className="ti ti-chevron-down" style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: '#64748B', fontSize: '13px', pointerEvents: 'none' }} />
+            </div>
           </div>
-          <div style={{ position: 'relative' }} onMouseEnter={() => !isGenerated && setHoveredReportType('collections')} onMouseLeave={() => setHoveredReportType(null)}>
-            <ReportTypeOption value="collections" label="Collection Summary" subLabel="Payments received" current={reportType} onChange={(v: string) => { setReportType(v); setIsGenerated(false); }} disabled={isGenerated} />
-            {hoveredReportType === 'collections' && <BillingScheduleFilter />}
+
+          {/* Status Filter */}
+          <div style={{ flex: '1 1 140px', minWidth: 130 }}>
+            <label style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748B', display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Status Filter</label>
+            <div style={{ position: 'relative' }}>
+              <select value={compileStatus} onChange={e => setCompileStatus(e.target.value)}
+                style={{ width: '100%', appearance: 'none', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '9px 32px 9px 12px', fontSize: '0.85rem', color: '#0F172A', cursor: 'pointer', outline: 'none' }}>
+                <option>All Statuses</option>
+                <option>Pending Review</option>
+                <option>Resolved</option>
+                <option>Dismissed</option>
+                <option>Flagged</option>
+              </select>
+              <i className="ti ti-chevron-down" style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: '#64748B', fontSize: '13px', pointerEvents: 'none' }} />
+            </div>
+          </div>
+
+          {/* Refresh Report */}
+          <div style={{ flexShrink: 0 }}>
+            <button onClick={() => {}}
+              style={{ background: '#fff', color: '#0F172A', padding: '9px 18px', borderRadius: 8, border: '1px solid #CBD5E1', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap', transition: 'background 0.15s' }}
+              onMouseEnter={e => (e.currentTarget.style.background = '#F8FAFC')}
+              onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
+              <i className="ti ti-refresh" style={{ fontSize: '15px', color: '#0D9488' }} />
+              Refresh Report
+            </button>
           </div>
         </div>
-
-        <label style={{ fontSize: '0.7rem', fontWeight: 800, color: '#475569', display: 'block', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>DATE BOUNDS</label>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 24 }}>
-          <div>
-            <CustomDatePicker value={dateFrom} onChange={val => { setDateFrom(val); setIsGenerated(false); }} maxDate={dateTo || undefined} placeholder="Date From" />
-          </div>
-          <div>
-            <CustomDatePicker value={dateTo} onChange={val => { setDateTo(val); setIsGenerated(false); }} minDate={dateFrom || undefined} placeholder="Date To" />
-          </div>
-        </div>
-
-        {!isGenerated ? (
-          <button onClick={handleGenerateReport} style={{ width: '100%', background: '#10B981', color: '#fff', padding: '12px', borderRadius: 8, border: 'none', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, transition: 'background 0.2s', boxShadow: '0 4px 6px -1px rgba(16, 185, 129, 0.2)' }}>
-            <i className="ti ti-file-analytics" style={{ fontSize: '1.1rem' }}></i> GENERATE REPORT
-          </button>
-        ) : (
-          <button onClick={() => setIsGenerated(false)} style={{ width: '100%', background: '#fff', color: '#0F172A', padding: '12px', borderRadius: 8, border: '1px solid #CBD5E1', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, transition: 'background 0.2s' }}>
-            <i className="ti ti-refresh" style={{ fontSize: '1.1rem' }}></i> EDIT REPORT CONFIG
-          </button>
-        )}
       </div>
 
-      {/* ── Main Content (Right Area) ── */}
+
+      {/* ══ ROW 3: Main Content (full-width) ══ */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
         {selectedClientId && clients.find(c => c.id === selectedClientId) && (
           <div style={{ marginBottom: -8 }}>

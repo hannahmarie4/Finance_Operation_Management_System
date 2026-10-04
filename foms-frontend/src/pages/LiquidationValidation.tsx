@@ -73,13 +73,10 @@ export default function LiquidationValidation() {
     addCashFlowRecord({
       id: `CFO-${Date.now()}`,
       date: new Date().toISOString(),
-      description: `Liquidation Validated: ${viewRecord.id} - ${viewRecord.reference}`,
+      sourceReference: `Liquidation Validated: ${viewRecord.id} - ${viewRecord.reference}`,
       type: 'Outflow',
-      category: 'Operations',
       amount: viewRecord.amount,
-      reference: viewRecord.id,
-      recordedBy: user?.employeeId || 'System',
-      status: 'Completed'
+      recordedBy: user?.employeeId || 'System'
     });
 
     addAuditLog({

@@ -186,12 +186,48 @@ export default function FinancialAdjustments() {
 
   const viewRecord = viewRecordId ? financialAdjustments.find(a => a.id === viewRecordId) : null;
 
+  const totalAdjustments = financialAdjustments.length;
+  const pendingApprovals = financialAdjustments.filter(a => a.status === 'Pending Approval').length;
+  const totalAmount = financialAdjustments.reduce((sum, a) => sum + (a.status === 'Recorded' || a.status === 'Approved' ? a.amount : 0), 0);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      {/* KPI Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
+        {[
+          { label: 'TOTAL ADJUSTMENTS', value: totalAdjustments, border: '#E2E8F0', bg: '#fff', color: '#64748B', sub: 'Across all records' },
+          { label: 'PENDING APPROVALS', value: pendingApprovals, border: '#FDE68A', bg: '#FFFBEB', color: '#D97706', sub: 'Awaiting manager review' },
+          { label: 'APPROVED VALUE', value: `₱${totalAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, border: '#BBF7D0', bg: '#F0FDF4', color: '#16A34A', sub: 'Total amount approved' },
+        ].map((kpi: any, i) => (
+          <div
+            key={i}
+            style={{
+              background: kpi.bg, border: `1px solid ${kpi.border}`,
+              borderTop: '4px solid transparent', borderRadius: 12,
+              padding: '14px 20px', transition: 'all 0.3s ease', cursor: 'pointer'
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.transform = 'translateY(-5px)';
+              e.currentTarget.style.boxShadow = '0 10px 25px -5px rgba(0,0,0,0.1)';
+              e.currentTarget.style.borderTop = `4px solid ${kpi.color}`;
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = 'none';
+              e.currentTarget.style.borderTop = '4px solid transparent';
+            }}
+          >
+            <p style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 700, color: kpi.color, letterSpacing: '0.06em' }}>{kpi.label}</p>
+            <p style={{ margin: '0 0 4px', fontSize: typeof kpi.value === 'number' ? 32 : 24, fontWeight: 800, color: '#111827', lineHeight: 1 }}>{kpi.value}</p>
+            <p style={{ margin: 0, fontSize: 12, color: '#9CA3AF' }}>{kpi.sub}</p>
+          </div>
+        ))}
+      </div>
       <TableContainer>
         <DataTable
           title="Adjustment Records"
           subtitle="Manage and apply adjustments or credit memos to client accounts."
+          exportable={true}
           createButtons={[
             {
               label: 'New Adjustment / Memo',
@@ -205,6 +241,17 @@ export default function FinancialAdjustments() {
           rowKey="id"
           searchPlaceholder="Search adjustments by ID, Invoice, or Reason..."
           searchFields={['id', 'affectedRecordId', 'reason']}
+          filters={[
+            {
+              key: 'type',
+              label: 'Type',
+              options: [
+                { label: 'All Types', value: '' },
+                { label: 'Adjustment', value: 'Adjustment' },
+                { label: 'Credit Memo', value: 'Credit Memo' }
+              ]
+            }
+          ]}
           defaultPageSize={10}
         />
       </TableContainer>
@@ -231,14 +278,22 @@ export default function FinancialAdjustments() {
               <div className="tf-group state-default">
                 <label className="tf-label">Link to Finance Record (Invoice) <span style={{ color: 'red' }}>*</span></label>
                 <div className="tf-wrapper">
-                  <select className="tf-input" value={affectedRecordId} onChange={e => setAffectedRecordId(e.target.value)}>
-                    <option value="">Select Invoice to apply to...</option>
+                  <input
+                    type="text"
+                    className="tf-input"
+                    list="invoice-options"
+                    value={affectedRecordId}
+                    onChange={e => setAffectedRecordId(e.target.value)}
+                    placeholder="Select or type Invoice to apply to..."
+                  />
+                  <datalist id="invoice-options">
                     {invoices.filter(i => ['Sent', 'Overdue'].includes(i.status)).map(i => (
-                      <option key={i.id} value={i.id}>{i.id} ({i.clientId}) - Balance: ₱{(arRecords.find(a => a.invoiceId === i.id)?.outstandingBalance || 0).toLocaleString('en-PH')}</option>
+                      <option key={i.id} value={i.id}>
+                        {i.id} ({i.clientId}) - Balance: ₱{(arRecords.find(a => a.invoiceId === i.id)?.outstandingBalance || 0).toLocaleString('en-PH')}
+                      </option>
                     ))}
-                  </select>
+                  </datalist>
                 </div>
-                <div className="tf-help-text">An adjustment must be linked to a valid affected record (TC 327).</div>
               </div>
 
               <div className="tf-group state-default">

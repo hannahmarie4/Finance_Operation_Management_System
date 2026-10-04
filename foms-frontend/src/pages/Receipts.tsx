@@ -25,9 +25,10 @@ export const Receipts: React.FC = () => {
   // ─────────────────────────────────────────────────────────────
   // DETAIL VIEW — card form with Print/PDF popup
   // ─────────────────────────────────────────────────────────────
-  if (receiptIdParam) {
+  const renderReceiptModal = () => {
+    if (!receiptIdParam) return null;
     const raw = receipts.find(r => r.id === receiptIdParam);
-    if (!raw) return <div>Receipt not found</div>;
+    if (!raw) return null;
 
     const client = clients.find(c => c.id === raw.clientId);
     const invoice = invoices.find(i => i.id === raw.invoiceId);
@@ -265,31 +266,47 @@ export const Receipts: React.FC = () => {
     };
 
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-
-        <Card>
-          <div style={{ padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
-            <div style={{ display: 'flex', gap: '24px' }}>
-              <div>
-                <span style={{ display: 'block', fontSize: '0.75rem', fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase', marginBottom: '4px', letterSpacing: '0.05em' }}>PAYMENT STATUS</span>
-                <StatusBadge status="Issued OR" />
+      <div style={{ position: 'fixed', inset: 0, zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(15, 23, 42, 0.4)', padding: '24px', backdropFilter: 'blur(4px)' }} onClick={() => navigate(clientIdParam ? `/receipts/${clientIdParam}` : '/receipts')}>
+        <div style={{ background: '#F8FAFC', width: '100%', maxWidth: '850px', maxHeight: '100%', overflowY: 'auto', borderRadius: '12px', boxShadow: '0 20px 40px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
+          
+          {/* STICKY HEADER */}
+          <div style={{ position: 'sticky', top: 0, background: '#fff', padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #E2E8F0', zIndex: 10, borderTopLeftRadius: '12px', borderTopRightRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)', flexShrink: 0 }}>
+            <div style={{ display: 'flex', gap: '32px', alignItems: 'center' }}>
+              <button 
+                onClick={() => navigate(clientIdParam ? `/receipts/${clientIdParam}` : '/receipts')} 
+                style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '8px', borderRadius: '50%', color: '#64748B', transition: 'background 0.2s', marginRight: '-8px' }}
+                onMouseEnter={(e) => e.currentTarget.style.background = '#F1F5F9'} 
+                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                title="Go Back"
+              >
+                <i className="ti ti-arrow-left" style={{ fontSize: '20px' }} />
+              </button>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <span style={{ fontSize: '10px', fontWeight: 800, color: '#94A3B8', letterSpacing: '0.05em' }}>PAYMENT STATUS</span>
+                <span style={{ color: '#D97706', fontSize: '13px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ background: '#FEF3C7', display: 'flex', padding: '2px', borderRadius: '50%' }}><i className="ti ti-alert-circle" style={{ color: '#D97706', fontSize: '14px' }} /></span> Issued OR
+                </span>
               </div>
-              <div>
-                <span style={{ display: 'block', fontSize: '0.75rem', fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase', marginBottom: '4px', letterSpacing: '0.05em' }}>INVOICE STATUS</span>
-                <StatusBadge status="Paid" />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <span style={{ fontSize: '10px', fontWeight: 800, color: '#94A3B8', letterSpacing: '0.05em' }}>INVOICE STATUS</span>
+                <span style={{ color: '#059669', fontSize: '13px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ background: '#D1FAE5', display: 'flex', padding: '2px', borderRadius: '50%' }}><i className="ti ti-check" style={{ color: '#059669', fontSize: '14px' }} /></span> Paid
+                </span>
               </div>
-              <div>
-                <span style={{ display: 'block', fontSize: '0.75rem', fontWeight: 800, color: '#94A3B8', textTransform: 'uppercase', marginBottom: '4px', letterSpacing: '0.05em' }}>DATE ISSUED</span>
-                <span style={{ color: '#0F172A', fontWeight: 700, fontSize: '0.95rem' }}>{new Date(or.issuedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <span style={{ fontSize: '10px', fontWeight: 800, color: '#94A3B8', letterSpacing: '0.05em' }}>DATE ISSUED</span>
+                <span style={{ color: '#0F172A', fontWeight: 700, fontSize: '13px' }}>{new Date(or.issuedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
               </div>
             </div>
-            <div style={{ display: 'flex', gap: '12px' }}>
-              <Button title="Close" variant="secondary" onClick={() => navigate(`/receipts/${clientIdParam}`)} />
-              <Button title="Print / PDF" variant="primary" icon="ti-printer" onClick={handlePrint} />
+            
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+              <button onClick={(e) => { e.stopPropagation(); handlePrint(); }} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#0D9488', border: 'none', padding: '8px 16px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, color: '#fff', cursor: 'pointer' }}>
+                <i className="ti ti-printer" style={{ fontSize: '16px' }} /> Print / PDF
+              </button>
             </div>
           </div>
-        </Card>
 
+          <div style={{ padding: '24px' }}>
         <Card>
           <div style={{ padding: '32px', display: 'flex', flexDirection: 'column', position: 'relative' }}>
             {/* ── PAID Stamp ── */}
@@ -382,9 +399,11 @@ export const Receipts: React.FC = () => {
 
           </div>
         </Card>
+        </div>
+        </div>
       </div>
     );
-  }
+  };
 
   // ─────────────────────────────────────────────────────────────
   // CLIENT DETAIL VIEW — OR History table
@@ -438,6 +457,7 @@ export const Receipts: React.FC = () => {
             />
           </div>
         </Card>
+        {renderReceiptModal()}
       </div>
     );
   }
@@ -487,6 +507,7 @@ export const Receipts: React.FC = () => {
           densityToggle={true}
         />
       </TableContainer>
+      {renderReceiptModal()}
     </div>
   );
 };

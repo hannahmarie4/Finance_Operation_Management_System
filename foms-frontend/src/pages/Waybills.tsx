@@ -16,6 +16,7 @@ import { ClientInfoCard } from '../components/ClientInfoCard';
 const WaybillDetailCard: React.FC<{ waybill: Waybill, onUpdate: (id: string, updates: Partial<Waybill>) => void, userRole?: string }> = ({ waybill, onUpdate, userRole }) => {
   const { toast } = useToast();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { addAuditLog } = useAppData();
   const [checklist, setChecklist] = useState({
     signature: false,
@@ -24,11 +25,13 @@ const WaybillDetailCard: React.FC<{ waybill: Waybill, onUpdate: (id: string, upd
     notDuplicate: false
   });
   const [ctcForm, setCtcForm] = useState({
-    certifiedBy: '',
-    certificationDate: new Date().toISOString().split('T')[0],
-    reason: ''
+    reason: '',
+    additionalRemarks: ''
   });
   const [rejectReason, setRejectReason] = useState('');
+  const [rejectCategory, setRejectCategory] = useState('');
+  const [activeTab, setActiveTab] = useState(waybill.status === 'Missing' ? 'Submit CTC' : 'Approve');
+  const [showImageModal, setShowImageModal] = useState(false);
 
   const allChecked = Object.values(checklist).every(Boolean);
 
@@ -54,14 +57,15 @@ const WaybillDetailCard: React.FC<{ waybill: Waybill, onUpdate: (id: string, upd
   };
 
   const handleReject = () => {
-    if (!rejectReason.trim()) {
-      toast.error('Please provide a reason for rejecting.');
+    if (!rejectCategory) {
+      toast.error('Please select a reason for rejection.');
       return;
     }
     if (window.confirm('Return this waybill to Operations for correction?')) {
-      onUpdate(waybill.id, { status: 'Returned', notes: rejectReason });
+      onUpdate(waybill.id, { status: 'Returned', notes: `${rejectCategory}: ${rejectReason}` });
       toast.warning(`Waybill ${waybill.waybillNumber} returned to Ops.`);
       setRejectReason('');
+      setRejectCategory('');
     }
   };
 
@@ -74,11 +78,10 @@ const WaybillDetailCard: React.FC<{ waybill: Waybill, onUpdate: (id: string, upd
 
   const handleCtcSubmit = () => {
     onUpdate(waybill.id, {
-      status: 'CTC Submitted',
+      status: 'Pending',
       is_ctc: true,
-      certified_by: ctcForm.certifiedBy,
-      certification_date: ctcForm.certificationDate,
       reason_for_missing: ctcForm.reason,
+      notes: ctcForm.additionalRemarks,
       pod_image_url: 'https://images.unsplash.com/photo-1586281380349-632531db7ed4?q=80&w=600&auto=format&fit=crop',
       uploaded_date: new Date().toISOString()
     });
@@ -176,9 +179,9 @@ const WaybillDetailCard: React.FC<{ waybill: Waybill, onUpdate: (id: string, upd
             </h4>
             {waybill.pod_image_url ? (
               <div style={{ border: '1px dashed #CBD5E1', borderRadius: '8px', overflow: 'hidden' }}>
-                <a href={waybill.pod_image_url} target="_blank" rel="noreferrer" title="Click to view full size" style={{ display: 'block' }}>
+                <div onClick={() => setShowImageModal(true)} title="Click to view full size" style={{ display: 'block', cursor: 'pointer' }}>
                   <img src={waybill.pod_image_url} alt="POD Document" style={{ width: '100%', height: '200px', objectFit: 'cover', display: 'block' }} />
-                </a>
+                </div>
                 <div style={{ padding: '12px 16px', background: '#F1F5F9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #E2E8F0' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <i className="ti ti-file-type-jpg" style={{ fontSize: '20px', color: '#6366F1' }} />
@@ -206,167 +209,154 @@ const WaybillDetailCard: React.FC<{ waybill: Waybill, onUpdate: (id: string, upd
               <i className="ti ti-circle-check" style={{ color: '#10B981' }} /> Verification Status
             </h4>
 
-            {waybill.status === 'Missing' ? (
-              <div style={{ background: '#FFFBEB', padding: '16px', borderRadius: '12px', border: '1px solid #FDE68A' }}>
-                <h4 style={{ fontSize: '0.9rem', fontWeight: 600, color: '#92400E', margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <i className="ti ti-alert-triangle" /> Missing Original Document
-                </h4>
-                <p style={{ fontSize: '0.85rem', color: '#B45309', margin: '0 0 16px' }}>
-                  The original POD was not received. Please submit CTC details to proceed.
-                </p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  <div>
-                    <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#92400E', display: 'block', marginBottom: '4px' }}>Certified By *</label>
-                    <input type="text" value={ctcForm.certifiedBy} onChange={e => setCtcForm(p => ({ ...p, certifiedBy: e.target.value }))} style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #FCD34D', background: '#fff' }} />
-                  </div>
-                  <CalendarPicker
-                    label="CERTIFICATION DATE"
-                    value={ctcForm.certificationDate}
-                    onChange={v => setCtcForm(p => ({ ...p, certificationDate: v }))}
-                    required={true}
-                  />
-                  <div>
-                    <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#92400E', display: 'block', marginBottom: '4px' }}>Reason for Missing Original *</label>
-                    <input type="text" value={ctcForm.reason} onChange={e => setCtcForm(p => ({ ...p, reason: e.target.value }))} placeholder="e.g. Lost in transit" style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #FCD34D', background: '#fff' }} />
-                  </div>
-                  <div style={{ marginTop: '8px' }}>
-                    <Button variant="primary" title="Mark CTC Submitted" onClick={handleCtcSubmit} disabled={!ctcForm.certifiedBy || !ctcForm.certificationDate || !ctcForm.reason} />
-                  </div>
-                </div>
+            {waybill.status.includes('Validated') ? (
+              <div style={{ background: '#F0FDF4', padding: '16px', borderRadius: '8px', border: '1px solid #BBF7D0', color: '#166534', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 500 }}>
+                <i className="ti ti-circle-check" style={{ fontSize: '20px' }} />
+                <span style={{ fontSize: '0.85rem' }}>This document has already been validated.</span>
               </div>
             ) : (
-              <div>
-                {waybill.status === 'CTC Submitted' && (userRole === 'Accountant' || userRole === 'Head Accountant') ? (
-                  // ── Accountant: Validate CTC action ──
-                  <div style={{ background: '#EFF6FF', padding: '16px', borderRadius: '12px', border: '1px solid #BFDBFE' }}>
-                    <h4 style={{ fontSize: '0.9rem', fontWeight: 600, color: '#1D4ED8', margin: '0 0 8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <i className="ti ti-file-certificate" /> CTC Pending Validation
+              <>
+                {/* Tabs */}
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', background: '#F8FAFC', padding: '4px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                  <button onClick={() => setActiveTab('Submit CTC')} style={{ flex: 1, padding: '8px', borderRadius: '6px', border: 'none', background: activeTab === 'Submit CTC' ? '#FFFBEB' : 'transparent', color: activeTab === 'Submit CTC' ? '#92400E' : '#64748B', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' }}>Submit CTC</button>
+                  <button onClick={() => setActiveTab('Approve')} style={{ flex: 1, padding: '8px', borderRadius: '6px', border: 'none', background: activeTab === 'Approve' ? '#F0FDF4' : 'transparent', color: activeTab === 'Approve' ? '#166534' : '#64748B', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' }}>Approve</button>
+                  <button onClick={() => setActiveTab('Reject')} style={{ flex: 1, padding: '8px', borderRadius: '6px', border: 'none', background: activeTab === 'Reject' ? '#FEF2F2' : 'transparent', color: activeTab === 'Reject' ? '#991B1B' : '#64748B', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' }}>Reject</button>
+                </div>
+
+                {/* Tab Content */}
+                {activeTab === 'Submit CTC' && (
+                  <div style={{ background: '#FFFBEB', padding: '16px', borderRadius: '8px', border: '1px solid #FDE68A' }}>
+                    <h4 style={{ fontSize: '0.9rem', fontWeight: 600, color: '#92400E', margin: '0 0 4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <i className="ti ti-alert-triangle" /> Missing Original Document
                     </h4>
-                    <div style={{ fontSize: '0.82rem', color: '#1E40AF', marginBottom: '12px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <span><strong>Certified By:</strong> {waybill.certified_by || '—'}</span>
-                      <span><strong>Certification Date:</strong> {waybill.certification_date || '—'}</span>
-                      <span><strong>Reason:</strong> {waybill.reason_for_missing || '—'}</span>
-                    </div>
-                    <p style={{ fontSize: '0.82rem', color: '#3B82F6', margin: '0 0 12px' }}>
-                      Review the uploaded CTC document and check all items before approving.
+                    <p style={{ fontSize: '0.8rem', color: '#B45309', margin: '0 0 16px' }}>
+                      The original POD was not received. Please submit CTC details to proceed.
                     </p>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
-                      <label style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', cursor: 'pointer' }}>
-                        <input type="checkbox" checked={checklist.signature} onChange={e => setChecklist(p => ({ ...p, signature: e.target.checked }))} style={{ marginTop: '2px' }} />
-                        <span style={{ fontSize: '0.85rem', color: '#334155' }}>CTC document is clearly legible and complete</span>
-                      </label>
-                      <label style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', cursor: 'pointer' }}>
-                        <input type="checkbox" checked={checklist.waybillMatch} onChange={e => setChecklist(p => ({ ...p, waybillMatch: e.target.checked }))} style={{ marginTop: '2px' }} />
-                        <span style={{ fontSize: '0.85rem', color: '#334155' }}>Waybill number matches system record</span>
-                      </label>
-                      <label style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', cursor: 'pointer' }}>
-                        <input type="checkbox" checked={checklist.dateMatch} onChange={e => setChecklist(p => ({ ...p, dateMatch: e.target.checked }))} style={{ marginTop: '2px' }} />
-                        <span style={{ fontSize: '0.85rem', color: '#334155' }}>Certification date is within acceptable range</span>
-                      </label>
-                      <label style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', cursor: 'pointer' }}>
-                        <input type="checkbox" checked={checklist.notDuplicate} onChange={e => setChecklist(p => ({ ...p, notDuplicate: e.target.checked }))} style={{ marginTop: '2px' }} />
-                        <span style={{ fontSize: '0.85rem', color: '#334155' }}>Reason for missing original is acceptable</span>
-                      </label>
-                    </div>
-
-                    <div style={{ marginBottom: '16px' }}>
-                      <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#991B1B', display: 'block', marginBottom: '4px' }}>Return to Ops Reason (If Rejecting)</label>
-                      <input type="text" placeholder="Reason for rejection..." value={rejectReason} onChange={e => setRejectReason(e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #FCA5A5', background: '#FEF2F2' }} />
-                    </div>
-
-                    <div style={{ display: 'flex', gap: '12px' }}>
-                      <Button
-                        variant={allChecked ? 'primary' : 'secondary'}
-                        title="Validate CTC"
-                        icon="ti-circle-check"
-                        onClick={handleValidate}
-                        disabled={!allChecked}
-                      />
-                      <button
-                        onClick={handleReject}
-                        disabled={!rejectReason.trim()}
-                        style={{
-                          background: '#fff', border: '1px solid #EF4444', color: '#DC2626',
-                          borderRadius: 6, padding: '0 16px', fontSize: '0.875rem',
-                          fontWeight: 600, cursor: rejectReason.trim() ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', gap: 6, opacity: rejectReason.trim() ? 1 : 0.5
-                        }}
-                      >
-                        <i className="ti ti-arrow-back-up" />
-                        Reject / Return
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <div>
+                        <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#92400E', display: 'block', marginBottom: '4px' }}>Reason for Issuing CTC *</label>
+                        <select value={ctcForm.reason} onChange={e => setCtcForm(p => ({ ...p, reason: e.target.value }))} style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #FCD34D', background: '#fff', outline: 'none' }}>
+                          <option value="">Select Reason...</option>
+                          <option value="POD Not Submitted">POD Not Submitted</option>
+                          <option value="POD Lost/ Unavailable">POD Lost/ Unavailable</option>
+                          <option value="POD Damaged / Unreadable">POD Damaged / Unreadable</option>
+                          <option value="POD Not Obtained, Recipient">POD Not Obtained, Recipient</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#92400E', display: 'block', marginBottom: '4px' }}>Additional Remarks</label>
+                        <textarea value={ctcForm.additionalRemarks} onChange={e => setCtcForm(p => ({ ...p, additionalRemarks: e.target.value }))} placeholder="Optional notes..." rows={3} style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #FCD34D', background: '#fff', outline: 'none', resize: 'vertical' }} />
+                      </div>
+                      <div>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', padding: '32px 24px', border: '1px dashed #FCD34D', borderRadius: '12px', background: 'transparent', marginTop: 12 }}>
+                          <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#92400E', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', marginBottom: 4 }}>
+                            <i className="ti ti-cloud-upload" style={{ fontSize: '24px' }} />
+                          </div>
+                          <span style={{ fontSize: '1rem', fontWeight: 700, color: '#92400E' }}>Drag & Drop or Upload Document</span>
+                          <span style={{ fontSize: '0.8rem', color: '#B45309', marginBottom: 12 }}>Support JPG, JPEG, and PNG receipt statements up to 10MB.</span>
+                          
+                          <div style={{ display: 'flex', gap: 12 }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#92400E', color: '#fff', padding: '8px 16px', borderRadius: '6px', fontWeight: 600, fontSize: '0.875rem', cursor: 'pointer' }}>
+                              Choose File
+                              <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  toast.info('Scanning document for duplicates...');
+                                  setTimeout(() => {
+                                    toast.error('Duplicate detected! Routing to flagged duplicate review.');
+                                    navigate('/flagged-duplicates');
+                                  }, 1500);
+                                }
+                              }} />
+                            </label>
+                            <button type="button" style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#fff', color: '#92400E', border: '1px solid #FCD34D', padding: '8px 16px', borderRadius: '6px', fontWeight: 600, fontSize: '0.875rem', cursor: 'pointer' }}>
+                              <i className="ti ti-camera" style={{ fontSize: '16px' }} />
+                              Scan Document
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      <button onClick={handleCtcSubmit} disabled={!ctcForm.reason} style={{ background: '#92400E', color: '#fff', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 600, width: '100%', cursor: ctcForm.reason ? 'pointer' : 'not-allowed', opacity: ctcForm.reason ? 1 : 0.6, marginTop: '8px' }}>
+                        Submit CTC
                       </button>
                     </div>
                   </div>
-                ) : waybill.status.includes('Validated') || waybill.status === 'CTC Submitted' ? (
-                  <div style={{ background: '#F0FDF4', padding: '16px', borderRadius: '8px', border: '1px solid #BBF7D0', color: '#166534', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 500 }}>
-                    <i className="ti ti-circle-check" style={{ fontSize: '20px' }} />
-                    <span style={{ fontSize: '0.85rem' }}>
-                      {waybill.status === 'CTC Submitted' ? 'CTC has been submitted and is pending validation by the Accountant.' : 'This document has already been validated.'}
-                    </span>
-                  </div>
-                ) : (
-                  <>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>
-                      <label style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', cursor: 'pointer' }}>
-                        <input type="checkbox" checked={checklist.signature} onChange={e => setChecklist(p => ({ ...p, signature: e.target.checked }))} style={{ marginTop: '2px' }} />
-                        <span style={{ fontSize: '0.85rem', color: '#334155' }}>Signature of recipient is legible</span>
-                      </label>
-                      <label style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', cursor: 'pointer' }}>
-                        <input type="checkbox" checked={checklist.waybillMatch} onChange={e => setChecklist(p => ({ ...p, waybillMatch: e.target.checked }))} style={{ marginTop: '2px' }} />
-                        <span style={{ fontSize: '0.85rem', color: '#334155' }}>Waybill number matches system record</span>
-                      </label>
-                      <label style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', cursor: 'pointer' }}>
-                        <input type="checkbox" checked={checklist.dateMatch} onChange={e => setChecklist(p => ({ ...p, dateMatch: e.target.checked }))} style={{ marginTop: '2px' }} />
-                        <span style={{ fontSize: '0.85rem', color: '#334155' }}>Delivery date matches system record</span>
-                      </label>
-                      <label style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', cursor: 'pointer' }}>
-                        <input type="checkbox" checked={checklist.notDuplicate} onChange={e => setChecklist(p => ({ ...p, notDuplicate: e.target.checked }))} style={{ marginTop: '2px' }} />
-                        <span style={{ fontSize: '0.85rem', color: '#334155' }}>Not a duplicate of a previously validated waybill</span>
-                      </label>
-                    </div>
+                )}
 
-                    <div style={{ marginBottom: '16px' }}>
-                      <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#991B1B', display: 'block', marginBottom: '4px' }}>Return to Ops Reason (If Rejecting)</label>
-                      <input type="text" placeholder="Reason for rejection..." value={rejectReason} onChange={e => setRejectReason(e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #FCA5A5', background: '#FEF2F2' }} />
-                    </div>
-
-                    <div style={{ display: 'flex', gap: '12px' }}>
-                      <Button
-                        variant={allChecked ? "primary" : "secondary"}
-                        title={waybill.is_ctc ? "Validate CTC" : "Validate Original"}
-                        onClick={handleValidate}
-                        disabled={!allChecked}
-                      />
-                      <button
-                        onClick={handleMarkMissing}
-                        style={{
-                          background: '#fff', border: '1px solid #E2E8F0', color: '#DC2626',
-                          borderRadius: 6, padding: '0 16px', fontSize: '0.875rem',
-                          fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
-                        }}
-                      >
-                        <i className="ti ti-alert-triangle" />
-                        Mark Missing
+                {activeTab === 'Approve' && (
+                  <div style={{ background: '#F0FDF4', padding: '16px', borderRadius: '8px', border: '1px solid #BBF7D0' }}>
+                    <h4 style={{ fontSize: '0.9rem', fontWeight: 600, color: '#166534', margin: '0 0 4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <i className="ti ti-circle-check" /> Document Verified
+                    </h4>
+                    <p style={{ fontSize: '0.8rem', color: '#15803D', margin: '0 0 16px' }}>
+                      The original POD matches the waybill record and is complete.
+                    </p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <div>
+                        <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#166534', display: 'block', marginBottom: '4px' }}>Remarks (optional)</label>
+                        <textarea placeholder="Optional notes for the record..." rows={3} style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #86EFAC', background: '#fff', outline: 'none', resize: 'vertical' }} />
+                      </div>
+                      <button onClick={handleValidate} style={{ background: '#10B981', color: '#fff', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 600, width: '100%', cursor: 'pointer', marginTop: '8px' }}>
+                        Approve
                       </button>
-                      <button
-                        onClick={handleReject}
-                        disabled={!rejectReason.trim()}
-                        style={{
-                          background: '#fff', border: '1px solid #EF4444', color: '#DC2626',
-                          borderRadius: 6, padding: '0 16px', fontSize: '0.875rem',
-                          fontWeight: 600, cursor: rejectReason.trim() ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', gap: 6, opacity: rejectReason.trim() ? 1 : 0.5
-                        }}
-                      >
-                        <i className="ti ti-arrow-back-up" />
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === 'Reject' && (
+                  <div style={{ background: '#FEF2F2', padding: '16px', borderRadius: '8px', border: '1px solid #FECACA' }}>
+                    <h4 style={{ fontSize: '0.9rem', fontWeight: 600, color: '#991B1B', margin: '0 0 4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <i className="ti ti-x" /> Document Rejected
+                    </h4>
+                    <p style={{ fontSize: '0.8rem', color: '#B91C1C', margin: '0 0 16px' }}>
+                      Flag this waybill's document as invalid or unacceptable.
+                    </p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <div>
+                        <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#991B1B', display: 'block', marginBottom: '4px' }}>Reason for Rejection *</label>
+                        <select value={rejectCategory} onChange={e => setRejectCategory(e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #FCA5A5', background: '#fff', outline: 'none' }}>
+                          <option value="">Select Reason...</option>
+                          <option value="Illegible scan">Illegible scan</option>
+                          <option value="Mismatched waybill details">Mismatched waybill details</option>
+                          <option value="Unsigned by receiver">Unsigned by receiver</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#991B1B', display: 'block', marginBottom: '4px' }}>Remarks</label>
+                        <textarea value={rejectReason} onChange={e => setRejectReason(e.target.value)} placeholder="Explain the issue..." rows={3} style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #FCA5A5', background: '#fff', outline: 'none', resize: 'vertical' }} />
+                      </div>
+                      <button onClick={handleReject} disabled={!rejectCategory} style={{ background: '#DC2626', color: '#fff', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 600, width: '100%', cursor: rejectCategory ? 'pointer' : 'not-allowed', opacity: rejectCategory ? 1 : 0.6, marginTop: '8px' }}>
                         Reject
                       </button>
                     </div>
-                  </>
+                  </div>
                 )}
-              </div>
+              </>
             )}
           </div>
         </div>
       </Card>
+
+      {/* Image Modal */}
+      {showImageModal && waybill.pod_image_url && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.75)', zIndex: 9999,
+          display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '24px'
+        }} onClick={() => setShowImageModal(false)}>
+          <div style={{ position: 'relative', maxWidth: '90%', maxHeight: '90%', backgroundColor: '#fff', borderRadius: '8px', padding: '8px' }} onClick={e => e.stopPropagation()}>
+            <button onClick={() => setShowImageModal(false)} style={{
+              position: 'absolute', top: '-16px', right: '-16px', background: '#EF4444', color: '#fff',
+              border: 'none', borderRadius: '50%', width: '32px', height: '32px', cursor: 'pointer',
+              display: 'flex', justifyContent: 'center', alignItems: 'center', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)'
+            }}>
+              <i className="ti ti-x" style={{ fontSize: '20px' }} />
+            </button>
+            <img src={waybill.pod_image_url} alt="POD Preview" style={{ maxWidth: '100%', maxHeight: '85vh', objectFit: 'contain', borderRadius: '4px' }} />
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -383,8 +373,8 @@ export const Waybills: React.FC = () => {
   // Accountant also sees: CTC Submitted (needs their validation action)
   const isAccountant = user?.role === 'Accountant' || user?.role === 'Head Accountant';
   const coordinatorWaybills = waybills.filter(wb =>
-    wb.status === 'For Checking' || wb.status === 'Missing' || wb.status === 'Returned' ||
-    (isAccountant && wb.status === 'CTC Submitted')
+    (wb.status as string) === 'Pending' || (wb.status as string) === 'Missing' || (wb.status as string) === 'Returned' ||
+    (isAccountant && (wb.status as string) === 'Pending')
   );
 
   const [isRecording, setIsRecording] = useState(false);
@@ -465,6 +455,14 @@ export const Waybills: React.FC = () => {
               rowKey="id"
               searchPlaceholder="Search waybills..."
               searchFields={['waybillNumber', 'status'] as any}
+              filters={[{
+                key: 'status', label: 'POD Status', options: [
+                  { label: 'Missing', value: 'Missing' },
+                  { label: 'Pending', value: 'Pending' },
+                  { label: 'Validated', value: 'Validated' }
+                ],
+                filterFn: (row: any, val: string) => row.status === val
+              }]}
               emptyMessage="No waybills found for this client."
               columnToggle={true} densityToggle={true} exportable={false}
             />
@@ -484,12 +482,8 @@ export const Waybills: React.FC = () => {
   const listData = Array.from(grouped.entries()).map(([clientId, recs]) => {
     const client = clients.find(c => c.id === clientId);
 
-    let computedStatus = 'Validated';
-    if (recs.some(r => r.status === 'Missing')) {
-      computedStatus = 'Missing';
-    } else if (recs.some(r => r.status === 'Not Completed')) {
-      computedStatus = 'Not Completed';
-    } else if (recs.some(r => r.status === 'For Checking' || r.status === 'CTC Submitted' || r.status === 'Pending' || r.status === 'Returned')) {
+    let computedStatus = 'Completed';
+    if (recs.some(r => r.status !== 'Validated' && r.status !== 'Validated (CTC)')) {
       computedStatus = 'Pending';
     }
 
@@ -509,7 +503,7 @@ export const Waybills: React.FC = () => {
         </span>
       )
     },
-    { key: 'status', label: 'STATUS', render: (row: any) => <StatusBadge status={row.status} /> }
+    { key: 'status', label: 'POD STATUS', render: (row: any) => <StatusBadge status={row.status} /> }
   ];
 
   const actions = [
@@ -581,16 +575,14 @@ export const Waybills: React.FC = () => {
           columns={tableColumns}
           actions={actions}
           rowKey="id"
-          createButtons={[{ label: 'Record Waybill/POD', icon: 'ti-file-plus', onClick: () => setIsRecording(true), variant: 'primary' }]}
+          createButtons={user?.role === 'Coordinator' ? [] : [{ label: 'Record Waybill/POD', icon: 'ti-file-plus', onClick: () => setIsRecording(true), variant: 'primary' }]}
           emptyMessage="No waybills found."
           searchPlaceholder="Search clients..."
           searchFields={['clientName']}
           filters={[{
-            key: 'status', label: 'All Statuses', options: [
-              { label: 'Missing', value: 'Missing' },
+            key: 'status', label: 'POD Status', options: [
               { label: 'Pending', value: 'Pending' },
-              { label: 'Validated', value: 'Validated' },
-              { label: 'Not Completed', value: 'Not Completed' }
+              { label: 'Completed', value: 'Completed' }
             ],
             filterFn: (row: any, val: string) => row.status === val
           }]}

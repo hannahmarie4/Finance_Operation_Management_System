@@ -83,6 +83,7 @@ export interface DataTableProps<T> {
   defaultPageSize?: number;
   emptyMessage?: string;
   selectable?: boolean;
+  selectedKeys?: (string | number)[];
   onSelectionChange?: (selectedKeys: (string | number)[]) => void;
   className?: string;
   loading?: boolean;
@@ -103,6 +104,7 @@ export interface DataTableProps<T> {
   // Default pre-selected filter values
   defaultFilters?: Record<string, string>;
   customFilters?: ReactNode;
+  onRowClick?: (row: T) => void;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -200,6 +202,7 @@ export function DataTable<T>({
   isRowSelectable,
   defaultFilters = {},
   customFilters,
+  onRowClick,
 }: DataTableProps<T>) {
   const { toast } = useToast();
 
@@ -560,15 +563,17 @@ export function DataTable<T>({
   return (
     <div className={`dt-root ${densityClass} ${className}`}>
       {title && (
-        <div style={{ paddingBottom: subtitle ? 12 : 20, paddingLeft: 24, paddingRight: 24, paddingTop: 24 }}>
-          <h2 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#0F172A', margin: 0 }}>
-            {title}
-          </h2>
-          {subtitle && (
-            <p style={{ margin: '4px 0 0', color: '#64748B', fontSize: '0.9rem' }}>
-              {subtitle}
-            </p>
-          )}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', paddingBottom: subtitle ? 12 : 20, paddingLeft: 24, paddingRight: 24, paddingTop: 24 }}>
+          <div>
+            <h2 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#0F172A', margin: 0 }}>
+              {title}
+            </h2>
+            {subtitle && (
+              <p style={{ margin: '4px 0 0', color: '#64748B', fontSize: '0.9rem' }}>
+                {subtitle}
+              </p>
+            )}
+          </div>
         </div>
       )}
       {/* ── Toolbar ── */}
@@ -638,25 +643,27 @@ export function DataTable<T>({
         </div>
 
         <div className="dt-toolbar-right">
-
-
           {exportable && (
             <div style={{ display: 'flex', gap: 8 }}>
               <button
                 className="dt-btn"
                 onClick={handleExportCSV}
                 title="Export to CSV"
-                style={{ background: '#0EA5E9', color: '#fff', border: 'none', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.2s' }}
+                style={{ background: '#fff', color: '#0F172A', border: '1px solid #E2E8F0', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.2s, box-shadow 0.2s' }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = '#F8FAFC'; e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.boxShadow = 'none'; }}
               >
-                <i className="ti ti-file-spreadsheet" aria-hidden="true" /> CSV
+                <i className="ti ti-download" aria-hidden="true" /> Export CSV
               </button>
               <button
                 className="dt-btn"
                 onClick={handleExportPDF}
-                title="Export to PDF"
-                style={{ background: '#F43F5E', color: '#fff', border: 'none', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.2s' }}
+                title="Export to Formal PDF"
+                style={{ background: '#0D9488', color: '#fff', border: '1px solid #0D9488', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.2s' }}
+                onMouseEnter={(e) => e.currentTarget.style.background = '#0F766E'}
+                onMouseLeave={(e) => e.currentTarget.style.background = '#0D9488'}
               >
-                <i className="ti ti-file-description" aria-hidden="true" /> PDF
+                <i className="ti ti-file-description" aria-hidden="true" /> Export Formal PDF
               </button>
             </div>
           )}
@@ -924,8 +931,12 @@ export function DataTable<T>({
                 return (
                   <tr
                     key={key}
-                    className={`dt-row${isSelected ? " dt-row--selected" : ""}`}
+                    className={`dt-row${isSelected ? " dt-row--selected" : ""}${onRowClick ? " dt-row--clickable" : ""}`}
                     aria-selected={selectable ? isSelected : undefined}
+                    onClick={() => {
+                        if (onRowClick) onRowClick(row);
+                    }}
+                    style={{ cursor: onRowClick ? 'pointer' : 'default' }}
                   >
                     {selectable && (
                       <td className="dt-td dt-td--check dt-td--sticky-left">

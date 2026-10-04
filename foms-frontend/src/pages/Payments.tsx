@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { UploadCloud, CheckCircle, Clock, AlertTriangle, X, Search, Camera, ZoomIn, ZoomOut, Info } from 'lucide-react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { DataTable } from '../components/DataTable';
 import { StatusBadge } from '../components/StatusBadge';
@@ -16,6 +17,7 @@ import { TableContainer } from '../components/TableContainer';
 import { RecordHistoryModal } from '../components/RecordHistoryModal';
 import { ClientInfoCard } from '../components/ClientInfoCard';
 import api from '../services/api';
+import { InvoiceDocument } from '../components/InvoiceDocument';
 
 const safeFormatDate = (dateVal: string | Date | undefined | null, options?: Intl.DateTimeFormatOptions) => {
   if (!dateVal) return '—';
@@ -48,6 +50,40 @@ class PaymentsErrorBoundary extends React.Component<{ children: React.ReactNode 
     return this.props.children;
   }
 }
+
+const PaymentsKpiCard: React.FC<{ label: string; value: string; color: string; bgColor: string; textColor: string; icon: string; sub: string }> = ({ label, value, color, bgColor, textColor, icon, sub }) => {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        background: '#fff',
+        border: '1px solid #E2E8F0',
+        borderRadius: 12,
+        padding: '16px 20px',
+        transition: 'all 0.25s ease',
+        cursor: 'default',
+        boxShadow: hovered ? `inset 0 4px 0 0 ${color}, 0 6px 20px ${color}28` : '0 1px 3px rgba(0,0,0,0.05)',
+        transform: hovered ? 'translateY(-4px)' : 'none',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 16,
+      }}
+    >
+      <div style={{ width: 48, height: 48, borderRadius: 12, background: hovered ? bgColor : '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.25s', flexShrink: 0 }}>
+        <i className={`ti ${icon}`} style={{ fontSize: 24, color: hovered ? color : '#64748B', transition: 'color 0.25s' }} />
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: hovered ? color : '#64748B', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4, transition: 'color 0.25s', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</div>
+        <div style={{ fontSize: 20, fontWeight: 800, color: hovered ? textColor : '#0F172A', marginBottom: 2, transition: 'color 0.25s' }}>{value}</div>
+        <div style={{ fontSize: 11, color: '#10B981', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {sub}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const PaymentsContent: React.FC = () => {
   const { user } = useAuth();
@@ -96,6 +132,102 @@ const PaymentsContent: React.FC = () => {
   const [submitted, setSubmitted] = useState(false);
   const [selectedInvoiceForModal, setSelectedInvoiceForModal] = useState<any | null>(null);
 
+  // --- AI Scan States ---
+  const [dragActive, setDragActive] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [previewDocUrl, setPreviewDocUrl] = useState<string | null>(null);
+  const [fullScreenPreview, setFullScreenPreview] = useState(false);
+  const [previewZoom, setPreviewZoom] = useState(1);
+  const [checkingStep, setCheckingStep] = useState(0);
+  const [checkingProgress, setCheckingProgress] = useState(0);
+  const [scanResultMode, setScanResultMode] = useState<'NONE' | 'INVALID' | 'DUPLICATE' | 'CLEAR'>('NONE');
+  const [ocrWarning, setOcrWarning] = useState('');
+  const [similarityScore, setSimilarityScore] = useState(0);
+  const [matchedRecordDetails, setMatchedRecordDetails] = useState<any>(null);
+
+  // --- Manual Review States ---
+  const [showManualReviewPanel, setShowManualReviewPanel] = useState(false);
+  const [manualReviewDecision, setManualReviewDecision] = useState<any>('Mark as Duplicate');
+  const [duplicateHandling, setDuplicateHandling] = useState('Flag and Block New Submission');
+  const [uniqueReason, setUniqueReason] = useState('Different transaction');
+  const [duplicateReason, setDuplicateReason] = useState('Same OR number');
+  const [manualNote, setManualNote] = useState('');
+
+  const getCellMatchStyle = (field: string, uploaded: string, existing: string) => {
+    if (!existing) return { text: 'Missing', style: { fontStyle: 'italic', color: '#64748B', fontSize: '13px' } };
+    if (!uploaded) return { text: 'Missing', style: { fontStyle: 'italic', color: '#64748B', fontSize: '13px' } };
+    if (uploaded.trim().toLowerCase() === existing.trim().toLowerCase()) {
+      return { text: 'Exact Match', style: { background: '#FEE2E2', color: '#B91C1C', padding: '4px 10px', borderRadius: '4px', fontWeight: 700, fontSize: '12px' } };
+    }
+    return { text: 'Mismatch', style: { background: '#F1F5F9', color: '#475569', padding: '4px 10px', borderRadius: '4px', fontWeight: 700, fontSize: '12px' } };
+  };
+
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") setDragActive(true);
+    else if (e.type === "dragleave") setDragActive(false);
+  };
+
+  const processSelectedFile = (file: File) => {
+    setUploadFile(file);
+    setPreviewDocUrl(URL.createObjectURL(file));
+    setCheckingStep(1);
+    setCheckingProgress(25);
+    setScanResultMode('NONE');
+
+    setTimeout(() => {
+      setCheckingStep(2);
+      setCheckingProgress(60);
+      
+      setTimeout(() => {
+        setCheckingStep(0);
+        setCheckingProgress(100);
+        
+        const lowerName = file.name.toLowerCase();
+        if (lowerName.includes('invalid') || lowerName.includes('error')) {
+          setScanResultMode('INVALID');
+          setOcrWarning('Only official receipts, invoices, billing statements, or payment-related finance documents are allowed.');
+        } else {
+          // TEMPORARY: Always trigger DUPLICATE for testing purposes based on user request
+          setScanResultMode('DUPLICATE');
+          setSimilarityScore(100);
+          setMatchedRecordDetails({
+             record_id: 'FOMS-PAY-99812',
+             registered_or: form.invoiceNo || 'MOCK-OR-12345',
+             client_name: form.companyName || 'SPEEDEX USER',
+             amount: form.amount || '0.00',
+             entry_date: form.datePaid || '2026-09-15',
+             reference_no: form.referenceNumber || 'MOCK-REF-9876'
+          });
+          toast.warning('Duplicate detected (100% similarity). Review required.', 'AI Gemini Scan');
+        }
+      }, 1200);
+    }, 800);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      processSelectedFile(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      processSelectedFile(e.target.files[0]);
+    }
+  };
+
+  const resetUpload = () => {
+    setUploadFile(null);
+    setPreviewDocUrl(null);
+    setScanResultMode('NONE');
+    setCheckingStep(0);
+  };
+
   const handleSubmitExpense = (e: React.FormEvent) => {
     e.preventDefault();
     if (!expenseForm.description || !expenseForm.amount || !expenseForm.date) return;
@@ -114,7 +246,7 @@ const PaymentsContent: React.FC = () => {
     toast.success(`Expense "${newExpense.description}" recorded — ₱${newExpense.amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, 'Expense Recorded');
   };
 
-  const { payments, invoices, waybills, speedPay, clients, updatePayment, addPayment, updateInvoice, addReceipt, receipts, refreshPayments, refreshInvoices, refreshReceipts, addAuditLog } = useAppData();
+  const { payments, invoices, waybills, speedPay, clients, updatePayment, addPayment, updateInvoice, addReceipt, receipts, refreshPayments, refreshInvoices, refreshReceipts, addAuditLog, addCashFlowRecord, cashFlowRecords } = useAppData();
 
   // All roles see all payments — filtering by status was hiding history
   // Accountants see all; FM/HA/Assistant see all (they validate/approve from this list)
@@ -331,6 +463,16 @@ const PaymentsContent: React.FC = () => {
             updateInvoice(invoice.id, { paymentStatus: 'Paid', status: 'Paid' });
           }
         }
+        
+        // Auto-record Cash Flow Inflow
+        addCashFlowRecord({
+          id: `CFI-${Date.now()}`,
+          date: new Date().toISOString(),
+          sourceReference: viewPayment.id,
+          type: 'Inflow',
+          amount: viewPayment.amount,
+          recordedBy: user?.employeeId || 'System'
+        });
 
         toast.success(`Payment validated. Invoice and AR updated. OR generated.`, 'Payment Validated');
       }
@@ -383,6 +525,19 @@ const PaymentsContent: React.FC = () => {
             updateInvoice(invoice.id, { paymentStatus: 'Paid', status: 'Paid' });
           }
         }
+        
+        // Auto-record Cash Flow Inflow if not already recorded
+        const isRecorded = cashFlowRecords?.some((c: any) => c.sourceReference === viewPayment.id);
+        if (!isRecorded) {
+          addCashFlowRecord({
+            id: `CFI-${Date.now()}`,
+            date: new Date().toISOString(),
+            sourceReference: viewPayment.id,
+            type: 'Inflow',
+            amount: viewPayment.amount,
+            recordedBy: user?.employeeId || 'System'
+          });
+        }
 
         toast.success(`Payment approved. Invoice = Paid. AR updated. OR generated.`, 'Payment Approved');
       }
@@ -410,6 +565,7 @@ const PaymentsContent: React.FC = () => {
   };
 
   // --- Detail Views ---
+  let viewPayment: any = null;
   if (paymentIdParam) {
     let viewPaymentRaw: any = allowedPayments.find(p => p.id === paymentIdParam);
     if (!viewPaymentRaw && paymentIdParam.startsWith('SP-')) {
@@ -429,31 +585,32 @@ const PaymentsContent: React.FC = () => {
 
     const client = clients.find(c => c.id === viewPaymentRaw.clientId);
     const invoice = invoices.find(i => i.id === viewPaymentRaw.invoiceId);
-    const viewPayment = {
+    viewPayment = {
       ...viewPaymentRaw,
-      clientName: client?.name ?? 'Unknown',
-      invoiceNumber: invoice?.invoiceNumber ?? viewPaymentRaw.invoiceId
+      clientName: client?.name ?? viewPaymentRaw.clientName ?? 'Unknown',
+      invoiceNumber: invoice?.invoiceNumber ?? viewPaymentRaw.invoiceNumber ?? viewPaymentRaw.invoiceId
     };
 
     if (actionParam === 'view') {
       return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
-          {/* Notice Banner */}
-          <div style={{ background: '#FFF7ED', border: '1px solid #FED7AA', padding: '12px 16px', borderRadius: '8px', color: '#C2410C', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <i className="ti ti-info-circle" style={{ fontSize: '16px' }} />
-            <span><strong>Notice:</strong> Please ensure all payment details are correct. Verification actions are available in the summary section on the right.</span>
-          </div>
+
 
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px', alignItems: 'start' }}>
 
             {/* LEFT COLUMN */}
             <Card style={{ padding: '24px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', paddingBottom: '16px', borderBottom: '1px dashed #E2E8F0' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px dashed #E2E8F0' }}>
                 <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#0F172A', fontWeight: 800 }}>Payment Information</h3>
                 <span style={{ background: viewPayment.status === 'Validated' ? '#DCFCE7' : viewPayment.status === 'Pending Validation' ? '#FEF3C7' : '#F1F5F9', color: viewPayment.status === 'Validated' ? '#15803D' : viewPayment.status === 'Pending Validation' ? '#B45309' : '#475569', padding: '4px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
                   <i className={viewPayment.status === 'Validated' ? "ti ti-lock" : "ti ti-clock"} /> {viewPayment.status}
                 </span>
+              </div>
+              
+              <div style={{ fontSize: '13px', color: '#0F172A', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <i className="ti ti-info-circle" style={{ fontSize: '16px', color: '#0F172A' }} />
+                <span><strong>Notice:</strong> Please ensure all payment details are correct. Verification actions are available in the summary section on the right.</span>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
@@ -494,19 +651,37 @@ const PaymentsContent: React.FC = () => {
                 </div>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '24px' }}>
-                <label style={{ fontSize: '11px', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>NOTES / REMARKS</label>
-                <div style={{ padding: '12px 14px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '13px', color: '#1E293B', minHeight: '60px' }}>
-                  {(viewPayment as any).notes || 'No remarks provided.'}
-                </div>
-              </div>
+
 
               <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '16px' }}>
                 <Button
                   title="View Invoice"
                   variant="primary"
                   icon="ti-file-invoice"
-                  onClick={() => setSelectedInvoiceForModal(invoices.find(i => i.id === viewPayment.invoiceId))}
+                  onClick={() => {
+                    const found = invoices.find(i => i.id === viewPayment.invoiceId || i.invoiceNumber === viewPayment.invoiceId || i.invoiceNumber === viewPayment.invoiceNumber);
+                    if (found) {
+                      setSelectedInvoiceForModal(found);
+                    } else {
+                      const rawAmount = typeof viewPayment.amount === 'string' ? Number(viewPayment.amount.replace(/[^0-9.-]+/g,"")) : (viewPayment.amount || 15000);
+                      const safeAmount = isNaN(rawAmount) || rawAmount === 0 ? 15000 : rawAmount;
+                      setSelectedInvoiceForModal({
+                        id: 'MOCK-INV',
+                        invoiceNumber: viewPayment.invoiceNumber || 'MOCK-0001',
+                        clientId: viewPayment.clientId || 'CL-001',
+                        amount: safeAmount,
+                        vatAmount: safeAmount * 0.12,
+                        surchargeAmount: 0,
+                        totalAmount: safeAmount * 1.12,
+                        status: 'Sent',
+                        billingPeriod: 'Mock Period 2026',
+                        createdAt: new Date().toISOString(),
+                        dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+                        waybillIds: []
+                      });
+                      toast.info('Showing a preview mock invoice because the actual invoice was not found in the database.', 'Mock Invoice', undefined, undefined, 4000);
+                    }
+                  }}
                 />
 
                 {isAccountant && (
@@ -648,7 +823,7 @@ const PaymentsContent: React.FC = () => {
           />
 
           {/* Modal for Invoice Details */}
-          {selectedInvoiceForModal && createPortal(
+          {selectedInvoiceForModal && (
             <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', zIndex: 99999, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' }} onClick={() => setSelectedInvoiceForModal(null)}>
               <div style={{ background: '#ffffff', borderRadius: '12px', width: '100%', maxWidth: '850px', maxHeight: '90vh', overflowY: 'auto', padding: '32px', color: '#334155', boxShadow: '0 10px 25px rgba(0,0,0,0.3)' }} onClick={e => e.stopPropagation()}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
@@ -656,85 +831,17 @@ const PaymentsContent: React.FC = () => {
                   <button onClick={() => setSelectedInvoiceForModal(null)} style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', fontSize: '1.5rem', display: 'flex', alignItems: 'center' }}><i className="ti ti-x" /></button>
                 </div>
 
-                {/* SHIPMENT DETAILS */}
-                <div style={{ marginBottom: '32px' }}>
-                  <h4 style={{ margin: '0 0 16px 0', color: '#475569', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '8px', textTransform: 'uppercase', fontWeight: 600 }}>
-                    SHIPMENT DETAILS (Waybill Breakdown)
-                  </h4>
-                  <div style={{ border: '1px solid #E2E8F0', borderRadius: '8px', overflow: 'hidden' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-                      <thead>
-                        <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
-                          <th style={{ padding: '12px 16px', textAlign: 'left', color: '#475569', fontWeight: 600 }}>Date</th>
-                          <th style={{ padding: '12px 16px', textAlign: 'left', color: '#475569', fontWeight: 600 }}>Waybill No.</th>
-                          <th style={{ padding: '12px 16px', textAlign: 'left', color: '#475569', fontWeight: 600 }}>Receiver</th>
-                          <th style={{ padding: '12px 16px', textAlign: 'left', color: '#475569', fontWeight: 600 }}>Destination</th>
-                          <th style={{ padding: '12px 16px', textAlign: 'left', color: '#475569', fontWeight: 600 }}>Weight (kg)</th>
-                          <th style={{ padding: '12px 16px', textAlign: 'left', color: '#475569', fontWeight: 600 }}>Amount (PHP)</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {waybills.filter(wb => selectedInvoiceForModal.waybillIds?.includes(wb.id)).map(wb => (
-                          <tr key={wb.id} style={{ borderBottom: '1px solid #E2E8F0' }}>
-                            <td style={{ padding: '12px 16px', color: '#334155' }}>{new Date(wb.deliveryDate).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })}</td>
-                            <td style={{ padding: '12px 16px', color: '#0F172A', fontWeight: 500 }}>{wb.waybillNumber}</td>
-                            <td style={{ padding: '12px 16px', color: '#334155' }}>{wb.receiverName || 'N/A'}</td>
-                            <td style={{ padding: '12px 16px', color: '#334155' }}>{wb.destinationArea || (wb.receiverAddress ? wb.receiverAddress.split(',').pop()?.trim() : 'N/A')}</td>
-                            <td style={{ padding: '12px 16px', color: '#334155' }}>{wb.itemWeight ? wb.itemWeight.replace('kg', '').trim() : '-'}</td>
-                            <td style={{ padding: '12px 16px', color: '#334155' }}>{(selectedInvoiceForModal.amount / (selectedInvoiceForModal.waybillIds?.length || 1)).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
-                          </tr>
-                        ))}
-                        {(!selectedInvoiceForModal.waybillIds || selectedInvoiceForModal.waybillIds.length === 0) && (
-                          <tr>
-                            <td colSpan={6} style={{ padding: '16px', textAlign: 'center', color: '#94A3B8' }}>No waybill details found for this invoice.</td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                {/* FINANCIAL SUMMARY */}
-                <div>
-                  <h4 style={{ margin: '0 0 16px 0', color: '#475569', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '8px', textTransform: 'uppercase', fontWeight: 600 }}>
-                    FINANCIAL SUMMARY
-                  </h4>
-                  <div style={{ border: '1px solid #E2E8F0', borderRadius: '8px', overflow: 'hidden' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-                      <thead>
-                        <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
-                          <th style={{ padding: '12px 16px', textAlign: 'left', color: '#475569', fontWeight: 600 }}>Financial Breakdown</th>
-                          <th style={{ padding: '12px 16px', textAlign: 'right', color: '#475569', fontWeight: 600 }}>Amount</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr style={{ borderBottom: '1px solid #E2E8F0' }}>
-                          <td style={{ padding: '12px 16px', color: '#334155', fontWeight: 500 }}>Total Freight Subtotal</td>
-                          <td style={{ padding: '12px 16px', color: '#0F172A', textAlign: 'right', fontWeight: 600 }}>₱ {selectedInvoiceForModal.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                        </tr>
-                        <tr style={{ borderBottom: '1px solid #E2E8F0' }}>
-                          <td style={{ padding: '12px 16px', color: '#64748B', fontStyle: 'italic' }}>Add: Fuel Surcharge (5%)</td>
-                          <td style={{ padding: '12px 16px', color: '#334155', textAlign: 'right' }}>₱ {selectedInvoiceForModal.surchargeAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                        </tr>
-                        <tr style={{ borderBottom: '1px solid #E2E8F0' }}>
-                          <td style={{ padding: '12px 16px', color: '#64748B', fontStyle: 'italic' }}>Add: 12% VAT (if applicable)</td>
-                          <td style={{ padding: '12px 16px', color: '#334155', textAlign: 'right' }}>₱ {selectedInvoiceForModal.vatAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                        </tr>
-                        <tr style={{ background: '#F1F5F9' }}>
-                          <td style={{ padding: '16px', color: '#0F172A', fontWeight: 700, fontSize: '0.95rem' }}>TOTAL AMOUNT DUE</td>
-                          <td style={{ padding: '16px', color: '#2563EB', textAlign: 'right', fontWeight: 800, fontSize: '0.95rem' }}>₱ {selectedInvoiceForModal.totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
+                <div style={{ maxHeight: 'calc(90vh - 100px)', overflowY: 'auto' }}>
+                  <PaymentsErrorBoundary>
+                    <InvoiceDocument invoice={selectedInvoiceForModal} />
+                  </PaymentsErrorBoundary>
                 </div>
               </div>
-            </div>,
-            document.body
+            </div>
           )}
         </div>
       );
-    } else if (actionParam === 'receipt') {
+    } else if (false && actionParam === 'receipt') {
       return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
 
@@ -941,20 +1048,20 @@ const PaymentsContent: React.FC = () => {
             display: 'flex', justifyContent: 'center', alignItems: 'center',
             zIndex: 99999, padding: '20px'
           }}>
-            <div style={{ background: '#fff', borderRadius: 12, padding: 28, boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', width: '100%', maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ background: '#fff', borderRadius: 12, padding: 28, boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', width: '100%', maxWidth: '840px', maxHeight: '90vh', overflowY: 'auto' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                 <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0F172A' }}>Record Payment</h3>
                 <button onClick={() => setShowForm(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', fontSize: 20 }}>×</button>
               </div>
               <form onSubmit={handleSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <div style={{ gridColumn: '1 / -1' }}>
-                  <label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: 6 }}>Invoice No. *</label>
+                  <label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: 6 }}>Invoice No. <span style={{ color: '#EF4444' }}>*</span></label>
                   <input required type="text" placeholder="Enter Invoice Number" value={form.invoiceNo} onChange={e => setForm(f => ({ ...f, invoiceNo: e.target.value }))}
                     style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid #E2E8F0', background: '#F8FAFC', color: '#0F172A', fontSize: '0.9rem', boxSizing: 'border-box', fontWeight: 600 }} />
                 </div>
                 <div style={{ gridColumn: '1 / -1' }}>
-                  <label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: 6 }}>Company Name (Optional)</label>
-                  <input type="text" placeholder="Enter Company Name" value={form.companyName} onChange={e => setForm(f => ({ ...f, companyName: e.target.value }))}
+                  <label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: 6 }}>Company Name <span style={{ color: '#EF4444' }}>*</span></label>
+                  <input required type="text" placeholder="Enter Company Name" value={form.companyName} onChange={e => setForm(f => ({ ...f, companyName: e.target.value }))}
                     style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid #E2E8F0', background: '#F8FAFC', color: '#0F172A', fontSize: '0.9rem', boxSizing: 'border-box' }} />
                 </div>
                 <div>
@@ -968,12 +1075,12 @@ const PaymentsContent: React.FC = () => {
                     style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid #E2E8F0', background: '#F8FAFC', color: '#0F172A', fontSize: '0.9rem', boxSizing: 'border-box' }} />
                 </div>
                 <div>
-                  <label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: 6 }}>Amount Paid *</label>
+                  <label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: 6 }}>Amount Paid <span style={{ color: '#EF4444' }}>*</span></label>
                   <input required type="number" step="0.01" placeholder="0.00" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
                     style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid #E2E8F0', background: '#F8FAFC', color: '#0F172A', fontSize: '0.9rem', boxSizing: 'border-box', fontWeight: 600 }} />
                 </div>
                 <div>
-                  <label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: 6 }}>Payment Method *</label>
+                  <label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: 6 }}>Payment Method <span style={{ color: '#EF4444' }}>*</span></label>
                   <select value={form.paymentMethod} onChange={e => setForm(f => ({ ...f, paymentMethod: e.target.value }))}
                     style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid #E2E8F0', background: '#F8FAFC', fontSize: '0.9rem', boxSizing: 'border-box' }}>
                     <option value="Check">Check</option>
@@ -982,8 +1089,12 @@ const PaymentsContent: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: 6 }}>Reference No. *</label>
-                  <input required type="text" placeholder="e.g. BPI-887211" value={form.referenceNumber}
+                  <label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: 6 }}>
+                    {form.paymentMethod === 'Cash' ? 'Cash Receipt No. (Optional)' : (
+                      <>{form.paymentMethod === 'Check' ? 'Check Number' : 'Bank Reference Number'} <span style={{ color: '#EF4444' }}>*</span></>
+                    )}
+                  </label>
+                  <input required={form.paymentMethod !== 'Cash'} type="text" placeholder={form.paymentMethod === 'Cash' ? 'e.g. CR-0012' : 'e.g. BPI-887211'} value={form.referenceNumber}
                     onChange={e => setForm(f => ({ ...f, referenceNumber: e.target.value }))}
                     style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid #E2E8F0', background: '#F8FAFC', fontSize: '0.9rem', boxSizing: 'border-box' }} />
                 </div>
@@ -996,9 +1107,181 @@ const PaymentsContent: React.FC = () => {
                   />
                 </div>
                 <div style={{ gridColumn: '1 / -1' }}>
-                  <label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: 6 }}>Upload Proof of Payment</label>
-                  <input type="file"
-                    style={{ width: '100%', padding: '8px', borderRadius: 8, border: '1px dashed #CBD5E1', background: '#F8FAFC', fontSize: '0.85rem', boxSizing: 'border-box' }} />
+                  <label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: 12 }}>Upload Proof of Payment</label>
+                  
+                  {scanResultMode === 'NONE' && checkingStep === 0 && (
+                    <div
+                      onDragEnter={handleDrag}
+                      onDragOver={handleDrag}
+                      onDragLeave={handleDrag}
+                      onDrop={handleDrop}
+                      style={{
+                        padding: '24px 20px', borderRadius: '12px',
+                        border: dragActive ? '2px dashed #0D9488' : '2px dashed #CBD5E1',
+                        background: dragActive ? '#F0FDFA' : '#fff',
+                        textAlign: 'center', transition: 'all 0.2s',
+                      }}
+                    >
+                      <input type="file" id="file-upload-2" style={{ display: 'none' }} onChange={handleFileChange} accept=".jpg,.jpeg,.png,.pdf" />
+                      <div style={{ width: '42px', height: '42px', borderRadius: '50%', background: '#0D9488', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px', boxShadow: '0 4px 12px rgba(13,148,136,0.3)' }}>
+                        <UploadCloud size={20} color="#ffffff" />
+                      </div>
+                      <div style={{ fontSize: '0.95rem', color: '#0F172A', fontWeight: 700, marginBottom: '6px' }}>
+                        Drag & Drop or Upload Document
+                      </div>
+                      <div style={{ fontSize: '0.78rem', color: '#64748B', marginBottom: '16px' }}>
+                        Support JPG, JPEG, and PNG receipt statements up to 10MB.
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'center', gap: '10px' }}>
+                        <button type="button" onClick={() => document.getElementById('file-upload-2')?.click()} style={{ background: '#0D9488', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '8px', fontWeight: 600, cursor: 'pointer', fontSize: '0.8rem' }}>Choose File</button>
+                        <button type="button" onClick={() => document.getElementById('file-upload-2')?.click()} style={{ background: '#fff', color: '#0F172A', border: '1px solid #CBD5E1', padding: '8px 16px', borderRadius: '8px', fontWeight: 600, cursor: 'pointer', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <Camera size={16} color="#475569" /> Scan Document
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {checkingStep > 0 && (
+                    <div style={{ padding: '24px', textAlign: 'center', background: '#F8FAFC', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+                      <div style={{ marginBottom: 12, fontWeight: 600, color: '#0F172A' }}>AI Scanning Document...</div>
+                      <div style={{ width: '100%', height: 6, background: '#E2E8F0', borderRadius: 4, overflow: 'hidden', marginBottom: 12 }}>
+                        <div style={{ width: `${checkingProgress}%`, height: '100%', background: '#0EA5E9', transition: 'width 0.3s ease' }} />
+                      </div>
+                      <div style={{ fontSize: '0.8rem', color: '#64748B', display: 'flex', justifyContent: 'center', gap: 12 }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: checkingStep >= 1 ? '#0F172A' : '#94A3B8' }}>{checkingStep > 1 ? <CheckCircle size={14} color="#10B981" /> : <Clock size={14} />} Reading</span>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: checkingStep >= 2 ? '#0F172A' : '#94A3B8' }}>{checkingStep > 2 ? <CheckCircle size={14} color="#10B981" /> : <Clock size={14} />} Checking</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {(scanResultMode === 'INVALID' || scanResultMode === 'DUPLICATE' || scanResultMode === 'CLEAR') && previewDocUrl && (
+                    <div style={{ marginBottom: 16, background: '#fff', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '16px', textAlign: 'center' }}>
+                      <div style={{ fontWeight: 600, color: '#0F172A', marginBottom: 12, fontSize: '0.9rem', textAlign: 'left' }}>Uploaded Document Preview:</div>
+                      <img src={previewDocUrl} alt="Uploaded Proof" onClick={() => setFullScreenPreview(true)} style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: '8px', objectFit: 'contain', border: '1px solid #E2E8F0', cursor: 'pointer', transition: 'opacity 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.opacity = '0.85'} onMouseLeave={(e) => e.currentTarget.style.opacity = '1'} title="Click to view full size" />
+                    </div>
+                  )}
+
+                  {scanResultMode === 'INVALID' && (
+                    <div style={{ padding: '20px', borderRadius: '12px', border: '1px solid #FECACA', background: '#FEF2F2' }}>
+                      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                        <AlertTriangle size={24} color="#EF4444" style={{ flexShrink: 0 }} />
+                        <div>
+                          <h4 style={{ margin: '0 0 6px', color: '#991B1B', fontWeight: 700 }}>Invalid Document Uploaded</h4>
+                          <p style={{ margin: 0, fontSize: '0.85rem', color: '#B91C1C', lineHeight: 1.5 }}>{ocrWarning}</p>
+                        </div>
+                      </div>
+                      <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>
+                        <button type="button" onClick={resetUpload} style={{ background: '#fff', border: '1px solid #FECACA', padding: '6px 16px', borderRadius: 6, color: '#991B1B', fontWeight: 600, cursor: 'pointer' }}>Clear</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {scanResultMode === 'DUPLICATE' && matchedRecordDetails && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', marginTop: 16 }}>
+                      <div style={{ padding: '32px', borderRadius: '16px', border: '1px solid rgba(225, 29, 72, 0.2)', background: '#fff' }}>
+                        <div style={{ display: 'flex', gap: '16px', marginBottom: '24px' }}>
+                          <div style={{ width: '48px', height: '48px', borderRadius: '50%', backgroundColor: '#FEF2F2', color: '#EF4444', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <AlertTriangle size={24} />
+                          </div>
+                          <div>
+                            <h3 style={{ margin: '0 0 4px', fontSize: '18px', fontWeight: 800, color: '#EF4444' }}>Possible Duplicate Detected</h3>
+                            <p style={{ margin: 0, fontSize: '14px', color: '#334155' }}>A possible matching Official Receipt or Invoice already exists in FOMS.</p>
+                          </div>
+                        </div>
+
+                        {/* Document Previews side-by-side */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '24px' }}>
+                          <div style={{ padding: '16px', background: '#F8FAFC', borderRadius: '12px', border: '1px solid #E2E8F0', textAlign: 'center' }}>
+                            <h4 style={{ margin: '0 0 12px', fontSize: '12.5px', fontWeight: 700, color: '#334155', textTransform: 'uppercase' }}>Uploaded / Scanned Document</h4>
+                            <div style={{ overflow: 'hidden', height: '180px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#ffffff', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                              <img src={previewDocUrl || '/mock_receipt.png'} alt="Uploaded candidate preview" style={{ maxHeight: '100%', maxWidth: '100%', objectFit: 'contain' }} />
+                            </div>
+                          </div>
+                          <div style={{ padding: '16px', background: '#ffffff', borderRadius: '12px', border: '1px solid #E2E8F0', textAlign: 'center' }}>
+                            <h4 style={{ margin: '0 0 12px', fontSize: '12.5px', fontWeight: 700, color: '#334155', textTransform: 'uppercase' }}>Existing Matching FOMS Record</h4>
+                            <div style={{ overflow: 'hidden', height: '180px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                              <img src={'/mock_receipt.png'} alt="Existing database match preview" style={{ maxHeight: '100%', maxWidth: '100%', objectFit: 'contain', opacity: 0.85 }} />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Similarity Banner info */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 18px', background: '#FFF7ED', borderRadius: '8px', border: '1px solid rgba(249, 115, 22, 0.2)', marginBottom: '24px', fontSize: '13.5px', fontWeight: 600 }}>
+                          <span style={{ color: '#9A3412' }}>Highest Similarity: {similarityScore}% Match Score</span>
+                          <span style={{ color: '#334155' }}>Checked Date & Time: {new Date().toLocaleString()}</span>
+                        </div>
+
+                        {/* Comparison Matrix */}
+                        <h4 style={{ fontSize: '14px', fontWeight: 700, marginBottom: '12px', color: '#0F172A' }}>Comparison Parameters Matrix</h4>
+                        <div style={{ overflowX: 'auto', marginBottom: '28px' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                            <thead>
+                              <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
+                                <th style={{ padding: '10px 14px', fontSize: '12px', fontWeight: 700, color: '#334155', textTransform: 'uppercase' }}>Field</th>
+                                <th style={{ padding: '10px 14px', fontSize: '12px', fontWeight: 700, color: '#334155', textTransform: 'uppercase' }}>Uploaded Document</th>
+                                <th style={{ padding: '10px 14px', fontSize: '12px', fontWeight: 700, color: '#334155', textTransform: 'uppercase' }}>Existing FOMS Record</th>
+                                <th style={{ padding: '10px 14px', fontSize: '12px', fontWeight: 700, color: '#334155', textTransform: 'uppercase' }}>Match Result</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <tr style={{ borderBottom: '1px solid #E2E8F0' }}>
+                                <td style={{ padding: '12px 14px', fontSize: '13px', fontWeight: 600 }}>Document Type</td>
+                                <td style={{ padding: '12px 14px', fontSize: '13px' }}>OFFICIAL RECEIPT</td>
+                                <td style={{ padding: '12px 14px', fontSize: '13px' }}>Official Receipt</td>
+                                <td style={{ padding: '12px 14px' }}><span style={getCellMatchStyle('type', 'OFFICIAL_RECEIPT', 'OFFICIAL_RECEIPT').style}>{getCellMatchStyle('type', 'OFFICIAL_RECEIPT', 'OFFICIAL_RECEIPT').text}</span></td>
+                              </tr>
+                              <tr style={{ borderBottom: '1px solid #E2E8F0' }}>
+                                <td style={{ padding: '12px 14px', fontSize: '13px', fontWeight: 600 }}>OR / Invoice Number</td>
+                                <td style={{ padding: '12px 14px', fontSize: '13px', fontFamily: 'monospace' }}>{form.referenceNumber || 'MOCK-OR-12345'}</td>
+                                <td style={{ padding: '12px 14px', fontSize: '13px', fontFamily: 'monospace' }}>{matchedRecordDetails?.registered_or}</td>
+                                <td style={{ padding: '12px 14px' }}><span style={getCellMatchStyle('docNum', form.referenceNumber || 'MOCK-OR-12345', matchedRecordDetails?.registered_or).style}>{getCellMatchStyle('docNum', form.referenceNumber || 'MOCK-OR-12345', matchedRecordDetails?.registered_or).text}</span></td>
+                              </tr>
+                              <tr style={{ borderBottom: '1px solid #E2E8F0' }}>
+                                <td style={{ padding: '12px 14px', fontSize: '13px', fontWeight: 600 }}>Client Name</td>
+                                <td style={{ padding: '12px 14px', fontSize: '13px' }}>{form.companyName || form.firstName || 'SPEEDEX USER'}</td>
+                                <td style={{ padding: '12px 14px', fontSize: '13px' }}>{matchedRecordDetails?.client_name}</td>
+                                <td style={{ padding: '12px 14px' }}><span style={getCellMatchStyle('client', form.companyName || form.firstName || 'SPEEDEX USER', matchedRecordDetails?.client_name).style}>{getCellMatchStyle('client', form.companyName || form.firstName || 'SPEEDEX USER', matchedRecordDetails?.client_name).text}</span></td>
+                              </tr>
+                              <tr style={{ borderBottom: '1px solid #E2E8F0' }}>
+                                <td style={{ padding: '12px 14px', fontSize: '13px', fontWeight: 600 }}>Amount</td>
+                                <td style={{ padding: '12px 14px', fontSize: '13px', fontWeight: 700 }}>₱{parseFloat(form.amount || '0').toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                <td style={{ padding: '12px 14px', fontSize: '13px', fontWeight: 700 }}>₱{parseFloat(matchedRecordDetails?.amount || '0').toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                <td style={{ padding: '12px 14px' }}><span style={getCellMatchStyle('amount', form.amount || '0', matchedRecordDetails?.amount).style}>{getCellMatchStyle('amount', form.amount || '0', matchedRecordDetails?.amount).text}</span></td>
+                              </tr>
+                              <tr style={{ borderBottom: '1px solid #E2E8F0' }}>
+                                <td style={{ padding: '12px 14px', fontSize: '13px', fontWeight: 600 }}>Transaction Date</td>
+                                <td style={{ padding: '12px 14px', fontSize: '13px' }}>{form.datePaid || '2026-09-15'}</td>
+                                <td style={{ padding: '12px 14px', fontSize: '13px' }}>{matchedRecordDetails?.entry_date || '2026-09-15'}</td>
+                                <td style={{ padding: '12px 14px' }}><span style={getCellMatchStyle('date', form.datePaid || '2026-09-15', matchedRecordDetails?.entry_date || '2026-09-15').style}>{getCellMatchStyle('date', form.datePaid || '2026-09-15', matchedRecordDetails?.entry_date || '2026-09-15').text}</span></td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+                          <button type="button" onClick={resetUpload} style={{ background: '#fff', border: '1px solid #CBD5E1', padding: '10px 20px', borderRadius: 8, color: '#334155', fontWeight: 600, cursor: 'pointer' }}>Cancel / Reset</button>
+                          <button type="button" onClick={() => setShowManualReviewPanel(true)} style={{ background: '#fff', border: '1px solid #CBD5E1', padding: '10px 20px', borderRadius: 8, color: '#0F172A', fontWeight: 600, cursor: 'pointer' }}>Need Manual Review</button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {scanResultMode === 'CLEAR' && (
+                    <div style={{ padding: '16px', borderRadius: '12px', border: '1px solid #A7F3D0', background: '#ECFDF5', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <div style={{ width: 40, height: 40, borderRadius: 8, background: '#fff', border: '1px solid #A7F3D0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <CheckCircle size={20} color="#10B981" />
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 600, color: '#065F46', fontSize: '0.9rem' }}>{uploadFile?.name}</div>
+                          <div style={{ fontSize: '0.8rem', color: '#059669' }}>Scanned successfully. No duplicates found.</div>
+                        </div>
+                      </div>
+                      <button type="button" onClick={resetUpload} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+                        <X size={20} color="#059669" />
+                      </button>
+                    </div>
+                  )}
                 </div>
                 {!isFinanceManager && (
                   <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: '#F8FAFC', borderRadius: 8, border: '1px solid #E2E8F0' }}>
@@ -1018,8 +1301,8 @@ const PaymentsContent: React.FC = () => {
                   <button type="button" onClick={() => setShowForm(false)} style={{ padding: '10px 24px', borderRadius: 8, background: '#F1F5F9', color: '#475569', border: 'none', fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
                   <button
                     type="submit"
-                    disabled={!form.invoiceNo || !form.referenceNumber || !form.datePaid}
-                    style={{ padding: '10px 24px', borderRadius: 8, background: (!form.invoiceNo || !form.referenceNumber || !form.datePaid) ? '#94A3B8' : '#0F172A', color: '#fff', border: 'none', fontWeight: 700, cursor: (!form.invoiceNo || !form.referenceNumber || !form.datePaid) ? 'not-allowed' : 'pointer', transition: 'background 0.2s' }}>Record Payment</button>
+                    disabled={!form.invoiceNo || !form.companyName || (form.paymentMethod !== 'Cash' && !form.referenceNumber) || !form.datePaid}
+                    style={{ padding: '10px 24px', borderRadius: 8, background: (!form.invoiceNo || !form.companyName || (form.paymentMethod !== 'Cash' && !form.referenceNumber) || !form.datePaid) ? '#94A3B8' : '#0F172A', color: '#fff', border: 'none', fontWeight: 700, cursor: (!form.invoiceNo || !form.companyName || (form.paymentMethod !== 'Cash' && !form.referenceNumber) || !form.datePaid) ? 'not-allowed' : 'pointer', transition: 'background 0.2s' }}>Record Payment</button>
                 </div>
               </form>
             </div>
@@ -1192,20 +1475,20 @@ const PaymentsContent: React.FC = () => {
           display: 'flex', justifyContent: 'center', alignItems: 'center',
           zIndex: 99999, padding: '20px'
         }}>
-          <div style={{ background: '#fff', borderRadius: 12, padding: 28, boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', width: '100%', maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto' }}>
+          <div style={{ background: '#fff', borderRadius: 12, padding: 28, boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', width: '100%', maxWidth: '840px', maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0F172A' }}>Record Payment</h3>
               <button onClick={() => setShowForm(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', fontSize: 20 }}>×</button>
             </div>
             <form onSubmit={handleSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
               <div style={{ gridColumn: '1 / -1' }}>
-                <label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: 6 }}>Invoice No. *</label>
+                <label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: 6 }}>Invoice No. <span style={{ color: '#EF4444' }}>*</span></label>
                 <input required type="text" placeholder="Enter Invoice Number" value={form.invoiceNo} onChange={e => setForm(f => ({ ...f, invoiceNo: e.target.value }))}
                   style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid #E2E8F0', background: '#F8FAFC', color: '#0F172A', fontSize: '0.9rem', boxSizing: 'border-box', fontWeight: 600 }} />
               </div>
               <div style={{ gridColumn: '1 / -1' }}>
-                <label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: 6 }}>Company Name (Optional)</label>
-                <input type="text" placeholder="Enter Company Name" value={form.companyName} onChange={e => setForm(f => ({ ...f, companyName: e.target.value }))}
+                <label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: 6 }}>Company Name <span style={{ color: '#EF4444' }}>*</span></label>
+                <input required type="text" placeholder="Enter Company Name" value={form.companyName} onChange={e => setForm(f => ({ ...f, companyName: e.target.value }))}
                   style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid #E2E8F0', background: '#F8FAFC', color: '#0F172A', fontSize: '0.9rem', boxSizing: 'border-box' }} />
               </div>
               <div>
@@ -1219,12 +1502,12 @@ const PaymentsContent: React.FC = () => {
                   style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid #E2E8F0', background: '#F8FAFC', color: '#0F172A', fontSize: '0.9rem', boxSizing: 'border-box' }} />
               </div>
               <div>
-                <label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: 6 }}>Amount Paid *</label>
+                <label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: 6 }}>Amount Paid <span style={{ color: '#EF4444' }}>*</span></label>
                 <input required type="number" step="0.01" placeholder="0.00" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
                   style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid #E2E8F0', background: '#F8FAFC', color: '#0F172A', fontSize: '0.9rem', boxSizing: 'border-box', fontWeight: 600 }} />
               </div>
               <div>
-                <label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: 6 }}>Payment Method *</label>
+                <label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: 6 }}>Payment Method <span style={{ color: '#EF4444' }}>*</span></label>
                 <select value={form.paymentMethod} onChange={e => setForm(f => ({ ...f, paymentMethod: e.target.value }))}
                   style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid #E2E8F0', background: '#F8FAFC', fontSize: '0.9rem', boxSizing: 'border-box' }}>
                   <option value="Check">Check</option>
@@ -1233,8 +1516,12 @@ const PaymentsContent: React.FC = () => {
                 </select>
               </div>
               <div>
-                <label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: 6 }}>Reference No. *</label>
-                <input required type="text" placeholder="e.g. BPI-887211" value={form.referenceNumber}
+                <label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: 6 }}>
+                  {form.paymentMethod === 'Cash' ? 'Cash Receipt No. (Optional)' : (
+                    <>{form.paymentMethod === 'Check' ? 'Check Number' : 'Bank Reference Number'} <span style={{ color: '#EF4444' }}>*</span></>
+                  )}
+                </label>
+                <input required={form.paymentMethod !== 'Cash'} type="text" placeholder={form.paymentMethod === 'Cash' ? 'e.g. CR-0012' : 'e.g. BPI-887211'} value={form.referenceNumber}
                   onChange={e => setForm(f => ({ ...f, referenceNumber: e.target.value }))}
                   style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid #E2E8F0', background: '#F8FAFC', fontSize: '0.9rem', boxSizing: 'border-box' }} />
               </div>
@@ -1247,9 +1534,181 @@ const PaymentsContent: React.FC = () => {
                 />
               </div>
               <div style={{ gridColumn: '1 / -1' }}>
-                <label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: 6 }}>Upload Proof of Payment</label>
-                <input type="file"
-                  style={{ width: '100%', padding: '8px', borderRadius: 8, border: '1px dashed #CBD5E1', background: '#F8FAFC', fontSize: '0.85rem', boxSizing: 'border-box' }} />
+                <label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: 12 }}>Upload Proof of Payment</label>
+                
+                {scanResultMode === 'NONE' && checkingStep === 0 && (
+                  <div
+                    onDragEnter={handleDrag}
+                    onDragOver={handleDrag}
+                    onDragLeave={handleDrag}
+                    onDrop={handleDrop}
+                    style={{
+                      padding: '24px 20px', borderRadius: '12px',
+                      border: dragActive ? '2px dashed #0D9488' : '2px dashed #CBD5E1',
+                      background: dragActive ? '#F0FDFA' : '#fff',
+                      textAlign: 'center', transition: 'all 0.2s',
+                    }}
+                  >
+                    <input type="file" id="file-upload-1" style={{ display: 'none' }} onChange={handleFileChange} accept=".jpg,.jpeg,.png,.pdf" />
+                    <div style={{ width: '42px', height: '42px', borderRadius: '50%', background: '#0D9488', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px', boxShadow: '0 4px 12px rgba(13,148,136,0.3)' }}>
+                      <UploadCloud size={20} color="#ffffff" />
+                    </div>
+                    <div style={{ fontSize: '0.95rem', color: '#0F172A', fontWeight: 700, marginBottom: '6px' }}>
+                      Drag & Drop or Upload Document
+                    </div>
+                    <div style={{ fontSize: '0.78rem', color: '#64748B', marginBottom: '16px' }}>
+                      Support JPG, JPEG, and PNG receipt statements up to 10MB.
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: '10px' }}>
+                      <button type="button" onClick={() => document.getElementById('file-upload-1')?.click()} style={{ background: '#0D9488', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '8px', fontWeight: 600, cursor: 'pointer', fontSize: '0.8rem' }}>Choose File</button>
+                      <button type="button" onClick={() => document.getElementById('file-upload-1')?.click()} style={{ background: '#fff', color: '#0F172A', border: '1px solid #CBD5E1', padding: '8px 16px', borderRadius: '8px', fontWeight: 600, cursor: 'pointer', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Camera size={16} color="#475569" /> Scan Document
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {checkingStep > 0 && (
+                  <div style={{ padding: '24px', textAlign: 'center', background: '#F8FAFC', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+                    <div style={{ marginBottom: 12, fontWeight: 600, color: '#0F172A' }}>AI Scanning Document...</div>
+                    <div style={{ width: '100%', height: 6, background: '#E2E8F0', borderRadius: 4, overflow: 'hidden', marginBottom: 12 }}>
+                      <div style={{ width: `${checkingProgress}%`, height: '100%', background: '#0EA5E9', transition: 'width 0.3s ease' }} />
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: '#64748B', display: 'flex', justifyContent: 'center', gap: 12 }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: checkingStep >= 1 ? '#0F172A' : '#94A3B8' }}>{checkingStep > 1 ? <CheckCircle size={14} color="#10B981" /> : <Clock size={14} />} Reading</span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: checkingStep >= 2 ? '#0F172A' : '#94A3B8' }}>{checkingStep > 2 ? <CheckCircle size={14} color="#10B981" /> : <Clock size={14} />} Checking</span>
+                    </div>
+                  </div>
+                )}
+
+                {(scanResultMode === 'INVALID' || scanResultMode === 'DUPLICATE' || scanResultMode === 'CLEAR') && previewDocUrl && (
+                  <div style={{ marginBottom: 16, background: '#fff', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '16px', textAlign: 'center' }}>
+                    <div style={{ fontWeight: 600, color: '#0F172A', marginBottom: 12, fontSize: '0.9rem', textAlign: 'left' }}>Uploaded Document Preview:</div>
+                    <img src={previewDocUrl} alt="Uploaded Proof" onClick={() => setFullScreenPreview(true)} style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: '8px', objectFit: 'contain', border: '1px solid #E2E8F0', cursor: 'pointer', transition: 'opacity 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.opacity = '0.85'} onMouseLeave={(e) => e.currentTarget.style.opacity = '1'} title="Click to view full size" />
+                  </div>
+                )}
+
+                {scanResultMode === 'INVALID' && (
+                  <div style={{ padding: '20px', borderRadius: '12px', border: '1px solid #FECACA', background: '#FEF2F2' }}>
+                    <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                      <AlertTriangle size={24} color="#EF4444" style={{ flexShrink: 0 }} />
+                      <div>
+                        <h4 style={{ margin: '0 0 6px', color: '#991B1B', fontWeight: 700 }}>Invalid Document Uploaded</h4>
+                        <p style={{ margin: 0, fontSize: '0.85rem', color: '#B91C1C', lineHeight: 1.5 }}>{ocrWarning}</p>
+                      </div>
+                    </div>
+                    <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>
+                      <button type="button" onClick={resetUpload} style={{ background: '#fff', border: '1px solid #FECACA', padding: '6px 16px', borderRadius: 6, color: '#991B1B', fontWeight: 600, cursor: 'pointer' }}>Clear</button>
+                    </div>
+                  </div>
+                )}
+
+                {scanResultMode === 'DUPLICATE' && matchedRecordDetails && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', marginTop: 16 }}>
+                    <div style={{ padding: '32px', borderRadius: '16px', border: '1px solid rgba(225, 29, 72, 0.2)', background: '#fff' }}>
+                      <div style={{ display: 'flex', gap: '16px', marginBottom: '24px' }}>
+                        <div style={{ width: '48px', height: '48px', borderRadius: '50%', backgroundColor: '#FEF2F2', color: '#EF4444', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <AlertTriangle size={24} />
+                        </div>
+                        <div>
+                          <h3 style={{ margin: '0 0 4px', fontSize: '18px', fontWeight: 800, color: '#EF4444' }}>Possible Duplicate Detected</h3>
+                          <p style={{ margin: 0, fontSize: '14px', color: '#334155' }}>A possible matching Official Receipt or Invoice already exists in FOMS.</p>
+                        </div>
+                      </div>
+
+                      {/* Document Previews side-by-side */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '24px' }}>
+                        <div style={{ padding: '16px', background: '#F8FAFC', borderRadius: '12px', border: '1px solid #E2E8F0', textAlign: 'center' }}>
+                          <h4 style={{ margin: '0 0 12px', fontSize: '12.5px', fontWeight: 700, color: '#334155', textTransform: 'uppercase' }}>Uploaded / Scanned Document</h4>
+                          <div style={{ overflow: 'hidden', height: '180px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#ffffff', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                            <img src={previewDocUrl || '/mock_receipt.png'} alt="Uploaded candidate preview" style={{ maxHeight: '100%', maxWidth: '100%', objectFit: 'contain' }} />
+                          </div>
+                        </div>
+                        <div style={{ padding: '16px', background: '#ffffff', borderRadius: '12px', border: '1px solid #E2E8F0', textAlign: 'center' }}>
+                          <h4 style={{ margin: '0 0 12px', fontSize: '12.5px', fontWeight: 700, color: '#334155', textTransform: 'uppercase' }}>Existing Matching FOMS Record</h4>
+                          <div style={{ overflow: 'hidden', height: '180px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                            <img src={'/mock_receipt.png'} alt="Existing database match preview" style={{ maxHeight: '100%', maxWidth: '100%', objectFit: 'contain', opacity: 0.85 }} />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Similarity Banner info */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 18px', background: '#FFF7ED', borderRadius: '8px', border: '1px solid rgba(249, 115, 22, 0.2)', marginBottom: '24px', fontSize: '13.5px', fontWeight: 600 }}>
+                        <span style={{ color: '#9A3412' }}>Highest Similarity: {similarityScore}% Match Score</span>
+                        <span style={{ color: '#334155' }}>Checked Date & Time: {new Date().toLocaleString()}</span>
+                      </div>
+
+                      {/* Comparison Matrix */}
+                      <h4 style={{ fontSize: '14px', fontWeight: 700, marginBottom: '12px', color: '#0F172A' }}>Comparison Parameters Matrix</h4>
+                      <div style={{ overflowX: 'auto', marginBottom: '28px' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                          <thead>
+                            <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
+                              <th style={{ padding: '10px 14px', fontSize: '12px', fontWeight: 700, color: '#334155', textTransform: 'uppercase' }}>Field</th>
+                              <th style={{ padding: '10px 14px', fontSize: '12px', fontWeight: 700, color: '#334155', textTransform: 'uppercase' }}>Uploaded Document</th>
+                              <th style={{ padding: '10px 14px', fontSize: '12px', fontWeight: 700, color: '#334155', textTransform: 'uppercase' }}>Existing FOMS Record</th>
+                              <th style={{ padding: '10px 14px', fontSize: '12px', fontWeight: 700, color: '#334155', textTransform: 'uppercase' }}>Match Result</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr style={{ borderBottom: '1px solid #E2E8F0' }}>
+                              <td style={{ padding: '12px 14px', fontSize: '13px', fontWeight: 600 }}>Document Type</td>
+                              <td style={{ padding: '12px 14px', fontSize: '13px' }}>OFFICIAL RECEIPT</td>
+                              <td style={{ padding: '12px 14px', fontSize: '13px' }}>Official Receipt</td>
+                              <td style={{ padding: '12px 14px' }}><span style={getCellMatchStyle('type', 'OFFICIAL_RECEIPT', 'OFFICIAL_RECEIPT').style}>{getCellMatchStyle('type', 'OFFICIAL_RECEIPT', 'OFFICIAL_RECEIPT').text}</span></td>
+                            </tr>
+                            <tr style={{ borderBottom: '1px solid #E2E8F0' }}>
+                              <td style={{ padding: '12px 14px', fontSize: '13px', fontWeight: 600 }}>OR / Invoice Number</td>
+                              <td style={{ padding: '12px 14px', fontSize: '13px', fontFamily: 'monospace' }}>{form.referenceNumber || 'MOCK-OR-12345'}</td>
+                              <td style={{ padding: '12px 14px', fontSize: '13px', fontFamily: 'monospace' }}>{matchedRecordDetails?.registered_or}</td>
+                              <td style={{ padding: '12px 14px' }}><span style={getCellMatchStyle('docNum', form.referenceNumber || 'MOCK-OR-12345', matchedRecordDetails?.registered_or).style}>{getCellMatchStyle('docNum', form.referenceNumber || 'MOCK-OR-12345', matchedRecordDetails?.registered_or).text}</span></td>
+                            </tr>
+                            <tr style={{ borderBottom: '1px solid #E2E8F0' }}>
+                              <td style={{ padding: '12px 14px', fontSize: '13px', fontWeight: 600 }}>Client Name</td>
+                              <td style={{ padding: '12px 14px', fontSize: '13px' }}>{form.companyName || form.firstName || 'SPEEDEX USER'}</td>
+                              <td style={{ padding: '12px 14px', fontSize: '13px' }}>{matchedRecordDetails?.client_name}</td>
+                              <td style={{ padding: '12px 14px' }}><span style={getCellMatchStyle('client', form.companyName || form.firstName || 'SPEEDEX USER', matchedRecordDetails?.client_name).style}>{getCellMatchStyle('client', form.companyName || form.firstName || 'SPEEDEX USER', matchedRecordDetails?.client_name).text}</span></td>
+                            </tr>
+                            <tr style={{ borderBottom: '1px solid #E2E8F0' }}>
+                              <td style={{ padding: '12px 14px', fontSize: '13px', fontWeight: 600 }}>Amount</td>
+                              <td style={{ padding: '12px 14px', fontSize: '13px', fontWeight: 700 }}>₱{parseFloat(form.amount || '0').toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                              <td style={{ padding: '12px 14px', fontSize: '13px', fontWeight: 700 }}>₱{parseFloat(matchedRecordDetails?.amount || '0').toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                              <td style={{ padding: '12px 14px' }}><span style={getCellMatchStyle('amount', form.amount || '0', matchedRecordDetails?.amount).style}>{getCellMatchStyle('amount', form.amount || '0', matchedRecordDetails?.amount).text}</span></td>
+                            </tr>
+                            <tr style={{ borderBottom: '1px solid #E2E8F0' }}>
+                              <td style={{ padding: '12px 14px', fontSize: '13px', fontWeight: 600 }}>Transaction Date</td>
+                              <td style={{ padding: '12px 14px', fontSize: '13px' }}>{form.datePaid || '2026-09-15'}</td>
+                              <td style={{ padding: '12px 14px', fontSize: '13px' }}>{matchedRecordDetails?.entry_date || '2026-09-15'}</td>
+                              <td style={{ padding: '12px 14px' }}><span style={getCellMatchStyle('date', form.datePaid || '2026-09-15', matchedRecordDetails?.entry_date || '2026-09-15').style}>{getCellMatchStyle('date', form.datePaid || '2026-09-15', matchedRecordDetails?.entry_date || '2026-09-15').text}</span></td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+                        <button type="button" onClick={resetUpload} style={{ background: '#fff', border: '1px solid #CBD5E1', padding: '10px 20px', borderRadius: 8, color: '#334155', fontWeight: 600, cursor: 'pointer' }}>Cancel / Reset</button>
+                        <button type="button" onClick={() => setShowManualReviewPanel(true)} style={{ background: '#fff', border: '1px solid #CBD5E1', padding: '10px 20px', borderRadius: 8, color: '#0F172A', fontWeight: 600, cursor: 'pointer' }}>Need Manual Review</button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {scanResultMode === 'CLEAR' && (
+                  <div style={{ padding: '16px', borderRadius: '12px', border: '1px solid #A7F3D0', background: '#ECFDF5', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div style={{ width: 40, height: 40, borderRadius: 8, background: '#fff', border: '1px solid #A7F3D0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <CheckCircle size={20} color="#10B981" />
+                      </div>
+                      <div>
+                        <div style={{ fontWeight: 600, color: '#065F46', fontSize: '0.9rem' }}>{uploadFile?.name}</div>
+                        <div style={{ fontSize: '0.8rem', color: '#059669' }}>Scanned successfully. No duplicates found.</div>
+                      </div>
+                    </div>
+                    <button type="button" onClick={resetUpload} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+                      <X size={20} color="#059669" />
+                    </button>
+                  </div>
+                )}
               </div>
               {!isFinanceManager && (
                 <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: '#F8FAFC', borderRadius: 8, border: '1px solid #E2E8F0' }}>
@@ -1269,8 +1728,8 @@ const PaymentsContent: React.FC = () => {
                 <button type="button" onClick={() => setShowForm(false)} style={{ padding: '10px 24px', borderRadius: 8, background: '#F1F5F9', color: '#475569', border: 'none', fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
                 <button
                   type="submit"
-                  disabled={!form.invoiceNo || !form.referenceNumber || !form.datePaid}
-                  style={{ padding: '10px 24px', borderRadius: 8, background: (!form.invoiceNo || !form.referenceNumber || !form.datePaid) ? '#94A3B8' : '#0F172A', color: '#fff', border: 'none', fontWeight: 700, cursor: (!form.invoiceNo || !form.referenceNumber || !form.datePaid) ? 'not-allowed' : 'pointer', transition: 'background 0.2s' }}>Record Payment</button>
+                  disabled={!form.invoiceNo || !form.companyName || (form.paymentMethod !== 'Cash' && !form.referenceNumber) || !form.datePaid}
+                  style={{ padding: '10px 24px', borderRadius: 8, background: (!form.invoiceNo || !form.companyName || (form.paymentMethod !== 'Cash' && !form.referenceNumber) || !form.datePaid) ? '#94A3B8' : '#0F172A', color: '#fff', border: 'none', fontWeight: 700, cursor: (!form.invoiceNo || !form.companyName || (form.paymentMethod !== 'Cash' && !form.referenceNumber) || !form.datePaid) ? 'not-allowed' : 'pointer', transition: 'background 0.2s' }}>Record Payment</button>
               </div>
             </form>
           </div>
@@ -1281,33 +1740,12 @@ const PaymentsContent: React.FC = () => {
       {/* KPI Summary Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
         {[
-          { label: 'Total Cash Inflow', value: `₱${Number(totalInflow || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, color: '#10B981', icon: 'ti-trending-up', sub: 'Validated payments only' },
-          { label: 'Total Cash Outflow', value: `₱${Number(totalOutflow || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, color: '#EF4444', icon: 'ti-trending-down', sub: 'Approved outgoing transactions' },
-          { label: 'Net Cash Flow', value: `₱${Number(netCashFlow || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, color: netCashFlow >= 0 ? '#6366F1' : '#EF4444', icon: 'ti-currency-peso', sub: 'Total Inflow minus Outflow' },
-          { label: 'Pending Validation', value: `₱${Number(pendingInflowAmt || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, color: '#F59E0B', icon: 'ti-clock', sub: `${pendingPayments.length} payment(s) awaiting` },
+          { label: 'Total Cash Inflow', value: `₱${Number(totalInflow || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, color: '#10B981', bgColor: '#F0FDF4', textColor: '#15803D', icon: 'ti-trending-up', sub: 'Validated payments only' },
+          { label: 'Total Cash Outflow', value: `₱${Number(totalOutflow || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, color: '#EF4444', bgColor: '#FEF2F2', textColor: '#B91C1C', icon: 'ti-trending-down', sub: 'Approved outgoing transactions' },
+          { label: 'Net Cash Flow', value: `₱${Number(netCashFlow || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, color: netCashFlow >= 0 ? '#6366F1' : '#EF4444', bgColor: netCashFlow >= 0 ? '#EEF2FF' : '#FEF2F2', textColor: netCashFlow >= 0 ? '#4338CA' : '#B91C1C', icon: 'ti-currency-peso', sub: 'Total Inflow minus Outflow' },
+          { label: 'Pending Validation', value: `₱${Number(pendingInflowAmt || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, color: '#F59E0B', bgColor: '#FFFBEB', textColor: '#B45309', icon: 'ti-clock', sub: `${pendingPayments.length} payment(s) awaiting` },
         ].map(kpi => (
-          <div
-            key={kpi.label}
-            style={{
-              background: '#fff',
-              border: '1px solid #E2E8F0',
-              borderTop: `4px solid ${kpi.color}`,
-              borderRadius: 12,
-              padding: '16px 24px',
-              transition: 'all 0.2s ease',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.1)'; }}
-            onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
-              <div style={{ width: 40, height: 40, borderRadius: 10, background: kpi.color + '18', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <i className={`ti ${kpi.icon}`} style={{ fontSize: 20, color: kpi.color }} />
-              </div>
-              <div style={{ fontSize: 20, fontWeight: 800, color: '#0F172A' }}>{kpi.value}</div>
-            </div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#64748B' }}>{kpi.label}</div>
-            <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>{kpi.sub}</div>
-          </div>
+          <PaymentsKpiCard key={kpi.label} {...kpi} />
         ))}
       </div>
 
@@ -1318,14 +1756,14 @@ const PaymentsContent: React.FC = () => {
           customFilters={
             <>
               <select value={filterType} onChange={e => setFilterType(e.target.value)}
-                style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #E2E8F0', background: '#F8FAFC', fontSize: '0.85rem', color: '#475569', fontWeight: 600 }}>
+                style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #E2E8F0', background: '#F8FAFC', fontSize: '0.8rem', color: '#475569', fontWeight: 600 }}>
                 <option value="All">All Types</option>
                 <option value="Inflow">Inflow</option>
                 <option value="Outflow">Outflow</option>
               </select>
 
               <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
-                style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #E2E8F0', background: '#F8FAFC', fontSize: '0.85rem', color: '#475569', fontWeight: 600 }}>
+                style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #E2E8F0', background: '#F8FAFC', fontSize: '0.8rem', color: '#475569', fontWeight: 600 }}>
                 <option value="All">All Statuses</option>
                 <option value="Validated">Validated</option>
                 <option value="Approved">Approved</option>
@@ -1334,15 +1772,15 @@ const PaymentsContent: React.FC = () => {
               </select>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#64748B' }}>From:</label>
+                <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748B' }}>From:</label>
                 <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)}
-                  style={{ padding: '7px 10px', borderRadius: 8, border: '1px solid #E2E8F0', background: '#F8FAFC', fontSize: '0.85rem', color: '#475569' }} />
+                  style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #E2E8F0', background: '#F8FAFC', fontSize: '0.8rem', color: '#475569' }} />
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#64748B' }}>To:</label>
+                <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748B' }}>To:</label>
                 <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)}
-                  style={{ padding: '7px 10px', borderRadius: 8, border: '1px solid #E2E8F0', background: '#F8FAFC', fontSize: '0.85rem', color: '#475569' }} />
+                  style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #E2E8F0', background: '#F8FAFC', fontSize: '0.8rem', color: '#475569' }} />
               </div>
 
               {(filterType !== 'All' || filterStatus !== 'All' || filterDateFrom || filterDateTo) && (
@@ -1387,10 +1825,9 @@ const PaymentsContent: React.FC = () => {
                 <div>
                   <div style={{ fontWeight: 600, fontFamily: 'monospace', fontSize: 12, color: '#0F172A' }}>{row.invoiceNumber}</div>
                   <span style={{
-                    display: 'inline-block', marginTop: 2, padding: '1px 8px', borderRadius: 20,
+                    display: 'inline-block', marginTop: 2,
                     fontSize: 10, fontWeight: 700,
-                    background: row.classification === 'SpeedPay Collection' ? '#EEF2FF' : '#F0FDF4',
-                    color: row.classification === 'SpeedPay Collection' ? '#4338CA' : '#047857',
+                    color: '#000000',
                   }}>
                     {row.classification}
                   </span>
@@ -1401,16 +1838,14 @@ const PaymentsContent: React.FC = () => {
               key: 'amount', label: 'AMOUNT', sortable: true,
               render: (row: any) => (
                 <span style={{ fontWeight: 800, color: row.type === 'Inflow' ? '#10B981' : '#EF4444', fontSize: 14 }}>
-                  {row.type === 'Inflow' ? '+' : '-'}₱{Number(row.amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                  {row.type === 'Inflow' ? '' : '-'}₱{Number(row.amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                 </span>
               )
             },
             {
               key: 'paymentMethod', label: 'METHOD',
               render: (row: any) => {
-                const colors: Record<string, string> = { PayMongo: '#10B981', GCash: '#007AFF', Maya: '#00AA6C', 'Bank Transfer': '#1E3A5F', Cash: '#047857', Check: '#7C3AED', 'Online Bank Transfer': '#0EA5E9' };
-                const c = colors[row.paymentMethod] ?? '#64748B';
-                return <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: c + '18', color: c }}>{row.paymentMethod || '—'}</span>;
+                return <span style={{ color: '#000000', fontWeight: 'normal', fontSize: 13 }}>{row.paymentMethod || '—'}</span>;
               }
             },
             {
@@ -1438,6 +1873,290 @@ const PaymentsContent: React.FC = () => {
           ]}
         />
       </TableContainer>
+
+      {/* Full Screen Image Preview Modal */}
+      {fullScreenPreview && previewDocUrl && createPortal(
+        <div style={{ position: 'fixed', inset: 0, zIndex: 999999, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px', overflow: 'auto' }} onClick={() => { setFullScreenPreview(false); setPreviewZoom(1); }}>
+          <div style={{ position: 'fixed', top: '24px', right: '24px', display: 'flex', gap: '12px', zIndex: 1000000 }} onClick={(e) => e.stopPropagation()}>
+            <button style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff', padding: '12px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.4)'} onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.2)'} onClick={() => setPreviewZoom(prev => Math.min(prev + 0.5, 4))} title="Zoom In">
+              <ZoomIn size={24} />
+            </button>
+            <button style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff', padding: '12px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.4)'} onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.2)'} onClick={() => setPreviewZoom(prev => Math.max(prev - 0.5, 0.5))} title="Zoom Out">
+              <ZoomOut size={24} />
+            </button>
+            <button style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff', padding: '12px', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.4)'} onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.2)'} onClick={() => { setFullScreenPreview(false); setPreviewZoom(1); }} title="Close">
+              <X size={24} />
+            </button>
+          </div>
+          <div style={{ transform: `scale(${previewZoom})`, transition: 'transform 0.2s ease-in-out', transformOrigin: 'center' }} onClick={(e) => e.stopPropagation()}>
+            <img src={previewDocUrl} alt="Full screen preview" style={{ maxWidth: '100vw', maxHeight: '100vh', objectFit: 'contain', boxShadow: '0 8px 32px rgba(0,0,0,0.5)', borderRadius: '4px' }} />
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Manual Review Modal from ai-frontend */}
+      {showManualReviewPanel && createPortal(
+        <div style={{ position: 'fixed', inset: 0, zIndex: 999999, background: 'rgba(15, 23, 42, 0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', backdropFilter: 'blur(3.5px)' }}>
+          <div style={{ background: '#ffffff', borderRadius: '12px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)', width: '100%', maxWidth: '840px', maxHeight: '94vh', overflowY: 'auto', padding: '32px', border: '1px solid #E2E8F0' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '16px', marginBottom: '20px' }}>
+              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#1E293B' }}>Duplicate Record Comparison (Alert #28)</h3>
+              <button onClick={() => setShowManualReviewPanel(false)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94A3B8' }}><X size={20} /></button>
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', padding: '16px', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '8px', marginBottom: '24px', alignItems: 'flex-start' }}>
+              <Info size={18} style={{ color: '#D97706', marginTop: '2px', flexShrink: 0 }} />
+              <div>
+                <h5 style={{ margin: '0 0 4px', fontSize: '13.5px', fontWeight: 700, color: '#92400E' }}>Matching Factors Confidence: {similarityScore}%</h5>
+                <p style={{ margin: 0, fontSize: '13px', color: '#B45309', lineHeight: '1.4' }}>Highly similar {matchedRecordDetails?.registered_or ? 'receipt' : 'invoice'} numbers: {form.referenceNumber || 'MOCK-OR-12345'} and {matchedRecordDetails?.registered_or || matchedRecordDetails?.registered_invoice}.</p>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+              <span style={{ fontSize: '12.5px', fontWeight: 600, color: '#64748B' }}>Document Image Comparison View</span>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <button style={{ border: '1px solid #CBD5E1', background: '#fff', borderRadius: 4, cursor: 'pointer', padding: '4px 8px', height: '28px', fontSize: '11px' }} onClick={() => setPreviewZoom(z => Math.max(z - 0.25, 0.5))}><ZoomOut size={12} /></button>
+                <span style={{ fontSize: '12px', fontWeight: 600, color: '#64748B', minWidth: '40px', textAlign: 'center' }}>{previewZoom.toFixed(2)}x</span>
+                <button style={{ border: '1px solid #CBD5E1', background: '#fff', borderRadius: 4, cursor: 'pointer', padding: '4px 8px', height: '28px', fontSize: '11px' }} onClick={() => setPreviewZoom(z => Math.min(z + 0.25, 3))}><ZoomIn size={12} /></button>
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '24px' }}>
+              <div style={{ overflow: 'hidden', height: '140px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                <img src={previewDocUrl || '/mock_receipt.png'} alt="Uploaded original doc" style={{ maxHeight: '100%', maxWidth: '100%', objectFit: 'contain', transform: `scale(${previewZoom})`, transition: 'transform 0.15s ease' }} />
+              </div>
+              <div style={{ overflow: 'hidden', height: '140px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                <img src={'/mock_receipt.png'} alt="Legar FOMS match doc" style={{ maxHeight: '100%', maxWidth: '100%', objectFit: 'contain', opacity: 0.85, transform: `scale(${previewZoom})`, transition: 'transform 0.15s ease' }} />
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '28px' }}>
+              <div style={{ border: '1px solid #E2E8F0', borderRadius: '8px', padding: '16px', background: '#FFFFFF' }}>
+                <h4 style={{ margin: '0 0 14px', fontSize: '14px', fontWeight: 700, color: '#0F766E', borderBottom: '1px solid #E2E8F0', paddingBottom: '8px' }}>Original Record details</h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #F1F5F9', fontSize: '13px' }}>
+                    <span style={{ color: '#64748B' }}>amount</span>
+                    <span style={{ color: '#0D9488', fontWeight: 700 }}>{parseFloat(form.amount || '0').toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #F1F5F9', fontSize: '13px' }}>
+                    <span style={{ color: '#64748B' }}>dueDate</span>
+                    <span style={{ color: '#0D9488', fontWeight: 700 }}>{form.datePaid || '2026-09-15'}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #F1F5F9', fontSize: '13px' }}>
+                    <span style={{ color: '#64748B' }}>clientId</span>
+                    <span style={{ color: '#0D9488', fontWeight: 700 }}>C-004</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #F1F5F9', fontSize: '13px' }}>
+                    <span style={{ color: '#64748B' }}>clientName</span>
+                    <span style={{ color: '#0D9488', fontWeight: 700 }}>{form.companyName || form.firstName || 'SPEEDEX USER'}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #F1F5F9', fontSize: '13px' }}>
+                    <span style={{ color: '#64748B' }}>invoiceNumber</span>
+                    <span style={{ color: '#0D9488', fontWeight: 700 }}>{form.referenceNumber || 'MOCK-OR-12345'}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #F1F5F9', fontSize: '13px' }}>
+                    <span style={{ color: '#64748B' }}>paymentStatus</span>
+                    <span style={{ color: '#0D9488', fontWeight: 700 }}>Unpaid</span>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ border: '1px solid #E2E8F0', borderRadius: '8px', padding: '16px', background: '#FFFFFF' }}>
+                <h4 style={{ margin: '0 0 14px', fontSize: '14px', fontWeight: 700, color: '#0F766E', borderBottom: '1px solid #E2E8F0', paddingBottom: '8px' }}>Possible Matching record</h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #F1F5F9', fontSize: '13px' }}>
+                    <span style={{ color: '#64748B' }}>amount</span>
+                    <span style={{ color: '#0D9488', fontWeight: 700 }}>{parseFloat(matchedRecordDetails?.amount || '0').toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #F1F5F9', fontSize: '13px' }}>
+                    <span style={{ color: '#64748B' }}>dueDate</span>
+                    <span style={{ color: '#0D9488', fontWeight: 700 }}>{matchedRecordDetails?.entry_date || '2026-09-15'}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #F1F5F9', fontSize: '13px' }}>
+                    <span style={{ color: '#64748B' }}>clientId</span>
+                    <span style={{ color: '#0D9488', fontWeight: 700 }}>C-005</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #F1F5F9', fontSize: '13px' }}>
+                    <span style={{ color: '#64748B' }}>clientName</span>
+                    <span style={{ color: '#0D9488', fontWeight: 700 }}>{matchedRecordDetails?.client_name || 'Epsilon Corp'}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #F1F5F9', fontSize: '13px' }}>
+                    <span style={{ color: '#64748B' }}>invoiceNumber</span>
+                    <span style={{ color: '#0D9488', fontWeight: 700 }}>{matchedRecordDetails?.registered_or || matchedRecordDetails?.registered_invoice || 'INV-2026-005'}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #F1F5F9', fontSize: '13px' }}>
+                    <span style={{ color: '#64748B' }}>paymentStatus</span>
+                    <span style={{ color: '#0D9488', fontWeight: 700 }}>{matchedRecordDetails?.status === 'Validated' ? 'Paid' : 'Unpaid'}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ borderTop: '1px solid #E2E8F0', paddingTop: '20px', marginBottom: '14px' }}>
+              <h4 style={{ margin: '0 0 16px', fontSize: '15px', fontWeight: 800, color: '#1E293B' }}>Log Human Validation Action</h4>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '16px' }}>
+                <div>
+                  <label style={{ fontSize: '12px', fontWeight: 700, display: 'block', marginBottom: '6px', color: '#334155' }}>Review Decision</label>
+                  <select style={{ width: '100%', padding: '8px 12px', border: '1px solid #CBD5E1', borderRadius: '6px', fontSize: '13px' }} value={manualReviewDecision} onChange={(e) => setManualReviewDecision(e.target.value as any)}>
+                    <option value="Mark as Duplicate">Mark as Duplicate</option>
+                    <option value="Mark as Unique">Mark as Unique</option>
+                  </select>
+                </div>
+                <div>
+                  {manualReviewDecision === 'Mark as Duplicate' ? (
+                    <>
+                      <label style={{ fontSize: '12px', fontWeight: 700, display: 'block', marginBottom: '6px', color: '#334155' }}>Recommended Legacy Action</label>
+                      <select style={{ width: '100%', padding: '8px 12px', border: '1px solid #CBD5E1', borderRadius: '6px', fontSize: '13px' }} value={duplicateHandling} onChange={(e) => setDuplicateHandling(e.target.value)}>
+                        <option value="Flag and Block New Submission">Flag and Block New Submission</option>
+                        <option value="Link to Existing Record">Link to Existing Record</option>
+                        <option value="Return for Correction">Return for Correction</option>
+                        <option value="Keep for Investigation">Keep for Investigation</option>
+                      </select>
+                    </>
+                  ) : (
+                    <>
+                      <label style={{ fontSize: '12px', fontWeight: 700, display: 'block', marginBottom: '6px', color: '#334155' }}>Reason why the document is unique</label>
+                      <select style={{ width: '100%', padding: '8px 12px', border: '1px solid #CBD5E1', borderRadius: '6px', fontSize: '13px' }} value={uniqueReason} onChange={(e) => setUniqueReason(e.target.value)}>
+                        <option value="Different transaction">Different transaction</option>
+                        <option value="Different client">Different client</option>
+                        <option value="Different amount">Different amount</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {manualReviewDecision === 'Mark as Duplicate' && (
+                <div style={{ marginBottom: '16px' }}>
+                  <label style={{ fontSize: '12px', fontWeight: 700, display: 'block', marginBottom: '6px', color: '#334155' }}>Duplicate Reason Option</label>
+                  <select style={{ width: '100%', padding: '8px 12px', border: '1px solid #CBD5E1', borderRadius: '6px', fontSize: '13px' }} value={duplicateReason} onChange={(e) => setDuplicateReason(e.target.value)}>
+                    <option value="Same OR number">Same OR number</option>
+                    <option value="Same Invoice number">Same Invoice number</option>
+                    <option value="Same client and amount">Same client and amount</option>
+                  </select>
+                </div>
+              )}
+
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 700, display: 'block', marginBottom: '6px', color: '#334155' }}>Remarks / Audit Notes <span style={{ color: '#EF4444' }}>*</span></label>
+                <textarea style={{ width: '100%', minHeight: '80px', padding: '10px 12px', borderRadius: '8px', fontSize: '13px', border: '1px solid #CBD5E1' }} placeholder="Explain matches or safety checks (required for auditor compliance logs)..." value={manualNote} onChange={(e) => setManualNote(e.target.value)} />
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', padding: '12px 14px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', marginBottom: '20px', alignItems: 'flex-start', fontSize: '12.5px', color: '#64748B' }}>
+                <Info size={16} style={{ color: '#94A3B8', marginTop: '2px', flexShrink: 0 }} />
+                <span>Note: Submitting this review records your validation inside the AI audit service database. It does not directly modify transaction data in the legacy FOMS MSSQL tables.</span>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', borderTop: '1px solid #E2E8F0', paddingTop: '16px' }}>
+              <button style={{ height: '36px', minWidth: '90px', border: '1px solid #CBD5E1', background: '#fff', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, color: '#334155' }} onClick={() => setShowManualReviewPanel(false)}>Close</button>
+              <button style={{ height: '36px', minWidth: '130px', backgroundColor: '#00A99D', border: 'none', borderRadius: '6px', color: '#FFFFFF', fontWeight: 700, cursor: manualNote.trim() ? 'pointer' : 'not-allowed', opacity: manualNote.trim() ? 1 : 0.6 }} onClick={() => { setShowManualReviewPanel(false); setScanResultMode('NONE'); }} disabled={!manualNote.trim()}>Submit Review</button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {paymentIdParam && actionParam === 'receipt' && viewPayment && createPortal(
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(4px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 99999, padding: '24px' }} onClick={() => navigate('/payments')}>
+          <div style={{ background: '#F8FAFC', width: '100%', maxWidth: '850px', maxHeight: '90vh', overflowY: 'auto', borderRadius: '12px', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }} onClick={e => e.stopPropagation()}>
+            
+            {/* STICKY HEADER */}
+            <div style={{ position: 'sticky', top: 0, background: '#fff', padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #E2E8F0', zIndex: 10, borderTopLeftRadius: '12px', borderTopRightRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)' }}>
+              <div style={{ display: 'flex', gap: '32px', alignItems: 'center' }}>
+                <button 
+                  onClick={() => navigate('/payments')} 
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '8px', borderRadius: '50%', color: '#64748B', transition: 'background 0.2s', marginRight: '-8px' }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = '#F1F5F9'} 
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                  title="Close and Go Back"
+                >
+                  <i className="ti ti-arrow-left" style={{ fontSize: '20px' }} />
+                </button>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <span style={{ fontSize: '10px', fontWeight: 800, color: '#94A3B8', letterSpacing: '0.05em' }}>PAYMENT STATUS</span>
+                  <span style={{ color: '#D97706', fontSize: '13px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ background: '#FEF3C7', display: 'flex', padding: '2px', borderRadius: '50%' }}><i className="ti ti-alert-circle" style={{ color: '#D97706', fontSize: '14px' }} /></span> Issued OR
+                  </span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <span style={{ fontSize: '10px', fontWeight: 800, color: '#94A3B8', letterSpacing: '0.05em' }}>INVOICE STATUS</span>
+                  <span style={{ color: '#059669', fontSize: '13px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ background: '#D1FAE5', display: 'flex', padding: '2px', borderRadius: '50%' }}><i className="ti ti-check" style={{ color: '#059669', fontSize: '14px' }} /></span> Paid
+                  </span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <span style={{ fontSize: '10px', fontWeight: 800, color: '#94A3B8', letterSpacing: '0.05em' }}>DATE ISSUED</span>
+                  <span style={{ color: '#0F172A', fontWeight: 700, fontSize: '13px' }}>{safeFormatDate(viewPayment.recordedAt || new Date())}</span>
+                </div>
+              </div>
+              
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                <button onClick={(e) => { e.stopPropagation(); toast.info(`Downloading PDF Official Receipt for ${viewPayment.invoiceNumber}...`, 'Download Started'); }} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#0D9488', border: 'none', padding: '8px 16px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, color: '#fff', cursor: 'pointer' }}>
+                  <i className="ti ti-printer" style={{ fontSize: '16px' }} /> Print / PDF
+                </button>
+              </div>
+            </div>
+
+            {/* RECEIPT BODY */}
+            <div style={{ padding: '24px' }}>
+              <div style={{ background: '#fff', padding: '48px', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.02)', border: '1px solid #E2E8F0', position: 'relative', overflow: 'hidden', minHeight: '500px' }}>
+                
+                <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+                  <h2 style={{ margin: '0 0 8px', fontSize: '1.4rem', color: '#0F172A', fontWeight: 800 }}>Speedex Courier & Forwarder, Inc.</h2>
+                  <p style={{ margin: 0, color: '#64748B', fontSize: '0.85rem' }}>123 Rizal St, Brgy. Poblacion, Cebu City</p>
+                </div>
+                
+                <h1 style={{ textAlign: 'center', margin: '0 0 40px', fontSize: '1.6rem', letterSpacing: '0.4em', color: '#0F172A', fontWeight: 800 }}>R E C E I P T</h1>
+                
+                <div style={{ position: 'absolute', top: '55%', left: '50%', transform: 'translate(-50%, -50%) rotate(-15deg)', fontSize: '140px', fontWeight: 900, color: 'rgba(239, 68, 68, 0.08)', pointerEvents: 'none', zIndex: 0, letterSpacing: '0.1em' }}>PAID</div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', fontSize: '0.85rem', color: '#475569', position: 'relative', zIndex: 1 }}>
+                  <div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px', marginBottom: '10px' }}>
+                      <span style={{ color: '#94A3B8' }}>Receipt #:</span>
+                      <strong style={{ color: '#0F172A' }}>{viewPayment.orNumber || `OR-2026-0001`}</strong>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px', marginBottom: '10px' }}>
+                      <span style={{ color: '#94A3B8' }}>Issue Date:</span>
+                      <strong style={{ color: '#0F172A' }}>{safeFormatDate(viewPayment.recordedAt || new Date())}</strong>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px', marginBottom: '10px' }}>
+                      <span style={{ color: '#94A3B8' }}>Payment Method:</span>
+                      <strong style={{ color: '#0F172A' }}>{viewPayment.paymentMethod || 'N/A'}</strong>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px', marginBottom: '10px' }}>
+                      <span style={{ color: '#94A3B8' }}>Reference #:</span>
+                      <strong style={{ color: '#0F172A' }}>{viewPayment.referenceNumber || 'CHK-999888'}</strong>
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ color: '#94A3B8', marginBottom: '6px' }}>Received From:</div>
+                    <strong style={{ display: 'block', color: '#0F172A', fontSize: '1.05rem', marginBottom: '6px' }}>{viewPayment.clientName || 'Shopee Express'}</strong>
+                    <div style={{ color: '#64748B', marginBottom: '4px' }}>Code: {viewPayment.clientId || 'CL-002'}</div>
+                    <div style={{ color: '#64748B' }}>Invoice No: {viewPayment.invoiceNumber || 'LZD-2026-0002'}</div>
+                  </div>
+                </div>
+
+                <div style={{ marginTop: '50px', position: 'relative', zIndex: 1 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px dashed #CBD5E1', paddingBottom: '12px', marginBottom: '16px', fontWeight: 700, color: '#0F172A' }}>
+                    <span>Description</span>
+                    <span>Total</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '32px', color: '#475569' }}>
+                    <span>Full payment for logistics and delivery services covered by Invoice No. {viewPayment.invoiceNumber}</span>
+                    <strong style={{ color: '#0F172A', fontSize: '1.1rem' }}>₱{Number(viewPayment.amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</strong>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
     </div>
   );
 

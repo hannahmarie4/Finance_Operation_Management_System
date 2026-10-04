@@ -1,18 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { DataTable } from '../components/DataTable';
 import { StatusBadge } from '../components/StatusBadge';
 import { Card } from '../components/Card';
 import { Button } from '../components/Buttons';
 import { CustomDatePicker } from '../components/CustomDatePicker';
-import {
-  SEEDED_CLIENTS, SEEDED_RATES,
-  Waybill, Invoice, BillingRate
-} from '../data/seed';
+import { Waybill, Invoice, BillingRate } from '../data/seed';
 import { useToast } from '../components/ToastContext';
 import { useAppData } from '../context/AppDataContext';
 import { TableContainer } from '../components/TableContainer';
-
+import { computeFreightCost } from '../utils/billing';
 import { useAuth } from '../context/AuthContext';
 
 type Step = 1 | 2 | 3;
@@ -20,21 +17,39 @@ type Step = 1 | 2 | 3;
 export const InvoiceCreation: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const { waybills, invoices, addInvoice, updateInvoice, updateWaybill, clients, addAuditLog } = useAppData();
+  const { waybills, invoices, addInvoice, updateInvoice, updateWaybill, clients } = useAppData();
 
   const [searchParams] = useSearchParams();
   const editInvoiceId = searchParams.get('edit');
   const navigate = useNavigate();
 
   const [step, setStep] = useState<Step>(1);
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [selectedWaybills, setSelectedWaybills] = useState<string[]>([]);
   const [billingPeriod, setBillingPeriod] = useState('');
-  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  
+  // To handle the details view on click
+  const [selectedWaybillForDetails, setSelectedWaybillForDetails] = useState<string | null>(null);
+
+  // Rate Config State (defaults from the user's example)
+  const [rateConfig, setRateConfig] = useState({
+    minWeight: 5,
+    ncrBase: 100, ncrExcess: 25,
+    luzonBase: 130, luzonExcess: 45,
+    visayasBase: 150, visayasExcess: 50,
+    mindanaoBase: 150, mindanaoExcess: 50,
+    valuationRate: 1, // percentage
+    fuelSurchargeRate: 15, // percentage
+    vatRate: 12 // percentage
+  });
 
   const todayStr = new Date().toISOString().split('T')[0];
   const defaultDueDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
   const [issueDate, setIssueDate] = useState(todayStr);
   const [dueDate, setDueDate] = useState(defaultDueDate);
+  const [notes, setNotes] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     if (issueDate) {
@@ -44,26 +59,89 @@ export const InvoiceCreation: React.FC = () => {
     }
   }, [issueDate]);
 
+  // Derived override rates
+  const overrideRates = useMemo<BillingRate[]>(() => {
+    return [
+      { id: 'R1', clientId: 'ALL', region: 'NCR', minimumWeight: rateConfig.minWeight, minimumRate: rateConfig.ncrBase, excessRate: rateConfig.ncrExcess, valuationRate: rateConfig.valuationRate / 100, vatRate: rateConfig.vatRate / 100, fuelSurchargeRate: rateConfig.fuelSurchargeRate / 100, status: 'Active', effectiveDate: '' },
+      { id: 'R2', clientId: 'ALL', region: 'Luzon', minimumWeight: rateConfig.minWeight, minimumRate: rateConfig.luzonBase, excessRate: rateConfig.luzonExcess, valuationRate: rateConfig.valuationRate / 100, vatRate: rateConfig.vatRate / 100, fuelSurchargeRate: rateConfig.fuelSurchargeRate / 100, status: 'Active', effectiveDate: '' },
+      { id: 'R3', clientId: 'ALL', region: 'Visayas', minimumWeight: rateConfig.minWeight, minimumRate: rateConfig.visayasBase, excessRate: rateConfig.visayasExcess, valuationRate: rateConfig.valuationRate / 100, vatRate: rateConfig.vatRate / 100, fuelSurchargeRate: rateConfig.fuelSurchargeRate / 100, status: 'Active', effectiveDate: '' },
+      { id: 'R4', clientId: 'ALL', region: 'Mindanao', minimumWeight: rateConfig.minWeight, minimumRate: rateConfig.mindanaoBase, excessRate: rateConfig.mindanaoExcess, valuationRate: rateConfig.valuationRate / 100, vatRate: rateConfig.vatRate / 100, fuelSurchargeRate: rateConfig.fuelSurchargeRate / 100, status: 'Active', effectiveDate: '' },
+      { id: 'R5', clientId: 'ALL', region: 'ODA', minimumWeight: 0, minimumRate: 500, excessRate: 0, valuationRate: rateConfig.valuationRate / 100, vatRate: rateConfig.vatRate / 100, fuelSurchargeRate: rateConfig.fuelSurchargeRate / 100, status: 'Active', effectiveDate: '' }
+    ];
+  }, [rateConfig]);
+
+  // Pre-load logic for Edit
   useEffect(() => {
     if (editInvoiceId) {
       const invoice = invoices.find(i => i.id === editInvoiceId || i.invoiceNumber === editInvoiceId);
       if (invoice && invoice.status === 'Draft') {
+        if (invoice.clientId) setSelectedClientId(invoice.clientId);
         setSelectedWaybills(invoice.waybillIds || []);
         if (invoice.billingPeriod) setBillingPeriod(invoice.billingPeriod);
         if (invoice.createdAt) setIssueDate(new Date(invoice.createdAt).toISOString().split('T')[0]);
         if (invoice.dueDate) setDueDate(new Date(invoice.dueDate).toISOString().split('T')[0]);
         setNotes(invoice.notes || '');
-        if (invoice.clientId) setSelectedClientId(invoice.clientId);
         setStep(2);
       }
     }
   }, [editInvoiceId, invoices]);
 
-  // Derive client and schedule from first selected waybill
-  const firstSelectedWaybill = waybills.find(w => w.id === selectedWaybills[0]);
-  const invoiceClient = clients.find(c => c.id === firstSelectedWaybill?.clientCode);
+  // Step 1: Client Selection
+  const availableWaybills = waybills.filter(w => {
+    const isUnbilled = !w.invoiceId || w.invoiceId === editInvoiceId;
+    return isUnbilled && (w.status === 'Validated' || w.status === 'Validated (CTC)');
+  });
+
+  const clientsWithPending = useMemo(() => {
+    const counts = new Map<string, number>();
+    availableWaybills.forEach(w => {
+      counts.set(w.clientCode, (counts.get(w.clientCode) || 0) + 1);
+    });
+    return Array.from(counts.entries()).map(([clientId, count]) => {
+      const client = clients.find(c => c.id === clientId);
+      return {
+        id: clientId,
+        clientName: client?.name || clientId,
+        pendingCount: count,
+        schedule: client?.billingSchedule || 'Monthly'
+      };
+    });
+  }, [availableWaybills, clients]);
+
+  const clientColumns = [
+    { key: 'clientName', label: 'CLIENT NAME', sortable: true, render: (row: any) => <span style={{ fontWeight: 700, color: '#0F172A' }}>{row.clientName}</span> },
+    { key: 'schedule', label: 'BILLING SCHEDULE' },
+    { key: 'pendingCount', label: 'UNBILLED WAYBILLS' }
+  ];
+
+  // Step 2: Waybills for Client
+  const clientWaybills = useMemo(() => {
+    return availableWaybills.filter(w => w.clientCode === selectedClientId).map(wb => {
+      let breakdown: any = null;
+      try {
+        breakdown = computeFreightCost(wb, overrideRates);
+      } catch (e) {
+      }
+      return {
+        ...wb,
+        area: breakdown?.area || '-',
+        chargeableWt: breakdown?.chargeableWeight || 0,
+        weightBasis: breakdown?.weightBasis || '',
+        baseRate: breakdown?.grandTotal || 0,
+        breakdown
+      };
+    });
+  }, [availableWaybills, selectedClientId, overrideRates]);
+
+  const filteredWaybills = useMemo(() => {
+    if (!searchQuery) return clientWaybills;
+    return clientWaybills.filter(w => w.waybillNumber.toLowerCase().includes(searchQuery.toLowerCase()));
+  }, [clientWaybills, searchQuery]);
+
+  const invoiceClient = clients.find(c => c.id === selectedClientId);
   const derivedBillingSchedule = invoiceClient?.billingSchedule ?? 'Monthly';
 
+  // Derived periods for Step 2
   const generatePeriodForDate = (dateStr: string, schedule: string) => {
     const d = new Date(dateStr);
     let start = new Date(d);
@@ -126,22 +204,20 @@ export const InvoiceCreation: React.FC = () => {
     }
   }, [selectedWaybills, derivedBillingSchedule, waybills, billingPeriod]);
 
-  const [notes, setNotes] = useState('');
-  const [submitted, setSubmitted] = useState(false);
-  const [isConfirmed, setIsConfirmed] = useState(false);
-
   const isDateInvalid = new Date(dueDate) < new Date(issueDate);
   const isBillingPeriodInvalid = !billingPeriod;
 
-  // Show all unbilled waybills (for TC-75 to show they cannot be added)
-  const availableWaybills = waybills.filter(w => !w.invoiceId || w.invoiceId === editInvoiceId);
-
-  // ── Billing Calculation ────────────────────────────────────────
+  // Compute Full Invoice
   const computeInvoice = () => {
-    let base = 0;
-    let vat = 0;
-    let surcharge = 0;
+    let totalFreightCost = 0;
+    let totalValuation = 0;
+    let totalODA = 0;
+    let totalSubtotal = 0;
+    let totalVAT = 0;
+    let totalFuelSurcharge = 0;
+    let totalGrand = 0;
     let validIds: string[] = [];
+    let lineDetails: any[] = [];
 
     if (selectedPeriodInfo) {
       selectedWaybills.forEach(wbId => {
@@ -151,64 +227,42 @@ export const InvoiceCreation: React.FC = () => {
         if (p.label !== selectedPeriodInfo.label) return;
 
         validIds.push(wbId);
-        const rate = SEEDED_RATES.find(r => r.clientId === wb.clientCode);
-        const client = clients.find(c => c.id === wb.clientCode);
-        if (!rate) return;
-        const lineBase = rate.baseRate;
-        base += lineBase;
-        vat += lineBase * (client?.vatRate ?? 0);
-        surcharge += lineBase * rate.surchargeRate;
+        try {
+          const breakdown = computeFreightCost(wb, overrideRates);
+          
+          totalFreightCost   += breakdown.freightCost;
+          totalValuation     += breakdown.valuation;
+          totalODA           += breakdown.odaCharge;
+          totalSubtotal      += breakdown.subtotal;
+          totalVAT           += breakdown.vat;
+          totalFuelSurcharge += breakdown.fuelSurcharge;
+          totalGrand         += breakdown.grandTotal;
+
+          lineDetails.push({ wbId, freightData: { ...breakdown, calculatedAmount: breakdown.grandTotal } });
+        } catch (err) {
+        }
       });
     }
 
-    return { base, vat, surcharge, total: base + vat + surcharge, validIds };
+    return {
+      base: totalFreightCost,
+      vat: totalVAT,
+      surcharge: totalFuelSurcharge,
+      total: totalGrand,
+      totalFreightCost,
+      totalValuation,
+      totalODA,
+      totalSubtotal,
+      totalVAT,
+      totalFuelSurcharge,
+      totalGrand,
+      validIds,
+      lineDetails,
+    };
   };
 
   const calc = computeInvoice();
-
-  // ── Client Validation ───────────────────────────────────────────
-  const selectedClientCodes = new Set(
-    selectedWaybills.map(id => waybills.find(w => w.id === id)?.clientCode)
-  );
-  const hasMultipleClients = selectedClientCodes.size > 1;
-
-  const waybillColumns = [
-    { key: 'waybillNumber', label: 'WAYBILL NO.', sortable: true },
-    {
-      key: 'clientCode', label: 'CLIENT', render: (row: any) => (
-        !selectedClientId ? (
-          <span onClick={() => setSelectedClientId(row.clientCode)} style={{ color: '#0F172A', fontWeight: 700, cursor: 'pointer', textDecoration: 'none' }}>
-            {row.clientName}
-          </span>
-        ) : (
-          <span style={{ fontWeight: 600 }}>{row.clientName}</span>
-        )
-      ), sortable: true
-    },
-    { key: 'deliveryDate', label: 'DELIVERY DATE', render: (row: any) => new Date(row.deliveryDate).toLocaleDateString('en-PH'), sortable: true },
-    {
-      key: 'billingSchedule', label: 'SCHEDULE', render: (row: any) => (
-        <span style={{ background: '#F1F5F9', color: '#475569', padding: '2px 8px', borderRadius: 12, fontSize: '0.75rem', fontWeight: 600 }}>
-          {row.billingSchedule}
-        </span>
-      ), sortable: true
-    },
-    { key: 'status', label: 'DOCUMENT STATUS', render: (row: any) => <StatusBadge status={row.status} /> },
-    { key: 'baseRate', label: 'BASE RATE', render: (row: any) => `₱${(row.baseRate || 0).toFixed(2)}` }
-  ];
-
-  const filteredAvailableWaybills = availableWaybills.map(wb => {
-    const rate = SEEDED_RATES.find(r => r.clientId === wb.clientCode);
-    const client = clients.find(c => c.id === wb.clientCode);
-    return {
-      ...wb,
-      clientName: client?.name ?? wb.clientCode,
-      baseRate: rate ? rate.baseRate : 600,
-      billingSchedule: client?.billingSchedule ?? 'Monthly'
-    };
-  });
-
-  const availableClients = Array.from(new Set(filteredAvailableWaybills.map(w => w.clientName)));
+  const selectedWbDetail = clientWaybills.find(w => w.id === selectedWaybillForDetails);
 
   if (submitted) {
     return (
@@ -224,443 +278,442 @@ export const InvoiceCreation: React.FC = () => {
           title="Create Another Invoice"
           variant="primary"
           style={{ marginTop: 8 }}
-          onClick={() => { setSubmitted(false); setStep(1); setSelectedWaybills([]); setBillingPeriod(''); setNotes(''); }}
+          onClick={() => { setSubmitted(false); setStep(1); setSelectedWaybills([]); setBillingPeriod(''); setNotes(''); setSelectedClientId(null); }}
         />
       </Card>
     );
   }
 
+  const isAllSelected = selectedWaybills.length === filteredWaybills.length && filteredWaybills.length > 0;
+  const isIndeterminate = selectedWaybills.length > 0 && selectedWaybills.length < filteredWaybills.length;
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 0, minHeight: 'calc(100vh - 120px)' }}>
+      
       {/* Progress Steps */}
-      <Card noPadding style={{ padding: '24px 32px' }}>
-        <h3 style={{ margin: '0 0 24px 0', fontSize: '0.85rem', fontWeight: 800, color: '#0F172A', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-          INVOICE CREATION PROGRESS
-        </h3>
-        <div style={{ position: 'relative', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          {/* Background Line */}
-          <div style={{ position: 'absolute', top: '16px', left: '50px', right: '50px', height: '2px', background: '#E2E8F0', zIndex: 0 }} />
-          {/* Active Line */}
-          <div style={{ position: 'absolute', top: '16px', left: '50px', height: '2px', background: '#059669', zIndex: 1, width: `calc(${((step - 1) / 2) * 100}% - ${((step - 1) / 2) * 100}px)`, transition: 'width 0.3s ease' }} />
+        <Card noPadding style={{ padding: '16px 32px', flexShrink: 0, marginBottom: 16 }}>
+          <div style={{ position: 'relative', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div style={{ position: 'absolute', top: '16px', left: '50px', right: '50px', height: '2px', background: '#E2E8F0', zIndex: 0 }} />
+            <div style={{ position: 'absolute', top: '16px', left: '50px', height: '2px', background: '#059669', zIndex: 1, width: `calc(${((step - 1) / 2) * 100}% - ${((step - 1) / 2) * 100}px)`, transition: 'width 0.3s ease' }} />
 
-          {([{ n: 1, label: 'Select Waybills', icon: 'ti-file-invoice' }, { n: 2, label: 'Billing Details', icon: 'ti-calculator' }, { n: 3, label: 'Confirm & Submit', icon: 'ti-send' }] as const).map(({ n, label, icon }, idx) => {
-            const isCompleted = step > n;
-            const isActive = step === n;
+            {([{ n: 1, label: 'Select Account', icon: 'ti-users' }, { n: 2, label: 'Waybills & Rates', icon: 'ti-calculator' }, { n: 3, label: 'Confirm & Submit', icon: 'ti-send' }] as const).map(({ n, label, icon }) => {
+              const isCompleted = step > n;
+              const isActive = step === n;
 
-            return (
-              <div
-                key={n}
-                onClick={() => {
-                  if (n === 1) setStep(1);
-                  else if (n === 2 && selectedWaybills.length > 0) setStep(2);
-                  else if (n === 3 && selectedWaybills.length > 0 && !isBillingPeriodInvalid && !isDateInvalid) setStep(3);
-                }}
-                style={{
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
-                  cursor: (n === 1 || selectedWaybills.length > 0) ? 'pointer' : 'not-allowed',
-                  position: 'relative', zIndex: 2, width: '120px'
-                }}
-              >
-                <div style={{
-                  width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  background: isCompleted || isActive ? '#059669' : '#F8FAFC',
-                  color: isCompleted || isActive ? '#fff' : '#94A3B8',
-                  border: `2px solid ${isCompleted || isActive ? '#059669' : '#E2E8F0'}`,
-                  fontWeight: 700, fontSize: '1rem', transition: 'all 0.2s',
-                  boxShadow: isActive ? '0 0 0 4px #D1FAE5' : 'none'
-                }}>
-                  <i className={`ti ${isCompleted ? 'ti-check' : icon}`} />
+              return (
+                <div
+                  key={n}
+                  onClick={() => {
+                    if (n === 1) setStep(1);
+                    else if (n === 2 && selectedClientId) setStep(2);
+                    else if (n === 3 && selectedWaybills.length > 0 && !isBillingPeriodInvalid && !isDateInvalid) setStep(3);
+                  }}
+                  style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+                    cursor: (n === 1 || selectedClientId) ? 'pointer' : 'not-allowed',
+                    position: 'relative', zIndex: 2, width: '120px'
+                  }}
+                >
+                  <div style={{
+                    width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: isCompleted || isActive ? '#059669' : '#F8FAFC',
+                    color: isCompleted || isActive ? '#fff' : '#94A3B8',
+                    border: `2px solid ${isCompleted || isActive ? '#059669' : '#E2E8F0'}`,
+                    fontWeight: 700, fontSize: '1rem', transition: 'all 0.2s',
+                    boxShadow: isActive ? '0 0 0 4px #D1FAE5' : 'none'
+                  }}>
+                    <i className={`ti ${isCompleted ? 'ti-check' : icon}`} />
+                  </div>
+                  <span style={{
+                    fontSize: '0.75rem',
+                    fontWeight: isActive ? 700 : 600,
+                    color: isCompleted || isActive ? '#059669' : '#64748B',
+                    textAlign: 'center',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em'
+                  }}>
+                    {label}
+                  </span>
                 </div>
-                <span style={{
-                  fontSize: '0.75rem',
-                  fontWeight: isActive ? 700 : 600,
-                  color: isCompleted || isActive ? '#059669' : '#64748B',
-                  textAlign: 'center',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em'
-                }}>
-                  {label}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </Card>
+              );
+            })}
+          </div>
+        </Card>
 
-      {/* Step 1: Select Waybills */}
+      {/* Step 1: Select Client */}
       {step === 1 && (
-        <>
-          <TableContainer style={{ display: 'flex', flexDirection: 'column', gap: 24, paddingBottom: 24 }}>
+        <div style={{ overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column' }}>
+          <TableContainer style={{ display: 'flex', flexDirection: 'column', gap: 24, paddingBottom: 24, flex: 1 }}>
             <DataTable
-              title="Select Validated Waybills"
-              data={filteredAvailableWaybills}
-              columns={waybillColumns}
+              title="Select Client Account"
+              data={clientsWithPending}
+              columns={clientColumns}
               rowKey="id"
-              selectable={true}
-              isRowSelectable={(row: any) => row.status === 'Validated' || row.status === 'Validated (CTC)' || row.status === 'CTC Submitted'}
-              onSelectionChange={(keys) => setSelectedWaybills(keys as string[])}
-              searchPlaceholder="Search waybill no. or client..."
-              searchFields={['waybillNumber', 'clientName']}
+              searchPlaceholder="Search client..."
+              searchFields={['clientName']}
               defaultPageSize={10}
-              pageSizeOptions={[10, 25, 50]}
-              columnToggle={true}
-              filters={[
+              emptyMessage="No clients have unbilled validated waybills."
+              actions={[
                 {
-                  key: 'clientName',
-                  label: 'Client',
-                  options: availableClients.map(c => ({ label: c, value: c }))
-                },
-                {
-                  key: 'status',
-                  label: 'Document Status',
-                  options: [
-                    { label: 'Validated', value: 'Validated' },
-                    { label: 'CTC Submitted', value: 'CTC Submitted' }
-                  ]
-                },
-                {
-                  key: 'billingSchedule',
-                  label: 'Billing Schedule',
-                  options: [
-                    { label: 'Weekly', value: 'Weekly' },
-                    { label: 'Semi-monthly', value: 'Semi-monthly' },
-                    { label: 'Monthly', value: 'Monthly' }
-                  ]
+                  label: 'Select Client',
+                  icon: 'ti-arrow-right',
+                  onClick: (row: any) => {
+                    setSelectedClientId(row.id);
+                    setStep(2);
+                    
+                    const clientWBs = availableWaybills.filter(w => w.clientCode === row.id);
+                    const validWBs = clientWBs.filter(w => w.status === 'Validated');
+                    setSelectedWaybills(validWBs.map(w => w.id));
+                    
+                    setSelectedWaybillForDetails(null);
+                    setSearchQuery('');
+                  }
                 }
               ]}
             />
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginTop: 8, padding: '0 32px' }}>
-
-              <Button
-                title="Next: Set Billing Period"
-                variant="primary"
-                onClick={() => {
-                  if (selectedWaybills.length === 0) {
-                    toast.error('Required client validation: Please select a client by choosing their validated delivery records.', 'Validation Error');
-                    return;
-                  }
-                  if (hasMultipleClients) {
-                    toast.error('Validation Error: All selected waybills must belong to the same client.', 'Warning');
-                    return;
-                  }
-                  setStep(2);
-                }}
-              />
-            </div>
           </TableContainer>
-        </>
+        </div>
       )}
 
-      {/* Step 2: Review & Compute */}
+      {/* Step 2: Custom Layout matching mockups precisely */}
       {step === 2 && (
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 24, alignItems: 'start' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+          
+          <div style={{ display: 'flex', gap: 24, flex: 1 }}>
+            {/* Custom Left Table Container */}
+            <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', background: '#fff', border: '1px solid #E2E8F0', borderRadius: 8 }}>
+              
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px', borderBottom: '1px solid #E2E8F0', flexShrink: 0, gap: '16px', flexWrap: 'wrap' }}>
+                <div style={{ flex: 1, minWidth: 250 }}>
+                  <h2 style={{ margin: '0 0 4px', fontSize: '1.25rem', fontWeight: 700, color: '#0F172A' }}>Select Waybills for {invoiceClient?.name}</h2>
+                  <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748B' }}>Only Validated waybills can be billed. Click a row to see its computation.</p>
+                </div>
+              </div>
 
-          {/* Left Column: Billing Details */}
-          <Card>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
-              <div style={{ background: '#EEF2FF', color: '#4F46E5', width: 40, height: 40, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <i className="ti ti-file-invoice" style={{ fontSize: 20 }} />
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                
+                {/* Banner */}
+                <div style={{ background: selectedWaybills.length > 0 ? '#ECFDF5' : '#F8FAFC', borderBottom: '1px solid #E2E8F0', padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', transition: 'background 0.2s' }}>
+                  <div style={{ position: 'relative', width: 250 }}>
+                    <i className="ti ti-search" style={{ position: 'absolute', left: 16, top: 10, color: '#94A3B8', fontSize: '1.1rem' }} />
+                    <input 
+                      type="text" 
+                      placeholder="Search waybill no..." 
+                      value={searchQuery}
+                      onChange={e => setSearchQuery(e.target.value)}
+                      style={{ width: '100%', padding: '8px 16px 8px 42px', borderRadius: 24, border: '1px solid #E2E8F0', background: '#fff', fontSize: '0.9rem', outline: 'none' }} 
+                    />
+                  </div>
+                  {selectedWaybills.length > 0 && (
+                    <button onClick={() => setSelectedWaybills([])} style={{ background: 'none', border: 'none', color: '#64748B', fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <i className="ti ti-x" /> Deselect all
+                    </button>
+                  )}
+                </div>
+
+                {/* Table */}
+                <div style={{ flex: 1 }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                    <thead style={{ position: 'sticky', top: 0, background: '#fff', zIndex: 10 }}>
+                      <tr>
+                        <th style={{ padding: '16px 20px', borderBottom: '1px solid #E2E8F0', width: 40 }}>
+                          <input
+                            type="checkbox"
+                            checked={isAllSelected}
+                            onChange={() => {
+                              const validWaybills = filteredWaybills.filter(w => w.status === 'Validated');
+                              if (isAllSelected) setSelectedWaybills([]);
+                              else setSelectedWaybills(validWaybills.map(w => w.id));
+                            }}
+                            style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#059669' }}
+                          />
+                        </th>
+                        <th style={{ padding: '16px 20px 16px 0', borderBottom: '1px solid #E2E8F0', color: '#64748B', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.05em' }}>WAYBILL NO.</th>
+                        <th style={{ padding: '16px 20px 16px 0', borderBottom: '1px solid #E2E8F0', color: '#64748B', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.05em' }}>DELIVERY DATE</th>
+                        <th style={{ padding: '16px 20px 16px 0', borderBottom: '1px solid #E2E8F0', color: '#64748B', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.05em' }}>AREA</th>
+                        <th style={{ padding: '16px 20px 16px 0', borderBottom: '1px solid #E2E8F0', color: '#64748B', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.05em' }}>CHARGEABLE WT.</th>
+                        <th style={{ padding: '16px 20px 16px 0', borderBottom: '1px solid #E2E8F0', color: '#64748B', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.05em' }}>DOC STATUS</th>
+                        <th style={{ padding: '16px 20px 16px 0', borderBottom: '1px solid #E2E8F0', color: '#64748B', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.05em', textAlign: 'right' }}>AMOUNT</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredWaybills.map((row) => {
+                        const isSelected = selectedWaybills.includes(row.id);
+                        const isFocused = selectedWbDetail?.id === row.id;
+                        const isValidated = row.status === 'Validated';
+                        return (
+                          <tr 
+                            key={row.id} 
+                            style={{ 
+                              background: isSelected ? '#F0FDF4' : (isFocused ? '#F8FAFC' : '#fff'), 
+                              borderBottom: '1px solid #F1F5F9'
+                            }}
+                          >
+                            <td 
+                              style={{ padding: '16px 20px', cursor: isValidated ? 'pointer' : 'not-allowed' }}
+                              onClick={(e) => {
+                                if (e.target instanceof HTMLInputElement && e.target.type === 'checkbox') return;
+                                if (!isValidated) return;
+                                if (isSelected) setSelectedWaybills(selectedWaybills.filter(id => id !== row.id));
+                                else setSelectedWaybills([...selectedWaybills, row.id]);
+                              }}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                disabled={!isValidated}
+                                onChange={(e) => {
+                                  if (!isValidated) return;
+                                  if (e.target.checked) setSelectedWaybills([...selectedWaybills, row.id]);
+                                  else setSelectedWaybills(selectedWaybills.filter(id => id !== row.id));
+                                }}
+                                style={{ width: 16, height: 16, cursor: isValidated ? 'pointer' : 'not-allowed', accentColor: '#059669' }}
+                              />
+                            </td>
+                            <td 
+                              onClick={() => setSelectedWaybillForDetails(isFocused ? null : row.id)}
+                              style={{ padding: '16px 20px 16px 0', fontSize: '0.9rem', color: '#0F172A', fontWeight: 600, cursor: 'pointer' }}
+                            >
+                              <span style={{ borderBottom: '1px dotted #CBD5E1' }}>{row.waybillNumber}</span>
+                            </td>
+                            <td style={{ padding: '16px 20px 16px 0', fontSize: '0.9rem', color: '#475569' }}>
+                              {new Date(row.deliveryDate).toLocaleDateString('en-US')}
+                            </td>
+                            <td style={{ padding: '16px 20px 16px 0', fontSize: '0.9rem', color: '#475569' }}>
+                              {row.area === 'NCR' ? 'NCR/Metro Manila' : row.area}
+                            </td>
+                            <td style={{ padding: '16px 20px 16px 0', fontSize: '0.9rem' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <span style={{ color: '#0F172A', fontWeight: 500 }}>{row.chargeableWt.toFixed(2)} kg</span>
+                                <span style={{ fontSize: '0.65rem', border: '1px solid #E2E8F0', color: '#64748B', padding: '2px 6px', borderRadius: 12, fontWeight: 700, textTransform: 'uppercase' }}>
+                                  {row.weightBasis === 'Volume Weight' ? 'VOLUME' : 'ACTUAL'}
+                                </span>
+                              </div>
+                            </td>
+                            <td style={{ padding: '16px 20px 16px 0' }}>
+                              <StatusBadge status={row.status} />
+                            </td>
+                            <td style={{ padding: '16px 20px 16px 0', fontSize: '0.9rem', color: '#0F172A', fontWeight: 700, textAlign: 'right' }}>
+                              ₱{(row.baseRate || 0).toLocaleString('en-PH', {minimumFractionDigits: 2})}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  <div style={{ padding: '12px 20px', background: '#fff', borderTop: '1px solid #E2E8F0', borderBottom: '1px solid #E2E8F0', fontSize: '0.75rem', color: '#64748B' }}>
+                    Amount = freight + valuation + ODA + 12% VAT + fuel surcharge, computed per waybill.
+                  </div>
+                </div>
               </div>
-              <div>
-                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: '#0F172A' }}>Billing Details</h3>
-                <p style={{ margin: '4px 0 0', fontSize: '0.85rem', color: '#64748B' }}>Configure the billing information for the selected waybills.</p>
-              </div>
+
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-              <div>
-                <label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: 8 }}>Billing Schedule</label>
-                <div style={{ position: 'relative' }}>
-                  <input type="text" value={derivedBillingSchedule} readOnly disabled
-                    style={{ width: '100%', padding: '12px 14px', borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', fontSize: '0.9rem', color: '#0F172A', boxSizing: 'border-box' }} />
-                  <i className="ti ti-chevron-down" style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
+            {/* Right Panel: Rate Config */}
+            <div style={{ width: 320, flexShrink: 0, display: 'flex', flexDirection: 'column', background: '#fff', border: '1px solid #E2E8F0', borderRadius: 8 }}>
+              
+              <div style={{ padding: 24 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <h4 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: '#0F172A' }}>Billing Rates</h4>
+                  <span style={{ fontSize: '0.65rem', border: '1px solid #E2E8F0', color: '#64748B', padding: '2px 8px', borderRadius: 4, fontWeight: 700, letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <i className="ti ti-lock" /> READ-ONLY
+                  </span>
                 </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-                <div>
-                  <label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: 8 }}>Issue Date</label>
-                  <CustomDatePicker value={issueDate} onChange={setIssueDate} />
-                </div>
-                <div>
-                  <label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: 8 }}>Due Date (Auto-computed)</label>
-                  <CustomDatePicker value={dueDate} isInvalid={isDateInvalid} disabled={true} />
-                </div>
-              </div>
-
-              <div>
-                <label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: 8 }}>Billing Period</label>
-                <div style={{ position: 'relative' }}>
-                  <i className="ti ti-calendar" style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
-                  <select
-                    value={billingPeriod}
-                    onChange={e => {
-                      const label = e.target.value;
-                      setBillingPeriod(label);
-                      const info = periodOptions.find(o => o.label === label);
-                      if (info) {
-                        setSelectedPeriodInfo(info);
-                        setIssueDate(info.end.toISOString().split('T')[0]);
-                      }
-                    }}
-                    style={{ width: '100%', padding: '12px 14px 12px 42px', borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', fontSize: '0.9rem', color: '#0F172A', boxSizing: 'border-box' }}
-                  >
-                    {periodOptions.map(p => <option key={p.label} value={p.label}>{p.label}</option>)}
-                  </select>
-                  <i className="ti ti-chevron-down" style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', color: '#94A3B8', pointerEvents: 'none' }} />
-                </div>
-                {calc.validIds.length < selectedWaybills.length && (
-                  <p style={{ margin: '6px 0 0', fontSize: '0.75rem', color: '#EF4444' }}>
-                    <i className="ti ti-alert-circle" /> {selectedWaybills.length - calc.validIds.length} out-of-period record(s) excluded.
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: 8 }}>Notes (Optional)</label>
-                <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3} placeholder="Additional billing notes..."
-                  style={{ width: '100%', padding: '12px 14px', borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', fontSize: '0.9rem', resize: 'vertical', boxSizing: 'border-box' }} />
-              </div>
-            </div>
-
-            <div style={{ marginTop: 32 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-                <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#0F172A' }}>Included Waybills</h4>
-                <span style={{ background: '#D1FAE5', color: '#065F46', padding: '2px 8px', borderRadius: 12, fontSize: '0.75rem', fontWeight: 700 }}>{calc.validIds.length}</span>
-              </div>
-              <div style={{ border: '1px solid #E2E8F0', borderRadius: 8, overflow: 'hidden' }}>
-                {calc.validIds.map((id, idx) => {
-                  const wb = waybills.find(w => w.id === id);
-                  const client = wb ? clients.find(c => c.id === wb.clientCode) : null;
-                  const rate = SEEDED_RATES.find(r => r.clientId === wb?.clientCode);
-                  return wb ? (
-                    <div key={id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: idx % 2 === 0 ? '#fff' : '#F8FAFC', borderBottom: idx < calc.validIds.length - 1 ? '1px solid #E2E8F0' : 'none' }}>
-                      <span style={{ fontSize: '0.85rem', color: '#0F172A', fontWeight: 600, width: '100px' }}>{wb.waybillNumber}</span>
-                      <span style={{ fontSize: '0.85rem', color: '#64748B', flex: 1 }}>{client?.name}</span>
-                      <span style={{ fontSize: '0.85rem', color: '#64748B', width: '120px', textAlign: 'center' }}>{new Date(wb.deliveryDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                      <span style={{ fontSize: '0.85rem', color: '#0F172A', fontWeight: 600, width: '100px', textAlign: 'right', marginRight: 16 }}>₱{(rate?.baseRate || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
-                      <StatusBadge status="Validated" />
+                <p style={{ margin: '0 0 24px', fontSize: '0.8rem', color: '#64748B', lineHeight: 1.5 }}>
+                  Agreed rates for {invoiceClient?.name}, applied automatically. To change them, update the client's rate matrix in Client Accounts.
+                </p>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #F1F5F9', paddingBottom: 12 }}>
+                    <div>
+                      <span style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155' }}>Minimum weight</span>
+                      <span style={{ display: 'block', fontSize: '0.75rem', color: '#94A3B8' }}>Minimum chargeable</span>
                     </div>
-                  ) : null;
-                })}
-              </div>
-            </div>
-          </Card>
-
-          {/* Right Column: Summary Card */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-            <div style={{ background: '#fff', borderRadius: 12, overflow: 'hidden', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
-
-              {/* Summary Header */}
-              <div style={{ background: '#0F172A', padding: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{ color: '#fff', background: 'rgba(255,255,255,0.1)', padding: 8, borderRadius: 8 }}>
-                    <i className="ti ti-receipt" style={{ fontSize: 24 }} />
+                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0F172A' }}>{rateConfig.minWeight} kg</span>
                   </div>
-                  <div>
-                    <h3 style={{ margin: '0 0 4px', fontSize: '1.1rem', fontWeight: 700, color: '#fff' }}>Invoice Summary</h3>
-                    <p style={{ margin: 0, fontSize: '0.85rem', color: '#94A3B8' }}>{invoiceClient?.name ?? 'Client'}</p>
+                  
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0F172A' }}>NCR / Metro Manila</span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: '0.8rem', color: '#64748B' }}>Base rate (up to 5 kg)</span><span style={{ fontSize: '0.8rem', color: '#0F172A', fontWeight: 600 }}>₱{rateConfig.ncrBase.toFixed(2)}</span></div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: '0.8rem', color: '#64748B' }}>Excess per kg</span><span style={{ fontSize: '0.8rem', color: '#0F172A', fontWeight: 600 }}>₱{rateConfig.ncrExcess.toFixed(2)}</span></div>
                   </div>
-                </div>
-                <div style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', padding: '4px 10px', borderRadius: 16, fontSize: '0.75rem', fontWeight: 600 }}>
-                  {derivedBillingSchedule}
-                </div>
-              </div>
 
-              {/* Summary Body */}
-              <div style={{ padding: '24px' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '0.9rem', color: '#475569' }}>Base Freight Amount</span>
-                    <span style={{ fontSize: '0.95rem', fontWeight: 600, color: '#0F172A' }}>₱{calc.base.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0F172A' }}>Luzon</span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: '0.8rem', color: '#64748B' }}>Base rate (up to 5 kg)</span><span style={{ fontSize: '0.8rem', color: '#0F172A', fontWeight: 600 }}>₱{rateConfig.luzonBase.toFixed(2)}</span></div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: '0.8rem', color: '#64748B' }}>Excess per kg</span><span style={{ fontSize: '0.8rem', color: '#0F172A', fontWeight: 600 }}>₱{rateConfig.luzonExcess.toFixed(2)}</span></div>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '0.9rem', color: '#475569' }}>VAT ({(invoiceClient?.vatRate ?? 0.12) * 100}%)</span>
-                    <span style={{ fontSize: '0.95rem', fontWeight: 600, color: '#0F172A' }}>₱{calc.vat.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0F172A' }}>Visayas</span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: '0.8rem', color: '#64748B' }}>Base rate (up to 5 kg)</span><span style={{ fontSize: '0.8rem', color: '#0F172A', fontWeight: 600 }}>₱{rateConfig.visayasBase.toFixed(2)}</span></div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: '0.8rem', color: '#64748B' }}>Excess per kg</span><span style={{ fontSize: '0.8rem', color: '#0F172A', fontWeight: 600 }}>₱{rateConfig.visayasExcess.toFixed(2)}</span></div>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '0.9rem', color: '#475569' }}>Surcharge</span>
-                    <span style={{ fontSize: '0.95rem', fontWeight: 600, color: '#0F172A' }}>₱{calc.surcharge.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0F172A' }}>Mindanao</span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: '0.8rem', color: '#64748B' }}>Base rate (up to 5 kg)</span><span style={{ fontSize: '0.8rem', color: '#0F172A', fontWeight: 600 }}>₱{rateConfig.mindanaoBase.toFixed(2)}</span></div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: '0.8rem', color: '#64748B' }}>Excess per kg</span><span style={{ fontSize: '0.8rem', color: '#0F172A', fontWeight: 600 }}>₱{rateConfig.mindanaoExcess.toFixed(2)}</span></div>
                   </div>
-                </div>
 
-                <div style={{ height: 1, background: '#E2E8F0', margin: '20px 0' }} />
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontWeight: 800, fontSize: '1.1rem', color: '#0F172A' }}>TOTAL</span>
-                  <span style={{ fontWeight: 800, fontSize: '1.4rem', color: '#10B981' }}>₱{calc.total.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
-                </div>
-
-                {/* Info Note */}
-                <div style={{ marginTop: 24, padding: '16px', background: '#ECFDF5', borderRadius: 8, display: 'flex', gap: 12, alignItems: 'start' }}>
-                  <i className="ti ti-info-circle" style={{ color: '#059669', fontSize: 18, marginTop: 2 }} />
-                  <p style={{ margin: 0, fontSize: '0.8rem', color: '#065F46', lineHeight: 1.5 }}>
-                    These amounts are automatically calculated based on the selected waybills and billing details.
-                  </p>
+                  <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0F172A' }}>Other charges</span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: '0.8rem', color: '#64748B' }}>ODA fee</span><span style={{ fontSize: '0.8rem', color: '#0F172A', fontWeight: 600 }}>₱500.00</span></div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: '0.8rem', color: '#64748B' }}>Valuation</span><span style={{ fontSize: '0.8rem', color: '#0F172A', fontWeight: 600 }}>{rateConfig.valuationRate}% of declared value</span></div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: '0.8rem', color: '#64748B' }}>VAT</span><span style={{ fontSize: '0.8rem', color: '#0F172A', fontWeight: 600 }}>{rateConfig.vatRate}%</span></div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: '0.8rem', color: '#64748B' }}>Fuel surcharge</span><span style={{ fontSize: '0.8rem', color: '#0F172A', fontWeight: 600 }}>{rateConfig.fuelSurchargeRate}% of freight</span></div>
+                  </div>
                 </div>
               </div>
             </div>
+          </div>
 
-            <div style={{ display: 'flex', gap: 12, justifyContent: 'space-between' }}>
-              <Button
-                title="Back"
-                variant="secondary"
-                onClick={() => setStep(1)}
-              />
-              <button
-                disabled={isBillingPeriodInvalid || isDateInvalid}
-                onClick={() => setStep(3)}
-                style={{
-                  background: (isBillingPeriodInvalid || isDateInvalid) ? '#94A3B8' : '#0F172A',
-                  color: '#fff',
-                  border: 'none',
-                  padding: '12px 24px',
-                  borderRadius: 8,
-                  fontWeight: 600,
-                  fontSize: '0.9rem',
-                  cursor: (isBillingPeriodInvalid || isDateInvalid) ? 'not-allowed' : 'pointer',
-                  flex: 1,
-                  display: 'flex',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  gap: 8,
-                  transition: 'background 0.2s'
-                }}
-              >
-                Next: Confirm & Submit <i className="ti ti-arrow-right" style={{ fontSize: 18 }} />
-              </button>
+          {/* Sticky Footer */}
+          <div style={{ position: 'sticky', bottom: 0, zIndex: 100, background: '#fff', borderTop: '1px solid #E2E8F0', padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0, marginTop: 24, borderRadius: 8, boxShadow: '0 -4px 12px rgba(0,0,0,0.05)' }}>
+            <div style={{ display: 'flex', gap: 32 }}>
+              <div>
+                <span style={{ display: 'block', fontSize: '0.75rem', color: '#64748B', fontWeight: 600 }}>Selected</span>
+                <span style={{ display: 'block', fontSize: '1.1rem', color: '#0F172A', fontWeight: 800 }}>{selectedWaybills.length}</span>
+              </div>
+              <div>
+                <span style={{ display: 'block', fontSize: '0.75rem', color: '#64748B', fontWeight: 600 }}>Subtotal</span>
+                <span style={{ display: 'block', fontSize: '1rem', color: '#334155', fontWeight: 700 }}>₱{calc.totalSubtotal.toLocaleString('en-PH', {minimumFractionDigits: 2})}</span>
+              </div>
+              <div>
+                <span style={{ display: 'block', fontSize: '0.75rem', color: '#64748B', fontWeight: 600 }}>VAT 12%</span>
+                <span style={{ display: 'block', fontSize: '1rem', color: '#334155', fontWeight: 700 }}>₱{calc.totalVAT.toLocaleString('en-PH', {minimumFractionDigits: 2})}</span>
+              </div>
+              <div>
+                <span style={{ display: 'block', fontSize: '0.75rem', color: '#64748B', fontWeight: 600 }}>Fuel surcharge</span>
+                <span style={{ display: 'block', fontSize: '1rem', color: '#334155', fontWeight: 700 }}>₱{calc.totalFuelSurcharge.toLocaleString('en-PH', {minimumFractionDigits: 2})}</span>
+              </div>
+              <div>
+                <span style={{ display: 'block', fontSize: '0.75rem', color: '#64748B', fontWeight: 600 }}>Grand total</span>
+                <span style={{ display: 'block', fontSize: '1.1rem', color: '#059669', fontWeight: 800 }}>₱{calc.totalGrand.toLocaleString('en-PH', {minimumFractionDigits: 2})}</span>
+              </div>
             </div>
+            <Button title="Next: Confirm & Submit" variant="success" onClick={() => {
+              if (selectedWaybills.length === 0) {
+                toast.error('Please select at least one waybill.', 'Validation Error');
+                return;
+              }
+              setStep(3);
+            }} style={{ padding: '12px 24px', fontSize: '0.95rem' }} />
           </div>
         </div>
       )}
 
-      {/* Step 3: Confirm & Submit */}
+      {/* Step 3: Review & Submit */}
       {step === 3 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-          <div>
-            <h3 style={{ margin: '0 0 6px', fontSize: '1.2rem', fontWeight: 700, color: '#0F172A' }}>Final Review</h3>
-            <p style={{ margin: 0, color: '#64748B', fontSize: '0.9rem' }}>Please verify the details before submitting the invoice.</p>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 24, alignItems: 'stretch' }}>
-            {/* Left Column */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-
-              {/* Card 1: Invoice Details */}
-              <Card style={{ padding: 24 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <i className="ti ti-file-invoice" style={{ color: '#3B82F6', fontSize: 18 }} />
-                    <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#0F172A' }}>Invoice Details</h4>
-                  </div>
-                  <button onClick={() => setStep(2)} style={{ background: 'none', border: 'none', color: '#3B82F6', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', padding: 0 }}>Edit</button>
+          {/* Include Billing Period Config Here */}
+          <Card>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+              <div style={{ background: '#EEF2FF', color: '#4F46E5', width: 40, height: 40, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <i className="ti ti-calendar" style={{ fontSize: 20 }} />
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0F172A' }}>Billing Timeline</h3>
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 20 }}>
+              <div>
+                <label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: 8 }}>Billing Period</label>
+                <div style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid #E2E8F0', background: '#F8FAFC', color: '#0F172A', fontWeight: 500, fontSize: '0.9rem' }}>
+                  {billingPeriod || 'N/A'}
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    <span style={{ color: '#64748B', fontSize: '0.8rem', fontWeight: 600, textTransform: 'uppercase' }}>Client</span>
-                    <span style={{ color: '#0F172A', fontSize: '0.9rem', fontWeight: 600 }}>{invoiceClient?.name}</span>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    <span style={{ color: '#64748B', fontSize: '0.8rem', fontWeight: 600, textTransform: 'uppercase' }}>Billing Schedule</span>
-                    <span style={{ color: '#0F172A', fontSize: '0.9rem', fontWeight: 600 }}>{derivedBillingSchedule}</span>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    <span style={{ color: '#64748B', fontSize: '0.8rem', fontWeight: 600, textTransform: 'uppercase' }}>Issue Date</span>
-                    <span style={{ color: '#0F172A', fontSize: '0.9rem', fontWeight: 600 }}>{new Date(issueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    <span style={{ color: '#64748B', fontSize: '0.8rem', fontWeight: 600, textTransform: 'uppercase' }}>Due Date</span>
-                    <span style={{ color: '#0F172A', fontSize: '0.9rem', fontWeight: 600 }}>{new Date(dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, gridColumn: 'span 2' }}>
-                    <span style={{ color: '#64748B', fontSize: '0.8rem', fontWeight: 600, textTransform: 'uppercase' }}>Billing Period</span>
-                    <span style={{ color: '#0F172A', fontSize: '0.9rem', fontWeight: 600 }}>{billingPeriod}</span>
-                  </div>
+              </div>
+              <div>
+                <label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: 8 }}>Issue Date</label>
+                <div style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid #E2E8F0', background: '#F8FAFC', color: '#0F172A', fontWeight: 500, fontSize: '0.9rem' }}>
+                  {issueDate ? new Date(issueDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'N/A'}
                 </div>
-              </Card>
-
-              {/* Card 2: Waybills */}
-              <Card style={{ padding: 24, display: 'flex', flexDirection: 'column' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <i className="ti ti-box" style={{ color: '#3B82F6', fontSize: 18 }} />
-                    <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#0F172A' }}>Waybills</h4>
-                  </div>
-                  <button onClick={() => setStep(1)} style={{ background: 'none', border: 'none', color: '#3B82F6', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', padding: 0 }}>Edit</button>
-                </div>
-                <div style={{ overflowX: 'auto', marginBottom: 16 }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
-                    <thead>
-                      <tr>
-                        <th style={{ textAlign: 'left', paddingBottom: 8, color: '#64748B', fontWeight: 600, borderBottom: '1px solid #E2E8F0', fontSize: '0.75rem' }}>WAYBILL NO.</th>
-                        <th style={{ textAlign: 'left', paddingBottom: 8, color: '#64748B', fontWeight: 600, borderBottom: '1px solid #E2E8F0', fontSize: '0.75rem' }}>CLIENT</th>
-                        <th style={{ textAlign: 'left', paddingBottom: 8, color: '#64748B', fontWeight: 600, borderBottom: '1px solid #E2E8F0', fontSize: '0.75rem' }}>DELIVERY DATE</th>
-                        <th style={{ textAlign: 'right', paddingBottom: 8, color: '#64748B', fontWeight: 600, borderBottom: '1px solid #E2E8F0', fontSize: '0.75rem' }}>AMOUNT</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {selectedWaybills.slice(0, 3).map((id) => {
-                        const wb = waybills.find(w => w.id === id);
-                        const rate = SEEDED_RATES.find(r => r.clientId === wb?.clientCode);
-                        return wb ? (
-                          <tr key={id}>
-                            <td style={{ padding: '8px 0', color: '#0F172A', fontWeight: 600, borderBottom: '1px solid #F1F5F9' }}>{wb.waybillNumber}</td>
-                            <td style={{ padding: '8px 0', color: '#64748B', borderBottom: '1px solid #F1F5F9' }}>{invoiceClient?.name}</td>
-                            <td style={{ padding: '8px 0', color: '#64748B', borderBottom: '1px solid #F1F5F9' }}>{new Date(wb.deliveryDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
-                            <td style={{ padding: '8px 0', color: '#0F172A', fontWeight: 600, textAlign: 'right', borderBottom: '1px solid #F1F5F9' }}>₱{(rate?.baseRate || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
-                          </tr>
-                        ) : null;
-                      })}
-                    </tbody>
-                  </table>
-                  {calc.validIds.length > 3 && <div style={{ fontSize: '0.8rem', color: '#64748B', textAlign: 'center', marginTop: 8 }}>+ {calc.validIds.length - 3} more</div>}
-                </div>
-                <div>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: '#ECFEFF', color: '#0D9488', borderRadius: 6, fontSize: '0.75rem', fontWeight: 700, border: '1px solid #CCFBF1' }}>
-                    <i className="ti ti-checkbox" style={{ fontSize: 14 }} />
-                    {calc.validIds.length} waybill{calc.validIds.length !== 1 ? 's' : ''} selected
-                  </span>
-                </div>
-              </Card>
-
-              {/* Checkbox and Back Button */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <input type="checkbox" id="confirm-check" checked={isConfirmed} onChange={e => setIsConfirmed(e.target.checked)} style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#3B82F6' }} />
-                  <label htmlFor="confirm-check" style={{ fontSize: '0.9rem', color: '#334155', cursor: 'pointer', fontWeight: 500 }}>I have reviewed and confirmed the invoice details.</label>
-                </div>
-                <div>
-                  <Button title="Back" variant="secondary" onClick={() => setStep(2)} />
+              </div>
+              <div>
+                <label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: 8 }}>Due Date (30 Days)</label>
+                <div style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid #E2E8F0', background: '#F8FAFC', color: '#0F172A', fontWeight: 500, fontSize: '0.9rem' }}>
+                  {dueDate ? new Date(dueDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'N/A'}
                 </div>
               </div>
             </div>
 
-            {/* Right Column */}
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <Card style={{ padding: 24, height: '100%', display: 'flex', flexDirection: 'column' }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <i className="ti ti-receipt" style={{ color: '#3B82F6', fontSize: 18 }} />
-                      <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#0F172A' }}>Payment Summary</h4>
-                    </div>
-                    <button onClick={() => setStep(2)} style={{ background: 'none', border: 'none', color: '#3B82F6', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', padding: 0 }}>Edit</button>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: '#64748B', fontSize: '0.85rem' }}>Base Freight Amount</span><span style={{ color: '#0F172A', fontSize: '0.85rem', fontWeight: 600 }}>₱{calc.base.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: '#64748B', fontSize: '0.85rem' }}>VAT ({(invoiceClient?.vatRate ?? 0.12) * 100}%)</span><span style={{ color: '#0F172A', fontSize: '0.85rem', fontWeight: 600 }}>₱{calc.vat.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: '#64748B', fontSize: '0.85rem' }}>Surcharge</span><span style={{ color: '#0F172A', fontSize: '0.85rem', fontWeight: 600 }}>₱{calc.surcharge.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
-                  </div>
-                  <div style={{ height: 1, background: '#E2E8F0', margin: '16px 0' }} />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontWeight: 800, fontSize: '1rem', color: '#0F172A' }}>TOTAL</span>
-                    <span style={{ fontWeight: 800, fontSize: '1.4rem', color: '#059669' }}>₱{calc.total.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
-                  </div>
+            {calc.validIds.length < selectedWaybills.length && (
+              <p style={{ margin: '16px 0 0', fontSize: '0.8rem', color: '#EF4444' }}>
+                <i className="ti ti-alert-circle" /> {selectedWaybills.length - calc.validIds.length} out-of-period record(s) excluded from calculation.
+              </p>
+            )}
+          </Card>
+
+          <Card style={{ padding: 24 }}>
+            <h4 style={{ margin: '0 0 8px', fontSize: '1.05rem', fontWeight: 700, color: '#0F172A' }}>Invoice summary · {invoiceClient?.name}</h4>
+            <p style={{ margin: '0 0 20px', fontSize: '0.85rem', color: '#64748B' }}>Review each waybill line before submitting. Taxes and surcharges are computed per line.</p>
+            
+            <div style={{ overflowX: 'auto', marginBottom: 24 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                <thead>
+                  <tr>
+                    <th style={{ textAlign: 'left', paddingBottom: 12, color: '#64748B', fontWeight: 600, borderBottom: '1px solid #E2E8F0', textTransform: 'uppercase' }}>WAYBILL NO.</th>
+                    <th style={{ textAlign: 'left', paddingBottom: 12, color: '#64748B', fontWeight: 600, borderBottom: '1px solid #E2E8F0', textTransform: 'uppercase' }}>AREA</th>
+                    <th style={{ textAlign: 'left', paddingBottom: 12, color: '#64748B', fontWeight: 600, borderBottom: '1px solid #E2E8F0', textTransform: 'uppercase' }}>CHARGEABLE</th>
+                    <th style={{ textAlign: 'right', paddingBottom: 12, color: '#64748B', fontWeight: 600, borderBottom: '1px solid #E2E8F0', textTransform: 'uppercase' }}>FREIGHT</th>
+                    <th style={{ textAlign: 'right', paddingBottom: 12, color: '#64748B', fontWeight: 600, borderBottom: '1px solid #E2E8F0', textTransform: 'uppercase' }}>VALUATION</th>
+                    <th style={{ textAlign: 'right', paddingBottom: 12, color: '#64748B', fontWeight: 600, borderBottom: '1px solid #E2E8F0', textTransform: 'uppercase' }}>ODA</th>
+                    <th style={{ textAlign: 'right', paddingBottom: 12, color: '#64748B', fontWeight: 600, borderBottom: '1px solid #E2E8F0', textTransform: 'uppercase' }}>VAT</th>
+                    <th style={{ textAlign: 'right', paddingBottom: 12, color: '#64748B', fontWeight: 600, borderBottom: '1px solid #E2E8F0', textTransform: 'uppercase' }}>FUEL</th>
+                    <th style={{ textAlign: 'right', paddingBottom: 12, color: '#64748B', fontWeight: 600, borderBottom: '1px solid #E2E8F0', textTransform: 'uppercase' }}>TOTAL</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {calc.validIds.map((id) => {
+                    const detail = clientWaybills.find(w => w.id === id);
+                    if (!detail || !detail.breakdown) return null;
+                    const bd = detail.breakdown;
+                    return (
+                      <tr key={id}>
+                        <td style={{ padding: '12px 0', color: '#0F172A', fontWeight: 600, borderBottom: '1px solid #F1F5F9' }}>{detail.waybillNumber}</td>
+                        <td style={{ padding: '12px 0', color: '#475569', borderBottom: '1px solid #F1F5F9' }}>{bd.area}</td>
+                        <td style={{ padding: '12px 0', color: '#475569', borderBottom: '1px solid #F1F5F9' }}>{detail.chargeableWt.toFixed(2)} kg</td>
+                        <td style={{ padding: '12px 0', color: '#0F172A', fontWeight: 500, textAlign: 'right', borderBottom: '1px solid #F1F5F9' }}>₱{bd.freightCost.toLocaleString('en-PH', {minimumFractionDigits: 2})}</td>
+                        <td style={{ padding: '12px 0', color: '#0F172A', fontWeight: 500, textAlign: 'right', borderBottom: '1px solid #F1F5F9' }}>₱{bd.valuation.toLocaleString('en-PH', {minimumFractionDigits: 2})}</td>
+                        <td style={{ padding: '12px 0', color: '#0F172A', fontWeight: 500, textAlign: 'right', borderBottom: '1px solid #F1F5F9' }}>₱{bd.odaCharge.toLocaleString('en-PH', {minimumFractionDigits: 2})}</td>
+                        <td style={{ padding: '12px 0', color: '#0F172A', fontWeight: 500, textAlign: 'right', borderBottom: '1px solid #F1F5F9' }}>₱{bd.vat.toLocaleString('en-PH', {minimumFractionDigits: 2})}</td>
+                        <td style={{ padding: '12px 0', color: '#0F172A', fontWeight: 500, textAlign: 'right', borderBottom: '1px solid #F1F5F9' }}>₱{bd.fuelSurcharge.toLocaleString('en-PH', {minimumFractionDigits: 2})}</td>
+                        <td style={{ padding: '12px 0', color: '#059669', fontWeight: 700, textAlign: 'right', borderBottom: '1px solid #F1F5F9' }}>₱{bd.grandTotal.toLocaleString('en-PH', {minimumFractionDigits: 2})}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div style={{ width: '50%' }}>
+                <label style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0F172A', display: 'block', marginBottom: 8 }}>Remarks (optional)</label>
+                <textarea 
+                  value={notes} 
+                  onChange={e => setNotes(e.target.value)} 
+                  placeholder="Notes for this invoice..."
+                  style={{ width: '100%', padding: '12px', borderRadius: 8, border: '1px solid #E2E8F0', minHeight: '100px', fontFamily: 'inherit', outline: 'none' }}
+                />
+              </div>
+
+              <div style={{ width: '350px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: '#475569', fontSize: '0.85rem', fontWeight: 600 }}>Selected</span><span style={{ color: '#0F172A', fontSize: '0.9rem', fontWeight: 700 }}>{selectedWaybills.length}</span></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: '#475569', fontSize: '0.85rem', fontWeight: 600 }}>Subtotal</span><span style={{ color: '#0F172A', fontSize: '0.9rem', fontWeight: 700 }}>₱{calc.totalSubtotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: '#475569', fontSize: '0.85rem', fontWeight: 600 }}>VAT 12%</span><span style={{ color: '#0F172A', fontSize: '0.9rem', fontWeight: 700 }}>₱{calc.totalVAT.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: '#475569', fontSize: '0.85rem', fontWeight: 600 }}>Fuel surcharge</span><span style={{ color: '#0F172A', fontSize: '0.9rem', fontWeight: 700 }}>₱{calc.totalFuelSurcharge.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
+                
+                <div style={{ height: 1, background: '#E2E8F0', margin: '8px 0' }} />
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontWeight: 800, fontSize: '1.05rem', color: '#059669' }}>Grand total</span>
+                  <span style={{ fontWeight: 800, fontSize: '1.4rem', color: '#059669' }}>₱{calc.totalGrand.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
                 </div>
-                <div style={{ marginTop: 32, display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 16 }}>
+                  <Button title="Back" variant="secondary" onClick={() => setStep(2)} />
                   <button
-                    disabled={!isConfirmed}
+                    disabled={isBillingPeriodInvalid || isDateInvalid}
                     onClick={() => {
                       if (editInvoiceId) {
                         const existing = invoices.find(i => i.id === editInvoiceId || i.invoiceNumber === editInvoiceId);
@@ -677,30 +730,17 @@ export const InvoiceCreation: React.FC = () => {
                             createdAt: new Date(issueDate).toISOString(),
                             dueDate: new Date(dueDate).toISOString(),
                             notes,
+                            appliedRates: overrideRates,
                           });
                           calc.validIds.forEach(id => updateWaybill(id, { status: 'Billed' }));
-                          addAuditLog({
-                            id: `AL-${Date.now()}`,
-                            userId: user?.employeeId || 'U-000',
-                            userFullName: user?.fullName || 'System',
-                            userRole: user?.role || 'Accountant',
-                            action: 'SUBMIT_INVOICE',
-                            module: 'InvoiceCreation',
-                            recordId: existing.invoiceNumber,
-                            recordType: 'Invoice',
-                            ipAddress: '127.0.0.1',
-                            details: `Submitted invoice ${existing.invoiceNumber} for approval`,
-                            timestamp: new Date().toISOString()
-                          });
                           setSubmitted(true);
-                          toast.success(`Invoice ${existing.invoiceNumber} submitted for review.`, 'Success');
                           return;
                         }
                       }
 
                       const newInvoiceId = `INV-${Date.now()}`;
                       const invNum = `INV-${new Date().getFullYear()}-${String(invoices.length + 1).padStart(3, '0')}`;
-                      const newInvoice: Invoice = {
+                      addInvoice({
                         id: newInvoiceId,
                         invoiceNumber: invNum,
                         clientId: invoiceClient?.id ?? '',
@@ -712,150 +752,109 @@ export const InvoiceCreation: React.FC = () => {
                         billingSchedule: derivedBillingSchedule,
                         billingPeriod,
                         status: 'Pending Approval',
-                        createdBy: 'EMP-003',
+                        createdBy: user?.employeeId || 'EMP-003',
                         createdAt: new Date(issueDate).toISOString(),
                         dueDate: new Date(dueDate).toISOString(),
                         notes,
-                      };
-                      addInvoice(newInvoice);
+                        appliedRates: overrideRates,
+                      });
                       calc.validIds.forEach(id => updateWaybill(id, { status: 'Billed' }));
-                      addAuditLog({
-                        id: `AL-${Date.now()}`,
-                        userId: user?.employeeId || 'U-000',
-                        userFullName: user?.fullName || 'System',
-                        userRole: user?.role || 'Accountant',
-                        action: 'CREATE_INVOICE',
-                        module: 'InvoiceCreation',
-                        recordId: invNum,
-                        recordType: 'Invoice',
-                        ipAddress: '127.0.0.1',
-                        details: `Created and submitted invoice ${invNum}`,
-                        timestamp: new Date().toISOString()
-                      });
                       setSubmitted(true);
-                      toast.success(`Invoice ${invNum} submitted for Head Accountant approval.`, 'Invoice Submitted');
+                      toast.success(`Invoice ${invNum} submitted for approval.`, 'Success');
                     }}
                     style={{
-                      width: '100%',
-                      background: !isConfirmed ? '#94A3B8' : '#059669',
-                      color: '#fff',
-                      border: 'none',
-                      padding: '14px 24px',
+                      background: (isBillingPeriodInvalid || isDateInvalid) ? '#94A3B8' : '#6EE7B7',
+                      color: (isBillingPeriodInvalid || isDateInvalid) ? '#fff' : '#064E3B',
+                      border: '1px solid #34D399',
+                      padding: '12px 24px',
                       borderRadius: 8,
                       fontWeight: 600,
-                      fontSize: '0.95rem',
-                      cursor: !isConfirmed ? 'not-allowed' : 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 8,
-                      transition: 'background 0.2s, transform 0.1s'
+                      cursor: (isBillingPeriodInvalid || isDateInvalid) ? 'not-allowed' : 'pointer',
+                      flex: 1
                     }}
                   >
-                    <i className="ti ti-send" style={{ fontSize: 18 }} /> Submit Invoice
-                  </button>
-
-                  <button
-                    disabled={!isConfirmed}
-                    onClick={() => {
-                      if (editInvoiceId) {
-                        const existing = invoices.find(i => i.id === editInvoiceId || i.invoiceNumber === editInvoiceId);
-                        if (existing) {
-                          updateInvoice(existing.id, {
-                            waybillIds: calc.validIds,
-                            amount: calc.base,
-                            vatAmount: calc.vat,
-                            surchargeAmount: calc.surcharge,
-                            totalAmount: calc.total,
-                            billingSchedule: derivedBillingSchedule,
-                            billingPeriod,
-                            createdAt: new Date(issueDate).toISOString(),
-                            dueDate: new Date(dueDate).toISOString(),
-                            notes,
-                          });
-                          addAuditLog({
-                            id: `AL-${Date.now()}`,
-                            userId: user?.employeeId || 'U-000',
-                            userFullName: user?.fullName || 'System',
-                            userRole: user?.role || 'Accountant',
-                            action: 'SAVE_INVOICE_DRAFT',
-                            module: 'InvoiceCreation',
-                            recordId: existing.invoiceNumber,
-                            recordType: 'Invoice',
-                            ipAddress: '127.0.0.1',
-                            details: `Updated draft invoice ${existing.invoiceNumber}`,
-                            timestamp: new Date().toISOString()
-                          });
-                          setSubmitted(true);
-                          toast.success(`Draft Invoice ${existing.invoiceNumber} updated.`, 'Draft Updated');
-                          return;
-                        }
-                      }
-
-                      const newInvoiceId = `INV-${Date.now()}`;
-                      const invNum = `INV-${new Date().getFullYear()}-${String(invoices.length + 1).padStart(3, '0')}`;
-                      const newInvoice: Invoice = {
-                        id: newInvoiceId,
-                        invoiceNumber: invNum,
-                        clientId: invoiceClient?.id ?? '',
-                        waybillIds: calc.validIds,
-                        amount: calc.base,
-                        vatAmount: calc.vat,
-                        surchargeAmount: calc.surcharge,
-                        totalAmount: calc.total,
-                        billingSchedule: derivedBillingSchedule,
-                        billingPeriod,
-                        status: 'Draft',
-                        createdBy: 'EMP-003',
-                        createdAt: new Date(issueDate).toISOString(),
-                        dueDate: new Date(dueDate).toISOString(),
-                        notes,
-                      };
-                      addInvoice(newInvoice);
-                      // Don't mark waybills as billed yet for Drafts
-                      addAuditLog({
-                        id: `AL-${Date.now()}`,
-                        userId: user?.employeeId || 'U-000',
-                        userFullName: user?.fullName || 'System',
-                        userRole: user?.role || 'Accountant',
-                        action: 'SAVE_INVOICE_DRAFT',
-                        module: 'InvoiceCreation',
-                        recordId: invNum,
-                        recordType: 'Invoice',
-                        ipAddress: '127.0.0.1',
-                        details: `Created draft invoice ${invNum}`,
-                        timestamp: new Date().toISOString()
-                      });
-                      setSubmitted(true);
-                      toast.success(`Invoice ${invNum} saved as Draft.`, 'Draft Saved');
-                    }}
-                    style={{
-                      width: '100%',
-                      background: 'transparent',
-                      color: !isConfirmed ? '#94A3B8' : '#3B82F6',
-                      border: `1px solid ${!isConfirmed ? '#94A3B8' : '#3B82F6'}`,
-                      padding: '14px 24px',
-                      borderRadius: 8,
-                      fontWeight: 600,
-                      fontSize: '0.95rem',
-                      cursor: !isConfirmed ? 'not-allowed' : 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 8,
-                      transition: 'background 0.2s, transform 0.1s'
-                    }}
-                  >
-                    <i className="ti ti-device-floppy" style={{ fontSize: 18 }} /> Save as Draft
+                    Submit Invoice
                   </button>
                 </div>
-              </Card>
+              </div>
             </div>
+          </Card>
+        </div>
+      )}
+      {/* SLIDE-OVER MODAL FOR WAYBILL DETAILS */}
+      {selectedWbDetail && (
+        <div 
+          style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', justifyContent: 'flex-end', transition: 'all 0.3s' }} 
+          onClick={() => setSelectedWaybillForDetails(null)}
+        >
+          <div 
+            style={{ width: 450, background: '#fff', height: '100%', overflowY: 'auto', padding: 32, boxShadow: '-4px 0 15px rgba(0,0,0,0.1)' }} 
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
+              <div>
+                <h4 style={{ margin: '0 0 4px', fontSize: '1.2rem', fontWeight: 700, color: '#0F172A' }}>{selectedWbDetail.waybillNumber}</h4>
+                <StatusBadge status={selectedWbDetail.status} />
+              </div>
+              <button onClick={() => setSelectedWaybillForDetails(null)} style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 6, color: '#64748B', cursor: 'pointer', padding: 6, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <i className="ti ti-x" style={{ fontSize: '1.1rem' }} />
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 32 }}>
+              <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#94A3B8', letterSpacing: '0.05em' }}>WAYBILL DETAILS</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: '0.85rem', color: '#64748B' }}>Sender</span><span style={{ fontSize: '0.85rem', color: '#0F172A', fontWeight: 500, textAlign: 'right' }}>{selectedWbDetail.senderName || invoiceClient?.name}{selectedWbDetail.senderContact ? ` • ${selectedWbDetail.senderContact}` : ''}</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: '0.85rem', color: '#64748B' }}>Receiver</span><span style={{ fontSize: '0.85rem', color: '#0F172A', fontWeight: 500, textAlign: 'right' }}>{selectedWbDetail.receiverName}{selectedWbDetail.receiverContact ? ` • ${selectedWbDetail.receiverContact}` : ''}</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: '0.85rem', color: '#64748B' }}>Delivery address</span><span style={{ fontSize: '0.85rem', color: '#0F172A', fontWeight: 500, textAlign: 'right', maxWidth: '65%' }}>{selectedWbDetail.receiverAddress}</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: '0.85rem', color: '#64748B' }}>Service</span><span style={{ fontSize: '0.85rem', color: '#0F172A', fontWeight: 500 }}>{selectedWbDetail.deliveryType || 'Delivery'}</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: '0.85rem', color: '#64748B' }}>Courier</span><span style={{ fontSize: '0.85rem', color: '#0F172A', fontWeight: 500 }}>{selectedWbDetail.assignedCourier || '-'}</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: '0.85rem', color: '#64748B' }}>Delivery date</span><span style={{ fontSize: '0.85rem', color: '#0F172A', fontWeight: 500 }}>{new Date(selectedWbDetail.deliveryDate).toLocaleDateString('en-US')}</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: '0.85rem', color: '#64748B' }}>Items</span><span style={{ fontSize: '0.85rem', color: '#0F172A', fontWeight: 500 }}>{selectedWbDetail.itemQuantity} box{(selectedWbDetail as any).itemDimensions ? ` • ${(selectedWbDetail as any).itemDimensions.length}x${(selectedWbDetail as any).itemDimensions.width}x${(selectedWbDetail as any).itemDimensions.height} cm` : ''}</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: '0.85rem', color: '#64748B' }}>Declared value</span><span style={{ fontSize: '0.85rem', color: '#0F172A', fontWeight: 500 }}>₱{(selectedWbDetail.declaredValue || 0).toLocaleString('en-PH', {minimumFractionDigits: 2})}</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: '0.85rem', color: '#64748B' }}>Remarks</span><span style={{ fontSize: '0.85rem', color: '#0F172A', fontWeight: 500 }}>{selectedWbDetail.specialInstructions || '-'}</span></div>
+            </div>
+
+            {selectedWbDetail.breakdown && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, borderTop: '1px solid #E2E8F0', paddingTop: 24 }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#94A3B8', letterSpacing: '0.05em' }}>COMPUTATION - {(selectedWbDetail.area === 'NCR' ? 'NCR / METRO MANILA' : selectedWbDetail.area).toUpperCase()}</span>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: '0.85rem', color: '#64748B' }}>Actual weight</span><span style={{ fontSize: '0.85rem', color: '#0F172A', fontWeight: 500 }}>{selectedWbDetail.breakdown.actualWeight.toFixed(2)} kg</span></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: '0.85rem', color: '#64748B' }}>Volume weight</span><span style={{ fontSize: '0.85rem', color: '#0F172A', fontWeight: 500 }}>{selectedWbDetail.breakdown.volumeWeight.toFixed(2)} kg</span></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: '0.85rem', color: '#64748B' }}>Chargeable (higher)</span><span style={{ fontSize: '0.85rem', color: '#0F172A', fontWeight: 600 }}>{selectedWbDetail.chargeableWt.toFixed(2)} kg - {selectedWbDetail.weightBasis === 'Volume Weight' ? 'volume' : 'actual'}</span></div>
+                
+                <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <span style={{ fontSize: '0.85rem', color: '#64748B' }}>Freight</span>
+                    <div style={{ textAlign: 'right' }}>
+                      <span style={{ display: 'block', fontSize: '0.85rem', color: '#0F172A', fontWeight: 600 }}>₱{selectedWbDetail.breakdown.freightCost.toLocaleString('en-PH', {minimumFractionDigits: 2})}</span>
+                      {selectedWbDetail.breakdown.excessKgs > 0 && (
+                        <span style={{ display: 'block', fontSize: '0.75rem', color: '#94A3B8' }}>
+                          ₱{selectedWbDetail.breakdown.minimumRate.toFixed(2)} + ({selectedWbDetail.chargeableWt.toFixed(2)} - {rateConfig.minWeight}) x ₱{selectedWbDetail.breakdown.excessRate.toFixed(2)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: '0.85rem', color: '#64748B' }}>Valuation ({rateConfig.valuationRate}%)</span><span style={{ fontSize: '0.85rem', color: '#0F172A', fontWeight: 500 }}>₱{selectedWbDetail.breakdown.valuation.toLocaleString('en-PH', {minimumFractionDigits: 2})}</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: '0.85rem', color: '#64748B' }}>ODA</span><span style={{ fontSize: '0.85rem', color: '#0F172A', fontWeight: 500 }}>₱{selectedWbDetail.breakdown.odaCharge.toLocaleString('en-PH', {minimumFractionDigits: 2})}</span></div>
+                  
+                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 12, borderTop: '1px dashed #E2E8F0' }}><span style={{ fontSize: '0.85rem', color: '#0F172A', fontWeight: 700 }}>Subtotal</span><span style={{ fontSize: '0.85rem', color: '#0F172A', fontWeight: 700 }}>₱{selectedWbDetail.breakdown.subtotal.toLocaleString('en-PH', {minimumFractionDigits: 2})}</span></div>
+                  
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: '0.85rem', color: '#64748B' }}>VAT ({rateConfig.vatRate}%)</span><span style={{ fontSize: '0.85rem', color: '#0F172A', fontWeight: 500 }}>₱{selectedWbDetail.breakdown.vat.toLocaleString('en-PH', {minimumFractionDigits: 2})}</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: '0.85rem', color: '#64748B' }}>Fuel surcharge ({rateConfig.fuelSurchargeRate}% of freight)</span><span style={{ fontSize: '0.85rem', color: '#0F172A', fontWeight: 500 }}>₱{selectedWbDetail.breakdown.fuelSurcharge.toLocaleString('en-PH', {minimumFractionDigits: 2})}</span></div>
+                </div>
+
+                <div style={{ height: 2, background: '#0F172A', margin: '16px 0' }} />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontWeight: 800, fontSize: '1.1rem', color: '#0F172A' }}>Grand total</span>
+                  <span style={{ fontWeight: 800, fontSize: '1.4rem', color: '#059669' }}>₱{selectedWbDetail.breakdown.grandTotal.toLocaleString('en-PH', {minimumFractionDigits: 2})}</span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
+
     </div>
   );
 };
-
 export default InvoiceCreation;

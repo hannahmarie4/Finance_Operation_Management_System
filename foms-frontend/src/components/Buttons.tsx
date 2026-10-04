@@ -8,6 +8,7 @@ export type ButtonVariant =
   | "danger"
   | "success"
   | "warning"
+  | "navy"
   | "ghost";
 
 export type ButtonSize = "sm" | "md" | "lg";

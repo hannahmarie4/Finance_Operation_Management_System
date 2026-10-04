@@ -8,7 +8,8 @@ import { useAppData } from '../context/AppDataContext';
 import { TableContainer } from '../components/TableContainer';
 import { ClientInfoCard } from '../components/ClientInfoCard';
 import { StatusCard } from '../components/StatusCard';
-import { Button } from '../components/Buttons';
+
+
 
 const safeDate = (val: any) => {
   if (!val) return '—';
@@ -33,6 +34,8 @@ export const AccountsReceivable: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { arRecords, clients, invoices } = useAppData();
+
+
 
   // Only deal with unpaid records in Accounts Receivable
   const activeArRecords = arRecords.filter(r => r.outstandingBalance > 0);
@@ -76,6 +79,12 @@ export const AccountsReceivable: React.FC = () => {
 
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <button 
+          onClick={() => navigate('/accounts-receivable')}
+          style={{ alignSelf: 'flex-start', background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600, padding: 0 }}
+        >
+          <i className="ti ti-arrow-left"></i> Back to Accounts Receivable
+        </button>
 
         <ClientInfoCard client={client} />
 
@@ -225,63 +234,64 @@ export const AccountsReceivable: React.FC = () => {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '16px' }}>
         <StatusCard label="Total AR" value={formatPeso(totalAr)} icon="ti-wallet" variant="info" />
-        <StatusCard label="0-30 days" value={formatPeso(agingTotals['0-30 days'])} icon="ti-alert-circle" variant="warning" />
-        <StatusCard label="31-60 days" value={formatPeso(agingTotals['31-60 days'])} icon="ti-alert-triangle" variant="warning" />
-        <StatusCard label="61-90 days" value={formatPeso(agingTotals['61-90 days'])} icon="ti-alert-triangle" variant="danger" />
-        <StatusCard label="90+ days" value={formatPeso(agingTotals['90+ days'])} icon="ti-skull" variant="danger" />
-      </div>
-      <TableContainer>
-        <DataTable
-        columns={[
-          { key: 'id', label: 'CLIENT ID', sortable: true },
-          { key: 'clientName', label: 'CLIENT NAME', sortable: true, render: (row: any) => (
-            <span onClick={() => navigate(`/accounts-receivable/${row.id}`)} style={{ color: '#0F172A', fontWeight: 700, cursor: 'pointer' }}>
-              {row.clientName}
-            </span>
-          )},
-          { key: 'unpaidCount', label: 'UNPAID INVOICES', sortable: true, render: (row: any) => (
-            <span style={{ fontWeight: 700, color: row.unpaidCount > 0 ? '#EF4444' : '#10B981' }}>
-              {row.unpaidCount}
-            </span>
-          )},
-          { key: 'totalOriginal', label: 'TOTAL BILLED', sortable: true, render: (row: any) => formatPeso(row.totalOriginal) },
-          { key: 'totalOutstanding', label: 'OUTSTANDING BALANCE', sortable: true, render: (row: any) => (
-            <span style={{ fontWeight: 700, color: row.totalOutstanding > 0 ? '#EF4444' : '#10B981' }}>
-              {formatPeso(row.totalOutstanding)}
-            </span>
-          )},
-          { key: 'worstBracket', label: 'AGING CATEGORY', render: (row: any) => (
-            <span style={{
-              padding: '3px 12px', borderRadius: 9999, fontWeight: 700, fontSize: '0.75rem',
-              color: agingBracketColor[row.worstBracket] || '#64748B',
-              background: (agingBracketColor[row.worstBracket] || '#64748B') + '18',
-            }}>
-              {row.worstBracket}
-            </span>
-          )},
-          { key: 'status', label: 'STATUS', render: (row: any) => <StatusBadge status={row.status} /> },
-        ]}
-        data={listData}
-        rowKey="id"
-        searchPlaceholder="Search accounts receivable..."
-        actions={[
-          {
-            label: 'View Details',
-            icon: 'ti-eye',
-            onClick: (row: any) => navigate(`/accounts-receivable/${row.id}`)
-          }
-        ]}
-        filters={[{
-          key: 'status', label: 'All Statuses', options: [
-            { label: 'Overdue', value: 'Overdue' },
-            { label: 'Unpaid', value: 'Unpaid' }
-          ],
-          filterFn: (row: any, val: string) => row.status === val,
-        }]}
-      />
-      </TableContainer>
+            <StatusCard label="0-30 days" value={formatPeso(agingTotals['0-30 days'])} icon="ti-alert-circle" variant="warning" />
+            <StatusCard label="31-60 days" value={formatPeso(agingTotals['31-60 days'])} icon="ti-alert-triangle" variant="warning" />
+            <StatusCard label="61-90 days" value={formatPeso(agingTotals['61-90 days'])} icon="ti-alert-triangle" variant="danger" />
+            <StatusCard label="90+ days" value={formatPeso(agingTotals['90+ days'])} icon="ti-skull" variant="danger" />
+          </div>
+          <TableContainer>
+            <DataTable
+            columns={[
+              { key: 'id', label: 'CLIENT ID', sortable: true },
+              { key: 'clientName', label: 'CLIENT NAME', sortable: true, render: (row: any) => (
+                <span onClick={() => navigate(`/accounts-receivable/${row.id}`)} style={{ color: '#0F172A', fontWeight: 700, cursor: 'pointer' }}>
+                  {row.clientName}
+                </span>
+              )},
+              { key: 'unpaidCount', label: 'UNPAID INVOICES', sortable: true, render: (row: any) => (
+                <span style={{ fontWeight: 700, color: row.unpaidCount > 0 ? '#EF4444' : '#10B981' }}>
+                  {row.unpaidCount}
+                </span>
+              )},
+              { key: 'totalOriginal', label: 'TOTAL BILLED', sortable: true, render: (row: any) => formatPeso(row.totalOriginal) },
+              { key: 'totalOutstanding', label: 'OUTSTANDING BALANCE', sortable: true, render: (row: any) => (
+                <span style={{ fontWeight: 700, color: row.totalOutstanding > 0 ? '#EF4444' : '#10B981' }}>
+                  {formatPeso(row.totalOutstanding)}
+                </span>
+              )},
+              { key: 'worstBracket', label: 'AGING CATEGORY', render: (row: any) => (
+                <span style={{
+                  padding: '3px 12px', borderRadius: 9999, fontWeight: 700, fontSize: '0.75rem',
+                  color: agingBracketColor[row.worstBracket] || '#64748B',
+                  background: (agingBracketColor[row.worstBracket] || '#64748B') + '18',
+                }}>
+                  {row.worstBracket}
+                </span>
+              )},
+              { key: 'status', label: 'STATUS', render: (row: any) => <StatusBadge status={row.status} /> },
+            ]}
+            data={listData}
+            rowKey="id"
+            searchPlaceholder="Search accounts receivable..."
+            actions={[
+              {
+                label: 'View Details',
+                icon: 'ti-eye',
+                onClick: (row: any) => navigate(`/accounts-receivable/${row.id}`)
+              }
+            ]}
+            filters={[{
+              key: 'status', label: 'All Statuses', options: [
+                { label: 'Overdue', value: 'Overdue' },
+                { label: 'Unpaid', value: 'Unpaid' }
+              ],
+              filterFn: (row: any, val: string) => row.status === val,
+            }]}
+          />
+          </TableContainer>
     </div>
   );
 };
 
 export default AccountsReceivable;
+

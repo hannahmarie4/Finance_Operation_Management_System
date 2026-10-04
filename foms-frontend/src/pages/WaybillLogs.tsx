@@ -127,7 +127,7 @@ export const WaybillLogs: React.FC = () => {
                     { label: 'Draft', value: 'Draft' },
                     { label: 'Pending Validation', value: 'Pending Validation' },
                     { label: 'Validated', value: 'Validated' },
-                    { label: 'CTC Submitted', value: 'CTC Submitted' },
+
                     { label: 'Validated (CTC)', value: 'Validated (CTC)' },
                     { label: 'Billed', value: 'Billed' },
                     { label: 'Rejected', value: 'Rejected' }
@@ -156,7 +156,7 @@ export const WaybillLogs: React.FC = () => {
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
                 <Button variant="secondary" title="Cancel" onClick={() => { setCtcModal(null); setCtcFile(null); }} />
                 <Button variant="primary" title="Submit CTC" disabled={!ctcFile} onClick={() => {
-                  updateWaybill(ctcModal.id, { hasApprovedCTC: false, status: 'CTC Submitted' });
+                  updateWaybill(ctcModal.id, { hasApprovedCTC: false, status: 'Validated (CTC)' });
                   toast.success(`CTC for ${ctcModal.waybillNumber} submitted for verification.`, 'CTC Uploaded');
                   setCtcModal(null);
                   setCtcFile(null);
@@ -220,7 +220,7 @@ export const WaybillLogs: React.FC = () => {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
         <StatusCard label="Total Waybills" value={waybills.length} icon="ti-file-description" variant="new" />
         <StatusCard label="Validated" value={waybills.filter((w: any) => w.status === 'Validated' || w.status === 'Validated (CTC)').length} icon="ti-circle-check" variant="success" />
-        <StatusCard label="Pending Validation" value={waybills.filter((w: any) => w.status === 'Pending Validation' || w.status === 'CTC Submitted').length} icon="ti-clock-hour-4" variant="warning" />
+        <StatusCard label="Pending Validation" value={waybills.filter((w: any) => w.status === 'Pending Validation').length} icon="ti-clock-hour-4" variant="warning" />
         <StatusCard label="Billed" value={waybills.filter((w: any) => w.status === 'Billed').length} icon="ti-file-invoice" variant="info" />
       </div>
 
@@ -242,7 +242,7 @@ export const WaybillLogs: React.FC = () => {
                 { label: 'Draft', value: 'Draft' },
                 { label: 'Pending Validation', value: 'Pending Validation' },
                 { label: 'Validated', value: 'Validated' },
-                { label: 'CTC Submitted', value: 'CTC Submitted' },
+
                 { label: 'Validated (CTC)', value: 'Validated (CTC)' },
                 { label: 'Billed', value: 'Billed' },
                 { label: 'Rejected', value: 'Rejected' }

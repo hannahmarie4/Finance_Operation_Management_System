@@ -663,9 +663,9 @@ export const SpeedPay: React.FC = () => {
                   </h3>
 
                   <div style={{ background: '#F8FAFC', padding: 16, borderRadius: 12, display: 'flex', gap: 12, marginBottom: 16, border: '1px solid #E2E8F0', flexWrap: 'wrap' }}>
-                    <div style={{ flex: '1 1 200px', display: 'flex', alignItems: 'center', background: '#fff', border: '1px solid #CBD5E1', borderRadius: 8, padding: '0 12px' }}>
-                      <i className="ti ti-search" style={{ color: '#64748B' }} />
-                      <input type="text" placeholder="Search invoice number..." style={{ border: 'none', padding: '10px', outline: 'none', width: '100%', fontSize: 13, color: '#0F172A' }} />
+                    <div style={{ flex: '1 1 200px', display: 'flex', alignItems: 'center', background: '#EAEDF3', border: 'none', borderRadius: '28px', padding: '0 16px', height: '42px' }}>
+                      <i className="ti ti-search" style={{ color: '#49454F', fontSize: '16px' }} />
+                      <input type="text" placeholder="Search invoice number..." style={{ border: 'none', outline: 'none', background: 'transparent', width: '100%', fontSize: '0.9375rem', color: '#1C1B1F' }} />
                     </div>
                     <select style={{ padding: '0 12px', border: '1px solid #CBD5E1', borderRadius: 8, background: '#fff', fontSize: 13, color: '#0F172A', fontWeight: 600 }}>
                       <option>All statuses</option>

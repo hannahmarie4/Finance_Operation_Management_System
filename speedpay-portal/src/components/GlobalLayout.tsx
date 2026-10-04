@@ -15,7 +15,7 @@ export const GlobalLayout: React.FC = () => {
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: '#F8FAFC' }}>
       <Sidebar />
-      <div style={{ flex: 1, marginLeft: '272px', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         <TopHeader />
         <main style={{ padding: '32px', flex: 1, overflowY: 'auto' }}>
           <Outlet />

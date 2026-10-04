@@ -131,7 +131,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         <i className={item.icon} style={{ fontSize: "18px" }}></i>
                       </span>
                     )}
-                    <span className="nav-label">{item.label}</span>
+                    <span className="nav-label" style={{ flex: 1 }}>{item.label}</span>
+                    {item.badge && !collapsed && (
+                      <span style={{
+                        background: item.badge.bg,
+                        color: item.badge.color,
+                        padding: '2px 8px',
+                        borderRadius: '999px',
+                        fontSize: '0.7rem',
+                        fontWeight: 700,
+                        marginLeft: 'auto',
+                        whiteSpace: 'nowrap'
+                      }}>
+                        {item.badge.text}
+                      </span>
+                    )}
                     {item.children && !collapsed && (
                       <i className={`ti ti-chevron-${expandedItems[item.label] ? 'down' : 'right'}`} style={{ marginLeft: 'auto', fontSize: '14px', opacity: 0.7 }} />
                     )}
@@ -226,7 +240,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               )}
             </div>
             {!collapsed && (
-              <i className="ti ti-chevron-up" style={{ color: '#94A3B8', fontSize: '14px', flexShrink: 0 }}></i>
+              <i className="ti ti-selector" style={{ color: '#94A3B8', fontSize: '16px', flexShrink: 0 }}></i>
             )}
           </div>
         </div>
