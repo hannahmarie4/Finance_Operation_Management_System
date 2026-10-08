@@ -39,10 +39,10 @@ export const HeadAccountantDashboard: React.FC = () => {
   const approvalRate = decided > 0 ? Math.round((approved / decided) * 100) : 0;
 
   const totalBalance = arRecords?.reduce((s: number, r: any) => s + (r.outstandingBalance || 0), 0) || 0;
-  const overdueInvoices = invoices.filter(i => i.status === 'Overdue').length;
+  const overdueInvoices = invoices.filter(i => i.status === 'Overdue' || i.status === 'Outstanding').length;
 
   const nearDueAccounts = (arRecords || []).filter(r => {
-    if (r.outstandingBalance <= 0 || r.status === 'Overdue') return false;
+    if (r.outstandingBalance <= 0 || r.status === 'Overdue' || r.status === 'Outstanding') return false;
     const inv = invoices.find(i => i.id === r.invoiceId);
     const dueDate = r.dueDate || inv?.dueDate;
     if (!dueDate) return false;

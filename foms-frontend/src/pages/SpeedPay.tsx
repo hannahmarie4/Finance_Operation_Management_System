@@ -683,7 +683,7 @@ export const SpeedPay: React.FC = () => {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                     {clientInvoices.map(inv => {
                       const isSelected = foundInvoice?.id === inv.id;
-                      const isOverdue = inv.status === 'Overdue';
+                      const isOverdue = inv.status === 'Overdue' || inv.status === 'Outstanding';
                       const isDueSoon = !isOverdue && new Date(inv.dueDate) >= new Date();
                       return (
                         <div key={inv.id} onClick={() => handleSelectInvoice(inv)} style={{ display: 'flex', alignItems: 'center', padding: '16px 20px', borderRadius: 12, border: isSelected ? '2px solid #10B981' : '1px solid #E2E8F0', background: isSelected ? '#F0FDF4' : '#fff', cursor: 'pointer', transition: 'all 0.2s' }}>

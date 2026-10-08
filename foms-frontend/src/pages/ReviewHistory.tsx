@@ -42,7 +42,7 @@ const ReviewHistory: React.FC = () => {
       const res = await fetch('/api/ai/duplicates/review-history', {
         headers: { 'Authorization': `Bearer ${getToken()}` }
       });
-      let mapped = [];
+      let mapped: any[] = [];
       if (res.ok) {
         const json = await res.json();
         mapped = (Array.isArray(json) ? json : []).map((h: any) => ({
@@ -125,9 +125,9 @@ const ReviewHistory: React.FC = () => {
 
 
       {/* Table Card */}
-      <div style={{ background: '#fff', borderRadius: '14px', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
+      <div style={{ background: '#fff', borderRadius: '12px', padding: '24px', flex: 1, display: 'flex', flexDirection: 'column' }}>
         {/* Table Top Bar */}
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid #E2E8F0' }}>
+        <div style={{ paddingBottom: '20px' }}>
           <div style={{ fontWeight: 800, fontSize: '1.2rem', color: '#0F172A', marginBottom: 14 }}>
             Review History
           </div>
@@ -194,7 +194,7 @@ const ReviewHistory: React.FC = () => {
         </div>
 
         {/* Table */}
-        <div style={{ overflowX: 'auto' }}>
+        <div style={{ overflowX: 'auto', border: '1px solid #E2E8F0', borderRadius: '8px' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1200 }}>
             <thead>
               <tr style={{ background: '#F8FAFC' }}>
@@ -298,7 +298,7 @@ const ReviewHistory: React.FC = () => {
         {/* Pagination */}
         <div style={{
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          padding: '14px 20px', borderTop: '1px solid #F1F5F9', flexWrap: 'wrap', gap: 10,
+          paddingTop: '14px', marginTop: '14px', flexWrap: 'wrap', gap: 10,
         }}>
           <span style={{ fontSize: '0.875rem', color: '#64748B' }}>
             {filtered.length === 0

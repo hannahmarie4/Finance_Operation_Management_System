@@ -20,6 +20,7 @@ export default function CashFlowManagement() {
   const [filterType, setFilterType] = useState('All');
   const [filterDateRange, setFilterDateRange] = useState('All');
   const [isRecordSettlementModalOpen, setIsRecordSettlementModalOpen] = useState(false);
+  const [showProofModal, setShowProofModal] = useState(false);
 
   // Compute Unrecorded Transactions (For Accountant)
   const unrecordedPayments = useMemo(() => {
@@ -354,6 +355,69 @@ export default function CashFlowManagement() {
                 </span>
                 <span style={{ fontSize: '14px', fontWeight: 600, color: '#1E293B' }}>{selectedViewRecord.referenceNumber}</span>
               </div>
+              
+              {selectedViewRecord.type === 'Inflow' && (
+                <div style={{ marginTop: '16px' }}>
+                  <Button 
+                    title="View Proof of Payment" 
+                    variant="secondary" 
+                    icon="ti-photo" 
+                    onClick={() => setShowProofModal(true)} 
+                    style={{ background: '#EFF6FF', color: '#2563EB', borderColor: '#BFDBFE', width: '100%', justifyContent: 'center' }}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Proof of Payment Modal */}
+      {showProofModal && selectedViewRecord && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', zIndex: 99999, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' }} onClick={() => setShowProofModal(false)}>
+          <div style={{ background: '#ffffff', borderRadius: '12px', width: '100%', maxWidth: '500px', padding: '24px', color: '#334155', boxShadow: '0 10px 25px rgba(0,0,0,0.3)', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+              <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: '#0F172A' }}>Proof of Payment</h3>
+              <button onClick={() => setShowProofModal(false)} style={{ background: 'none', border: '1px solid #E2E8F0', borderRadius: '6px', color: '#64748B', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px' }}><i className="ti ti-x" /></button>
+            </div>
+            
+            <div style={{ background: '#F8FAFC', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+              <img src="/mock-receipt.png" alt="Proof of Payment" style={{ width: '100%', maxWidth: '280px', borderRadius: '8px', objectFit: 'contain' }} />
+              <div style={{ fontWeight: 700, color: '#475569', fontSize: '15px' }}>
+                bdoonline-lzd-2026-0004.jpg
+              </div>
+              <div style={{ color: '#64748B', fontSize: '13px', marginTop: '8px' }}>1.1 MB &bull; uploaded by {selectedViewRecord.recordedBy || 'EMP-002'}</div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #F1F5F9', paddingBottom: '12px' }}>
+                <span style={{ fontSize: '13px', color: '#64748B' }}>Reference Number</span>
+                <span style={{ fontSize: '13px', color: '#0D9488', fontWeight: 800 }}>{selectedViewRecord.referenceNumber || 'BDO-555666777'}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #F1F5F9', paddingBottom: '12px' }}>
+                <span style={{ fontSize: '13px', color: '#64748B' }}>Amount on receipt</span>
+                <span style={{ fontSize: '13px', color: '#0D9488', fontWeight: 800 }}>₱{Number(selectedViewRecord.amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #F1F5F9', paddingBottom: '12px' }}>
+                <span style={{ fontSize: '13px', color: '#64748B' }}>Uploaded</span>
+                <span style={{ fontSize: '13px', color: '#0F172A', fontWeight: 600 }}>{new Date(selectedViewRecord.date).toLocaleString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <Button
+                title="Close"
+                variant="secondary"
+                onClick={() => setShowProofModal(false)}
+                style={{ flex: 1, padding: '12px', fontWeight: 700 }}
+              />
+              <Button
+                title="Download"
+                variant="primary"
+                icon="ti-arrow-down"
+                onClick={() => toast.info('No file available to download.')}
+                style={{ flex: 1, padding: '12px', fontWeight: 700, background: '#10B981', borderColor: '#10B981' }}
+              />
             </div>
           </div>
         </div>

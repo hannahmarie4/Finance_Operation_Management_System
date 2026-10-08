@@ -53,13 +53,8 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, []);
 
   const startTimer = useCallback((id: number, type: ToastType, duration?: number) => {
-    // 0 = persistent
-    if (duration === 0) return;
-
-    // Default fallback durations: warning = 6000ms, error = persistent (0), success/info = 4000ms
-    const finalDuration = duration !== undefined
-      ? duration
-      : (type === "error" ? 0 : (type === "warning" ? 6000 : 4000));
+    // All toasts now disappear after 5 seconds (5000ms) by default
+    const finalDuration = duration !== undefined ? duration : 5000;
 
     if (finalDuration > 0) {
       setTimeout(() => {

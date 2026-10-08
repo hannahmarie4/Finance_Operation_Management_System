@@ -100,7 +100,7 @@ const AsstFinanceDashboard: React.FC = () => {
   const { arRecords, payments, auditLogs, liquidations, cashFlowRecords } = useAppData();
   const totalAR = arRecords.reduce((s: any, r: any) => s + r.outstandingBalance, 0);
   const nearDue = arRecords.filter(r => {
-    if (r.outstandingBalance <= 0 || r.status === 'Overdue') return false;
+    if (r.outstandingBalance <= 0 || r.status === 'Overdue' || r.status === 'Outstanding') return false;
     const dueDate = r.dueDate;
     if (!dueDate) return false;
     const daysRemaining = Math.ceil((new Date(dueDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
@@ -188,33 +188,7 @@ const AsstFinanceDashboard: React.FC = () => {
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 20 }}>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          {/* Payment Trends Graph */}
-          <Card style={{ display: 'flex', flexDirection: 'column' }}>
-            <div style={{ marginBottom: 20 }}>
-              <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: '#0F172A' }}>Payment Validation Trends</h3>
-              <p style={{ margin: '4px 0 0', fontSize: '0.8rem', color: '#64748B' }}>Last 7 Days (Validated vs Pending vs Rejected)</p>
-            </div>
 
-            <div style={{ flex: 1, minHeight: 250, width: '100%' }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={paymentTrendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }} barGap={4}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
-                  <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748B', fontWeight: 500 }} dy={10} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748B', fontWeight: 500 }} />
-                  <Tooltip cursor={{ fill: 'rgba(241, 245, 249, 0.5)' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }} labelStyle={{ fontWeight: 700, color: '#0F172A', marginBottom: '4px' }} />
-                  <Bar dataKey="validated" name="Validated" fill="#10B981" radius={[4, 4, 0, 0]} maxBarSize={30} />
-                  <Bar dataKey="pending" name="Pending" fill="#F59E0B" radius={[4, 4, 0, 0]} maxBarSize={30} />
-                  <Bar dataKey="rejected" name="Rejected" fill="#EF4444" radius={[4, 4, 0, 0]} maxBarSize={30} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'center', gap: '24px', marginTop: '16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><div style={{ width: 10, height: 10, borderRadius: '50%', background: '#10B981' }} /><span style={{ fontSize: '0.85rem', color: '#475569', fontWeight: 500 }}>Validated</span></div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><div style={{ width: 10, height: 10, borderRadius: '50%', background: '#F59E0B' }} /><span style={{ fontSize: '0.85rem', color: '#475569', fontWeight: 500 }}>Pending</span></div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><div style={{ width: 10, height: 10, borderRadius: '50%', background: '#EF4444' }} /><span style={{ fontSize: '0.85rem', color: '#475569', fontWeight: 500 }}>Rejected</span></div>
-            </div>
-          </Card>
 
           {/* Liquidation Trends Graph */}
           <Card style={{ display: 'flex', flexDirection: 'column' }}>
@@ -371,7 +345,7 @@ const FinanceManagerDashboard: React.FC = () => {
 
   // Ranking Computations
   const topOverdueAccounts = [...arRecords]
-    .filter(r => r.outstandingBalance > 0 && r.status === 'Overdue')
+    .filter(r => r.outstandingBalance > 0 && (r.status === 'Overdue' || r.status === 'Outstanding'))
     .sort((a, b) => b.outstandingBalance - a.outstandingBalance)
     .slice(0, 5)
     .map(r => ({ ...r, clientName: clients.find((c: any) => c.id === r.clientId)?.name || 'Unknown' }));

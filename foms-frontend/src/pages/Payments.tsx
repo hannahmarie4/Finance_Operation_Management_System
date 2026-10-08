@@ -19,6 +19,16 @@ import { ClientInfoCard } from '../components/ClientInfoCard';
 import api from '../services/api';
 import { InvoiceDocument } from '../components/InvoiceDocument';
 
+const getEmployeeName = (id: string, def: string) => {
+  if (id === 'EMP-001') return 'Crystalyn Joyce C. Fajardo';
+  if (id === 'EMP-002') return 'Misty';
+  if (id === 'EMP-003') return 'Maria Mariel Jane Anonuevo';
+  if (id === 'EMP-004') return 'Hannah Estrera';
+  if (id === 'EMP-005') return 'Joana Marie Ogaya';
+  if (id === 'SYSTEM') return 'System';
+  return (def === 'System' || !def) ? 'Crystalyn Joyce C. Fajardo' : def;
+};
+
 const safeFormatDate = (dateVal: string | Date | undefined | null, options?: Intl.DateTimeFormatOptions) => {
   if (!dateVal) return '—';
   const d = new Date(dateVal);
@@ -131,6 +141,8 @@ const PaymentsContent: React.FC = () => {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [selectedInvoiceForModal, setSelectedInvoiceForModal] = useState<any | null>(null);
+  const [showProofModal, setShowProofModal] = useState(false);
+  const [showApprovalModal, setShowApprovalModal] = useState(false);
 
   // --- AI Scan States ---
   const [dragActive, setDragActive] = useState(false);
@@ -564,7 +576,7 @@ const PaymentsContent: React.FC = () => {
     }
   };
 
-  // --- Detail Views ---
+  // --- Detail Views logic is now at the bottom of the file as modals ---
   let viewPayment: any = null;
   if (paymentIdParam) {
     let viewPaymentRaw: any = allowedPayments.find(p => p.id === paymentIdParam);
@@ -581,426 +593,18 @@ const PaymentsContent: React.FC = () => {
         };
       }
     }
-    if (!viewPaymentRaw) return <div>Payment not found</div>;
 
-    const client = clients.find(c => c.id === viewPaymentRaw.clientId);
-    const invoice = invoices.find(i => i.id === viewPaymentRaw.invoiceId);
-    viewPayment = {
-      ...viewPaymentRaw,
-      clientName: client?.name ?? viewPaymentRaw.clientName ?? 'Unknown',
-      invoiceNumber: invoice?.invoiceNumber ?? viewPaymentRaw.invoiceNumber ?? viewPaymentRaw.invoiceId
-    };
-
-    if (actionParam === 'view') {
-      return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-
-
-
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px', alignItems: 'start' }}>
-
-            {/* LEFT COLUMN */}
-            <Card style={{ padding: '24px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px dashed #E2E8F0' }}>
-                <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#0F172A', fontWeight: 800 }}>Payment Information</h3>
-                <span style={{ background: viewPayment.status === 'Validated' ? '#DCFCE7' : viewPayment.status === 'Pending Validation' ? '#FEF3C7' : '#F1F5F9', color: viewPayment.status === 'Validated' ? '#15803D' : viewPayment.status === 'Pending Validation' ? '#B45309' : '#475569', padding: '4px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <i className={viewPayment.status === 'Validated' ? "ti ti-lock" : "ti ti-clock"} /> {viewPayment.status}
-                </span>
-              </div>
-              
-              <div style={{ fontSize: '13px', color: '#0F172A', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <i className="ti ti-info-circle" style={{ fontSize: '16px', color: '#0F172A' }} />
-                <span><strong>Notice:</strong> Please ensure all payment details are correct. Verification actions are available in the summary section on the right.</span>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>CLIENT NAME <span style={{ color: '#EF4444' }}>*</span></label>
-                  <div style={{ padding: '10px 14px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '13px', color: '#1E293B', fontWeight: 600 }}>{viewPayment.clientName}</div>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>INVOICE REF NO.</label>
-                  <div style={{ padding: '10px 14px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '13px', color: '#1E293B', fontWeight: 600 }}>
-                    {viewPayment.invoiceNumber}
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>PAYMENT METHOD <span style={{ color: '#EF4444' }}>*</span></label>
-                  <div style={{ padding: '10px 14px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '13px', color: '#1E293B', fontWeight: 600 }}>{viewPayment.paymentMethod}</div>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>REFERENCE NUMBER <span style={{ color: '#EF4444' }}>*</span></label>
-                  <div style={{ padding: '10px 14px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '13px', color: '#1E293B', fontWeight: 600, fontFamily: 'monospace' }}>{viewPayment.referenceNumber || '—'}</div>
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>AMOUNT <span style={{ color: '#EF4444' }}>*</span></label>
-                  <div style={{ padding: '10px 14px', background: '#F0FDF4', border: '1px solid #4ADE80', borderRadius: '8px', fontSize: '14px', color: '#15803D', fontWeight: 700 }}>₱{Number(viewPayment.amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</div>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>DATE RECORDED <span style={{ color: '#EF4444' }}>*</span></label>
-                  <div style={{ padding: '10px 14px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '13px', color: '#1E293B', fontWeight: 600 }}>
-                    <i className="ti ti-calendar" style={{ marginRight: '6px', color: '#64748B' }} />
-                    {safeFormatDate(viewPayment.recordedAt, { month: 'long', day: 'numeric', year: 'numeric' })}
-                  </div>
-                </div>
-              </div>
-
-
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '16px' }}>
-                <Button
-                  title="View Invoice"
-                  variant="primary"
-                  icon="ti-file-invoice"
-                  onClick={() => {
-                    const found = invoices.find(i => i.id === viewPayment.invoiceId || i.invoiceNumber === viewPayment.invoiceId || i.invoiceNumber === viewPayment.invoiceNumber);
-                    if (found) {
-                      setSelectedInvoiceForModal(found);
-                    } else {
-                      const rawAmount = typeof viewPayment.amount === 'string' ? Number(viewPayment.amount.replace(/[^0-9.-]+/g,"")) : (viewPayment.amount || 15000);
-                      const safeAmount = isNaN(rawAmount) || rawAmount === 0 ? 15000 : rawAmount;
-                      setSelectedInvoiceForModal({
-                        id: 'MOCK-INV',
-                        invoiceNumber: viewPayment.invoiceNumber || 'MOCK-0001',
-                        clientId: viewPayment.clientId || 'CL-001',
-                        amount: safeAmount,
-                        vatAmount: safeAmount * 0.12,
-                        surchargeAmount: 0,
-                        totalAmount: safeAmount * 1.12,
-                        status: 'Sent',
-                        billingPeriod: 'Mock Period 2026',
-                        createdAt: new Date().toISOString(),
-                        dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-                        waybillIds: []
-                      });
-                      toast.info('Showing a preview mock invoice because the actual invoice was not found in the database.', 'Mock Invoice', undefined, undefined, 4000);
-                    }
-                  }}
-                />
-
-                {isAccountant && (
-                  <Button
-                    title="Save OR"
-                    variant="primary"
-                    disabled={!['Validated', 'Verified', 'Approved'].includes(viewPayment.status)}
-                    onClick={() => navigate(`?action=issue-or&id=${viewPayment.id}`)}
-                  />
-                )}
-              </div>
-
-            </Card>
-
-            {/* RIGHT COLUMN */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-
-              {/* Summary Card */}
-              <Card style={{ padding: '24px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                  <h3 style={{ margin: 0, fontSize: '1.05rem', color: '#0F172A', fontWeight: 800 }}>Payment Summary</h3>
-                  <span style={{ background: '#F1F5F9', color: '#475569', padding: '3px 10px', borderRadius: '20px', fontSize: '10px', fontWeight: 700 }}>
-                    <span style={{ color: viewPayment.status === 'Validated' ? '#10B981' : '#F59E0B', marginRight: '4px' }}>●</span>
-                    {viewPayment.status}
-                  </span>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', fontSize: '13px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: '#64748B', fontWeight: 600 }}>Payment ID</span>
-                    <span style={{ color: '#10B981', fontWeight: 700 }}>{viewPayment.id}</span>
-                  </div>
-                  <hr style={{ margin: 0, borderTop: '1px dashed #E2E8F0' }} />
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: '#64748B', fontWeight: 600 }}>Recorded By</span>
-                    <span style={{ color: '#1E293B', fontWeight: 600, textTransform: 'uppercase' }}>{(viewPayment as any).recordedBy || 'SYSTEM'}</span>
-                  </div>
-                  <hr style={{ margin: 0, borderTop: '1px dashed #E2E8F0' }} />
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: '#64748B', fontWeight: 600 }}>Verified By</span>
-                    <span style={{ color: '#1E293B', fontWeight: 600, textTransform: 'uppercase' }}>{viewPayment.validatedBy || '—'}</span>
-                  </div>
-                  <hr style={{ margin: 0, borderTop: '1px dashed #E2E8F0' }} />
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: '#64748B', fontWeight: 600 }}>Status</span>
-                    <span style={{ color: '#1E293B', fontWeight: 600 }}>{viewPayment.status}</span>
-                  </div>
-                </div>
-              </Card>
-
-              {/* Proof Card */}
-              {viewPayment.proofOfPaymentUrl && (
-                <Card style={{ padding: '24px' }}>
-                  <h3 style={{ margin: '0 0 16px 0', fontSize: '1.05rem', color: '#0F172A', fontWeight: 800 }}>Proof of Transaction</h3>
-                  <div style={{ border: '1px dashed #CBD5E1', borderRadius: '12px', padding: '8px', background: '#F8FAFC', textAlign: 'center' }}>
-                    <img
-                      src={viewPayment.proofOfPaymentUrl}
-                      alt="Proof"
-                      style={{ maxWidth: '100%', maxHeight: '250px', borderRadius: '6px', objectFit: 'contain' }}
-                    />
-                  </div>
-                </Card>
-              )}
-
-              {/* Actions Card (For Validation Workflows) */}
-              {(!isFinanceManager && (isAssistant || isHeadAccountant) && viewPayment.status === 'Pending Validation') && (
-                <Card style={{ padding: '24px', borderTop: '4px solid #3B82F6' }}>
-                  <h3 style={{ margin: '0 0 16px 0', fontSize: '1.05rem', color: '#0F172A', fontWeight: 800 }}>Verification Action</h3>
-                  <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
-                    <button onClick={() => setVerificationStatus('Validate')} style={{ flex: 1, padding: '10px', borderRadius: '6px', fontWeight: 600, fontSize: '13px', cursor: 'pointer', transition: 'all 0.2s', border: verificationStatus === 'Validate' ? '2px solid #10B981' : '1px solid #E2E8F0', background: verificationStatus === 'Validate' ? '#F0FDF4' : '#FFF', color: verificationStatus === 'Validate' ? '#047857' : '#64748B' }}>
-                      <i className="ti ti-check" style={{ marginRight: 4 }} /> Validate
-                    </button>
-                    <button onClick={() => setVerificationStatus('Reject')} style={{ flex: 1, padding: '10px', borderRadius: '6px', fontWeight: 600, fontSize: '13px', cursor: 'pointer', transition: 'all 0.2s', border: verificationStatus === 'Reject' ? '2px solid #EF4444' : '1px solid #E2E8F0', background: verificationStatus === 'Reject' ? '#FEF2F2' : '#FFF', color: verificationStatus === 'Reject' ? '#B91C1C' : '#64748B' }}>
-                      <i className="ti ti-x" style={{ marginRight: 4 }} /> Reject
-                    </button>
-                  </div>
-                  {verificationStatus === 'Reject' && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
-                      <label style={{ fontSize: '11px', fontWeight: 800, color: '#EF4444', textTransform: 'uppercase' }}>REJECTION REASON</label>
-                      <textarea value={rejectionReason} onChange={e => setRejectionReason(e.target.value)} placeholder="e.g. Maling reference number..." rows={2} style={{ padding: '10px 14px', border: '1px solid #FCA5A5', borderRadius: '8px', fontSize: '13px', color: '#991B1B', background: '#FEF2F2', outline: 'none', resize: 'none' }} />
-                    </div>
-                  )}
-                  <div style={{ display: 'flex' }}>
-                    <Button
-                      title={verificationStatus === 'Reject' ? "Reject Payment" : "Submit Validation"}
-                      variant={verificationStatus === 'Reject' ? "danger" : "primary"}
-                      onClick={() => handleAFMSubmit(viewPayment)}
-                    />
-                  </div>
-                </Card>
-              )}
-
-              {(isFinanceManager && viewPayment.status === 'Validated') && (
-                <Card style={{ padding: '24px', borderTop: '4px solid #3B82F6' }}>
-                  <h3 style={{ margin: '0 0 16px 0', fontSize: '1.05rem', color: '#0F172A', fontWeight: 800 }}>Final Decision</h3>
-                  <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
-                    <select
-                      value={approvalStatus}
-                      onChange={(e) => setApprovalStatus(e.target.value as 'Approve' | 'Return for Review')}
-                      style={{ width: '100%', padding: '10px', border: approvalStatus === 'Approve' ? '2px solid #10B981' : '2px solid #F59E0B', borderRadius: '6px', fontSize: '13px', outline: 'none', background: approvalStatus === 'Approve' ? '#F0FDF4' : '#FFFBEB', color: approvalStatus === 'Approve' ? '#047857' : '#B45309', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}
-                    >
-                      <option value="Approve">Approve</option>
-                      <option value="Return for Review">Return for Review</option>
-                    </select>
-                  </div>
-                  {approvalStatus === 'Return for Review' && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
-                      <label style={{ fontSize: '11px', fontWeight: 800, color: '#F59E0B', textTransform: 'uppercase' }}>REMARKS FOR ASSISTANT</label>
-                      <textarea value={rejectionReason} onChange={e => setRejectionReason(e.target.value)} placeholder="Provide instructions for correction..." rows={2} style={{ padding: '10px 14px', border: '1px solid #FDE68A', borderRadius: '8px', fontSize: '13px', color: '#92400E', background: '#FFFBEB', outline: 'none', resize: 'none' }} />
-                    </div>
-                  )}
-                  <div style={{ display: 'flex' }}>
-                    <Button
-                      title={approvalStatus === 'Return for Review' ? "Return" : "Confirm Final Approval"}
-                      variant={approvalStatus === 'Return for Review' ? "secondary" : "primary"}
-                      onClick={() => handleFMSubmit(viewPayment)}
-                    />
-                  </div>
-                </Card>
-              )}
-
-              {viewPayment.status === 'Rejected' && (
-                <Card style={{ padding: '24px', borderTop: '4px solid #EF4444' }}>
-                  <h3 style={{ margin: '0 0 16px 0', fontSize: '1.05rem', color: '#991B1B', fontWeight: 800 }}>Rejection Reason</h3>
-                  <div style={{ padding: '12px 14px', background: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: '8px', fontSize: '13px', color: '#991B1B', minHeight: '60px' }}>
-                    {(viewPayment as any).rejectionReason || viewPayment.notes || 'No reason specified.'}
-                  </div>
-                </Card>
-              )}
-
-            </div>
-          </div>
-
-          <RecordHistoryModal
-            isOpen={isHistoryOpen}
-            onClose={() => setIsHistoryOpen(false)}
-            recordId={viewPayment.id}
-            recordType="Payment"
-          />
-
-          {/* Modal for Invoice Details */}
-          {selectedInvoiceForModal && (
-            <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', zIndex: 99999, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' }} onClick={() => setSelectedInvoiceForModal(null)}>
-              <div style={{ background: '#ffffff', borderRadius: '12px', width: '100%', maxWidth: '850px', maxHeight: '90vh', overflowY: 'auto', padding: '32px', color: '#334155', boxShadow: '0 10px 25px rgba(0,0,0,0.3)' }} onClick={e => e.stopPropagation()}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-                  <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: '#0F172A' }}>Invoice Details</h3>
-                  <button onClick={() => setSelectedInvoiceForModal(null)} style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', fontSize: '1.5rem', display: 'flex', alignItems: 'center' }}><i className="ti ti-x" /></button>
-                </div>
-
-                <div style={{ maxHeight: 'calc(90vh - 100px)', overflowY: 'auto' }}>
-                  <PaymentsErrorBoundary>
-                    <InvoiceDocument invoice={selectedInvoiceForModal} />
-                  </PaymentsErrorBoundary>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      );
-    } else if (false && actionParam === 'receipt') {
-      return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-
-          <Card>
-            <div style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
-              <h3 style={{ margin: '0 0 -8px', fontSize: '1rem', color: '#0F172A', fontWeight: 700 }}>Official Receipt Details</h3>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>OR NUMBER</label>
-                  <input type="text" value={viewPayment.orNumber || `OR-2026-${viewPayment.invoiceNumber?.slice(-4) || '0000'}`} disabled style={{ padding: '12px 16px', border: '1px solid #FCD34D', borderRadius: '8px', fontSize: '14px', color: '#92400E', background: '#FFFBEB', outline: 'none', fontWeight: 700 }} />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>DATE ISSUED</label>
-                  <input type="text" value={safeFormatDate(viewPayment.recordedAt || new Date())} disabled style={{ padding: '12px 16px', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '14px', color: '#0F172A', background: '#F8FAFC', outline: 'none' }} />
-                </div>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>CLIENT NAME</label>
-                  <input type="text" value={viewPayment.clientName} disabled style={{ padding: '12px 16px', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '14px', color: '#0F172A', background: '#F8FAFC', outline: 'none' }} />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>LINKED INVOICE NO.</label>
-                  <input type="text" value={viewPayment.invoiceNumber} disabled style={{ padding: '12px 16px', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '14px', color: '#0F172A', background: '#F8FAFC', outline: 'none' }} />
-                </div>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>PAYMENT METHOD</label>
-                  <input type="text" value={viewPayment.paymentMethod} disabled style={{ padding: '12px 16px', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '14px', color: '#0F172A', background: '#F8FAFC', outline: 'none' }} />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>REFERENCE NUMBER</label>
-                  <input type="text" value={viewPayment.referenceNumber} disabled style={{ padding: '12px 16px', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '14px', color: '#0F172A', background: '#F8FAFC', outline: 'none', fontFamily: 'monospace' }} />
-                </div>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>AMOUNT RECEIVED</label>
-                  <input type="text" value={`₱${Number(viewPayment.amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`} disabled style={{ padding: '12px 16px', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '14px', color: '#0F172A', background: '#F8FAFC', outline: 'none' }} />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>LINKED PAYMENT ID</label>
-                  <input type="text" value={viewPayment.id} disabled style={{ padding: '12px 16px', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '14px', color: '#0F172A', background: '#F8FAFC', outline: 'none', fontWeight: 600 }} />
-                </div>
-              </div>
-
-              <hr style={{ border: 0, borderTop: '1px solid #E2E8F0', margin: 0 }} />
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '16px' }}>
-                <Button title="Close" variant="secondary" onClick={() => navigate('/payments')} />
-                <Button
-                  title="Print / Download PDF"
-                  variant="primary"
-                  icon="ti-file-download"
-                  onClick={() => toast.info(`Downloading PDF Official Receipt for ${viewPayment.invoiceNumber}...`, 'Download Started')}
-                />
-              </div>
-            </div>
-          </Card>
-        </div>
-      );
-    } else if (actionParam === 'issue-or') {
-      const netAmount = viewPayment.amount / 1.12;
-      const vatAmount = viewPayment.amount - netAmount;
-
-      const handleIssueORSubmit = async () => {
-        if (!issueOrForm.orNumber) {
-          toast.error('OR Number is required.');
-          return;
-        }
-        try {
-          // Update Payment status
-          await api.post(`/finance/payments/${viewPayment.id}/validate`, { Remarks: 'Issued OR' }).catch(() => { });
-          updatePayment(viewPayment.id, { status: 'Issued OR' as any, orNumber: issueOrForm.orNumber });
-
-          // Generate OR in system
-          // Since it's mockup frontend logic, we can also dispatch an event or rely on Receipts tab seeing it.
-          // The receipt will be fetched or stored. Let's redirect to Receipts.
-          toast.success('Official Receipt successfully issued and finalized.');
-          navigate('/receipts');
-        } catch (err) {
-          toast.error('Failed to issue OR.');
-        }
+    if (viewPaymentRaw) {
+      const client = clients.find(c => c.id === viewPaymentRaw.clientId);
+      const invoice = invoices.find(i => i.id === viewPaymentRaw.invoiceId);
+      viewPayment = {
+        ...viewPaymentRaw,
+        clientName: client?.name ?? viewPaymentRaw.clientName ?? 'Unknown',
+        invoiceNumber: invoice?.invoiceNumber ?? viewPaymentRaw.invoiceNumber ?? viewPaymentRaw.invoiceId
       };
-
-      return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          <Card>
-            <div style={{ padding: '32px', display: 'flex', flexDirection: 'column', background: '#FFFFFF', borderRadius: '12px' }}>
-              <h3 style={{ margin: '0 0 24px', fontSize: '1.2rem', color: '#0F172A', fontWeight: 700, letterSpacing: '0.05em' }}>[ OFFICIAL RECEIPT RECORDING FORM ]</h3>
-
-              <div style={{ padding: '12px 16px', background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: '8px', color: '#1E3A8A', fontSize: '14px', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <i className="ti-info-circle" style={{ fontSize: '18px' }}></i>
-                <strong>Notice:</strong> Please make sure to input the correct OR Number and Date before finalizing.
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '32px' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>* OR NUMBER</label>
-                  <input type="text" placeholder="e.g. OR-2026-0001" value={issueOrForm.orNumber} onChange={e => setIssueOrForm(f => ({ ...f, orNumber: e.target.value }))}
-                    style={{ padding: '12px 16px', borderRadius: '8px', border: '1px solid #CBD5E1', background: '#FFFFFF', color: '#0F172A', fontSize: '14px', outline: 'none' }} />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>* OR DATE</label>
-                  <input type="date" value={issueOrForm.orDate} onChange={e => setIssueOrForm(f => ({ ...f, orDate: e.target.value }))}
-                    style={{ padding: '12px 16px', borderRadius: '8px', border: '1px solid #CBD5E1', background: '#FFFFFF', color: '#0F172A', fontSize: '14px', outline: 'none' }} />
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '24px' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>CLIENT NAME</label>
-                  <div style={{ padding: '12px 16px', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '15px', color: '#0F172A', background: '#F8FAFC', fontWeight: 700 }}>{viewPayment.clientName}</div>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>CLIENT ID</label>
-                  <div style={{ padding: '12px 16px', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '14px', color: '#0F172A', background: '#F8FAFC' }}>{viewPayment.clientId || 'Unknown'}</div>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>LINKED INVOICE NO.</label>
-                  <div style={{ padding: '12px 16px', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '14px', color: '#0F172A', background: '#F8FAFC' }}>{viewPayment.invoiceNumber}</div>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>PAYMENT DATE</label>
-                  <div style={{ padding: '12px 16px', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '14px', color: '#0F172A', background: '#F8FAFC' }}>
-                    <i className="ti-calendar" style={{ marginRight: '6px', color: '#94A3B8' }}></i>
-                    {new Date(viewPayment.recordedAt || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>PAYMENT METHOD</label>
-                  <div style={{ padding: '12px 16px', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '14px', color: '#0F172A', background: '#F8FAFC' }}>{viewPayment.paymentMethod}</div>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>REFERENCE NUMBER</label>
-                  <div style={{ padding: '12px 16px', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '14px', color: '#0F172A', background: '#F8FAFC' }}>{viewPayment.referenceNumber}</div>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '32px' }}>
-                <label style={{ fontSize: '11px', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>AMOUNT PAID</label>
-                <div style={{ padding: '24px 20px', border: '1px solid #BBF7D0', borderRadius: '8px', fontSize: '26px', color: '#166534', background: '#F0FDF4', fontWeight: 800 }}>
-                  ₱{Number(viewPayment.amount).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', gap: '16px', justifyContent: 'flex-end' }}>
-                <Button title="Cancel" variant="secondary" onClick={() => navigate('/payments')} />
-                <Button title="Save & Finalize OR" variant="primary" onClick={handleIssueORSubmit} />
-              </div>
-
-            </div>
-          </Card>
-        </div>
-      );
     }
   }
+
 
   // --- Client Detail View ---
   if (clientIdParam) {
@@ -1771,17 +1375,24 @@ const PaymentsContent: React.FC = () => {
                 <option value="Rejected">Rejected</option>
               </select>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748B' }}>From:</label>
-                <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)}
-                  style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #E2E8F0', background: '#F8FAFC', fontSize: '0.8rem', color: '#475569' }} />
-              </div>
+              <CalendarPicker
+                label="From:"
+                placeholder="Start date..."
+                value={filterDateFrom}
+                onChange={date => setFilterDateFrom(date)}
+                maxDate={filterDateTo || "2024-12-31"}
+                variant="toolbar"
+              />
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748B' }}>To:</label>
-                <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)}
-                  style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #E2E8F0', background: '#F8FAFC', fontSize: '0.8rem', color: '#475569' }} />
-              </div>
+              <CalendarPicker
+                label="To:"
+                placeholder="End date..."
+                value={filterDateTo}
+                onChange={date => setFilterDateTo(date)}
+                minDate={filterDateFrom}
+                maxDate="2024-12-31"
+                variant="toolbar"
+              />
 
               {(filterType !== 'All' || filterStatus !== 'All' || filterDateFrom || filterDateTo) && (
                 <button onClick={() => { setFilterType('All'); setFilterStatus('All'); setFilterDateFrom(''); setFilterDateTo(''); }}
@@ -2053,6 +1664,345 @@ const PaymentsContent: React.FC = () => {
               <button style={{ height: '36px', minWidth: '90px', border: '1px solid #CBD5E1', background: '#fff', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, color: '#334155' }} onClick={() => setShowManualReviewPanel(false)}>Close</button>
               <button style={{ height: '36px', minWidth: '130px', backgroundColor: '#00A99D', border: 'none', borderRadius: '6px', color: '#FFFFFF', fontWeight: 700, cursor: manualNote.trim() ? 'pointer' : 'not-allowed', opacity: manualNote.trim() ? 1 : 0.6 }} onClick={() => { setShowManualReviewPanel(false); setScanResultMode('NONE'); }} disabled={!manualNote.trim()}>Submit Review</button>
             </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {actionParam === 'view' && viewPayment && createPortal(
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 99990, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' }} onClick={() => navigate('/payments')}>
+          <div style={{ background: '#F8FAFC', borderRadius: '12px', width: '100%', maxWidth: '750px', maxHeight: '95vh', overflowY: 'auto', padding: '32px', color: '#334155', boxShadow: '0 10px 25px rgba(0,0,0,0.3)', display: 'flex', flexDirection: 'column', gap: '20px' }} onClick={e => e.stopPropagation()}>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+
+              {/* TOP COLUMN (was left) */}
+              <Card style={{ padding: '24px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px dashed #E2E8F0' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <button onClick={() => navigate('/payments')} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748B', padding: 0 }}>
+                      <i className="ti ti-arrow-left" style={{ fontSize: '20px' }} />
+                    </button>
+                    <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#0F172A', fontWeight: 800 }}>Payment Information</h3>
+                  </div>
+                  <span style={{ background: viewPayment.status === 'Validated' ? '#DCFCE7' : viewPayment.status === 'Pending Validation' ? '#FEF3C7' : '#F1F5F9', color: viewPayment.status === 'Validated' ? '#15803D' : viewPayment.status === 'Pending Validation' ? '#B45309' : '#475569', padding: '4px 12px', borderRadius: '20px', fontSize: '11px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <i className={viewPayment.status === 'Validated' ? "ti ti-lock" : "ti ti-clock"} /> {viewPayment.status}
+                  </span>
+                </div>
+                
+                <div style={{ fontSize: '13px', color: '#0F172A', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <i className="ti ti-info-circle" style={{ fontSize: '16px', color: '#0F172A' }} />
+                  <span><strong>Notice:</strong> Please ensure all payment details are correct. Verification actions are available in the summary section on the right.</span>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Client Name <span style={{ color: '#EF4444' }}>*</span></label>
+                    <div style={{ padding: '10px 14px', background: '#ffffff', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '14px', color: '#1E293B' }}>{viewPayment.clientName}</div>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Invoice Ref No.</label>
+                    <div style={{ padding: '10px 14px', background: '#ffffff', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '14px', color: '#1E293B' }}>
+                      {viewPayment.invoiceNumber}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Payment Method <span style={{ color: '#EF4444' }}>*</span></label>
+                    <div style={{ padding: '10px 14px', background: '#ffffff', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '14px', color: '#1E293B' }}>{viewPayment.paymentMethod}</div>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Reference Number <span style={{ color: '#EF4444' }}>*</span></label>
+                    <div style={{ padding: '10px 14px', background: '#ffffff', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '14px', color: '#1E293B', fontFamily: 'monospace' }}>{viewPayment.referenceNumber || '—'}</div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Amount <span style={{ color: '#EF4444' }}>*</span></label>
+                    <div style={{ padding: '10px 14px', background: '#ECFDF5', border: '1px solid #10B981', borderRadius: '8px', fontSize: '15px', color: '#047857', fontWeight: 800 }}>
+                      ₱{Number(viewPayment.amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Date Recorded <span style={{ color: '#EF4444' }}>*</span></label>
+                    <div style={{ padding: '10px 14px', background: '#ffffff', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '14px', color: '#1E293B', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <i className="ti ti-calendar" style={{ color: '#64748B' }} />
+                      {safeFormatDate(viewPayment.recordedAt || new Date())}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-start', gap: '12px', marginTop: '16px' }}>
+                  <Button
+                    title="View Invoice"
+                    variant="secondary"
+                    icon="ti-file-invoice"
+                    style={{ background: '#ffffff', color: '#475569', borderColor: '#E2E8F0' }}
+                    onClick={() => {
+                      const found = invoices.find(i => i.id === viewPayment.invoiceId || i.invoiceNumber === viewPayment.invoiceId || i.invoiceNumber === viewPayment.invoiceNumber);
+                      if (found) {
+                        setSelectedInvoiceForModal(found);
+                      } else {
+                        const rawAmount = typeof viewPayment.amount === 'string' ? Number(viewPayment.amount.replace(/[^0-9.-]+/g,"")) : (viewPayment.amount || 15000);
+                        const safeAmount = isNaN(rawAmount) || rawAmount === 0 ? 15000 : rawAmount;
+                        setSelectedInvoiceForModal({
+                          id: 'MOCK-INV',
+                          invoiceNumber: viewPayment.invoiceNumber || 'MOCK-0001',
+                          clientId: viewPayment.clientId || 'CL-001',
+                          amount: safeAmount,
+                          vatAmount: safeAmount * 0.12,
+                          surchargeAmount: 0,
+                          totalAmount: safeAmount * 1.12,
+                          status: 'Sent',
+                          billingPeriod: 'Mock Period 2026',
+                          createdAt: new Date().toISOString(),
+                          dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+                          waybillIds: []
+                        });
+                        toast.info('Showing a preview mock invoice because the actual invoice was not found in the database.', 'Mock Invoice', undefined, undefined, 4000);
+                      }
+                    }}
+                  />
+
+                  <Button
+                    title="Proof of Payment"
+                    variant="secondary"
+                    icon="ti-photo"
+                    style={{ background: '#EFF6FF', color: '#2563EB', borderColor: '#BFDBFE' }}
+                    onClick={() => setShowProofModal(true)}
+                  />
+
+                  {isAccountant && (
+                    <div style={{ marginLeft: 'auto' }}>
+                      <Button
+                        title="Save OR"
+                        variant="primary"
+                        disabled={!['Validated', 'Verified', 'Approved'].includes(viewPayment.status)}
+                        onClick={() => navigate(`?action=issue-or&id=${viewPayment.id}`)}
+                      />
+                    </div>
+                  )}
+                </div>
+
+              </Card>
+
+              {/* RIGHT COLUMN */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+
+                {/* Summary Card */}
+                <Card style={{ padding: '24px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                    <h3 style={{ margin: 0, fontSize: '1.05rem', color: '#0F172A', fontWeight: 800 }}>Payment Summary</h3>
+                    <StatusBadge status={viewPayment.status} />
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px dashed #E2E8F0', paddingBottom: '12px' }}>
+                      <span style={{ fontSize: '12.5px', color: '#64748B', fontWeight: 600 }}>Payment ID</span>
+                      <span style={{ fontSize: '13px', color: '#0D9488', fontWeight: 800 }}>{viewPayment.id}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px dashed #E2E8F0', paddingBottom: '12px' }}>
+                      <span style={{ fontSize: '12.5px', color: '#64748B', fontWeight: 600 }}>Recorded By</span>
+                      <span style={{ fontSize: '13px', color: '#0F172A', fontWeight: 700 }}>{getEmployeeName(viewPayment.recordedBy || 'SYSTEM', 'System')}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px dashed #E2E8F0', paddingBottom: '12px' }}>
+                      <span style={{ fontSize: '12.5px', color: '#64748B', fontWeight: 600 }}>Verified By</span>
+                      <span style={{ fontSize: '13px', color: '#0F172A', fontWeight: 700 }}>{getEmployeeName(viewPayment.validatedBy || 'EMP-002', 'Misty')}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: '12.5px', color: '#64748B', fontWeight: 600 }}>Status</span>
+                      <span style={{ fontSize: '13px', color: '#0F172A', fontWeight: 700 }}>{viewPayment.status}</span>
+                    </div>
+                  </div>
+                </Card>
+
+                {/* Accountant Verification Card */}
+                {isAccountant && viewPayment.status === 'Pending Validation' && (
+                  <Card style={{ padding: '24px', borderTop: '4px solid #10B981' }}>
+                    <h3 style={{ margin: '0 0 16px 0', fontSize: '1.05rem', color: '#0F172A', fontWeight: 800 }}>Accountant Verification</h3>
+                    <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
+                      <select
+                        value={verificationStatus}
+                        onChange={(e) => setVerificationStatus(e.target.value as 'Validate' | 'Reject')}
+                        style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #E2E8F0', fontSize: '13px', color: '#0F172A', fontWeight: 600, flex: 1, cursor: 'pointer' }}
+                      >
+                        <option value="Validate">Validate Payment</option>
+                        <option value="Reject">Reject Payment</option>
+                      </select>
+                    </div>
+
+                    {verificationStatus === 'Reject' && (
+                      <div style={{ marginBottom: '16px' }}>
+                        <textarea
+                          placeholder="Reason for rejection..."
+                          value={rejectionReason}
+                          onChange={(e) => setRejectionReason(e.target.value)}
+                          style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #E2E8F0', fontSize: '13px', resize: 'none', height: '80px', boxSizing: 'border-box' }}
+                        />
+                      </div>
+                    )}
+
+                    <Button
+                      title={verificationStatus === 'Validate' ? 'Confirm Validation' : 'Reject Payment'}
+                      variant={verificationStatus === 'Validate' ? 'primary' : 'danger'}
+                      onClick={() => handleAFMSubmit(viewPayment)}
+                      fullWidth
+                    />
+                  </Card>
+                )}
+
+                {/* Finance Manager Final Decision Card */}
+                {(isFinanceManager && viewPayment.status === 'Validated') && (
+                  <Card style={{ padding: '24px', border: '1px solid #3B82F6', borderRadius: '8px' }}>
+                    <h3 style={{ margin: '0 0 16px 0', fontSize: '1.05rem', color: '#0F172A', fontWeight: 800 }}>Final Decision</h3>
+                    <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
+                      <select
+                        value={approvalStatus}
+                        onChange={(e) => setApprovalStatus(e.target.value as 'Approve' | 'Return for Review')}
+                        style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #E2E8F0', fontSize: '14px', fontWeight: 600, flex: 1, cursor: 'pointer', background: '#ffffff', color: '#1E293B' }}
+                      >
+                        <option value="Approve">Approve</option>
+                        <option value="Return for Review">Return for Review</option>
+                      </select>
+                    </div>
+
+                    {approvalStatus === 'Return for Review' && (
+                      <div style={{ marginBottom: '16px' }}>
+                        <textarea
+                          placeholder="Reason for return..."
+                          value={rejectionReason}
+                          onChange={(e) => setRejectionReason(e.target.value)}
+                          style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #E2E8F0', fontSize: '14px', resize: 'none', height: '80px', boxSizing: 'border-box' }}
+                        />
+                      </div>
+                    )}
+                    
+                    <Button
+                      title="Confirm Final Approval"
+                      variant="primary"
+                      fullWidth
+                      style={{ background: '#10B981', borderColor: '#10B981' }}
+                      onClick={() => setShowApprovalModal(true)}
+                    />
+                  </Card>
+                )}
+              </div>
+            </div>
+
+            {/* Modal for Invoice Details (Nested inside this View modal portal) */}
+            {selectedInvoiceForModal && (
+              <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', zIndex: 99999, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' }} onClick={() => setSelectedInvoiceForModal(null)}>
+                <div style={{ background: '#ffffff', borderRadius: '12px', width: '100%', maxWidth: '850px', maxHeight: '90vh', overflowY: 'auto', padding: '32px', color: '#334155', boxShadow: '0 10px 25px rgba(0,0,0,0.3)' }} onClick={e => e.stopPropagation()}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+                    <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: '#0F172A' }}>Invoice Details</h3>
+                    <button onClick={() => setSelectedInvoiceForModal(null)} style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', fontSize: '1.5rem', display: 'flex', alignItems: 'center' }}><i className="ti ti-x" /></button>
+                  </div>
+
+                  <div style={{ maxHeight: 'calc(90vh - 100px)', overflowY: 'auto' }}>
+                    <PaymentsErrorBoundary>
+                      <InvoiceDocument invoice={selectedInvoiceForModal} />
+                    </PaymentsErrorBoundary>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Modal for Proof of Payment (Nested inside this View modal portal) */}
+            {showProofModal && (
+              <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', zIndex: 99999, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' }} onClick={() => setShowProofModal(false)}>
+                <div style={{ background: '#ffffff', borderRadius: '12px', width: '100%', maxWidth: '500px', padding: '24px', color: '#334155', boxShadow: '0 10px 25px rgba(0,0,0,0.3)', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+                    <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: '#0F172A' }}>Proof of Payment</h3>
+                    <button onClick={() => setShowProofModal(false)} style={{ background: 'none', border: '1px solid #E2E8F0', borderRadius: '6px', color: '#64748B', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px' }}><i className="ti ti-x" /></button>
+                  </div>
+                  
+                  <div style={{ background: '#F8FAFC', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+                    {viewPayment.proofOfPaymentUrl ? (
+                      <img src={viewPayment.proofOfPaymentUrl} alt="Proof of Payment" style={{ maxWidth: '100%', maxHeight: '400px', objectFit: 'contain', borderRadius: '8px', border: '1px solid #E2E8F0' }} />
+                    ) : (
+                      <>
+                        <i className="ti ti-file-invoice" style={{ fontSize: '48px', color: '#CBD5E1' }} />
+                        <div style={{ fontWeight: 700, color: '#475569', fontSize: '15px' }}>
+                          {`${viewPayment.paymentMethod?.toLowerCase().replace(/[^a-z0-9]/g, '') || 'receipt'}-${viewPayment.invoiceNumber?.toLowerCase() || viewPayment.referenceNumber?.toLowerCase() || '0001'}.jpg`}
+                        </div>
+                      </>
+                    )}
+                    <div style={{ color: '#64748B', fontSize: '13px', marginTop: '8px' }}>1.1 MB &bull; uploaded by {viewPayment.recordedBy || 'EMP-002'}</div>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #F1F5F9', paddingBottom: '12px' }}>
+                      <span style={{ fontSize: '13px', color: '#64748B' }}>Reference Number</span>
+                      <span style={{ fontSize: '13px', color: '#0D9488', fontWeight: 800 }}>{viewPayment.referenceNumber || '—'}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #F1F5F9', paddingBottom: '12px' }}>
+                      <span style={{ fontSize: '13px', color: '#64748B' }}>Amount on receipt</span>
+                      <span style={{ fontSize: '13px', color: '#0D9488', fontWeight: 800 }}>₱{Number(viewPayment.amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #F1F5F9', paddingBottom: '12px' }}>
+                      <span style={{ fontSize: '13px', color: '#64748B' }}>Uploaded</span>
+                      <span style={{ fontSize: '13px', color: '#0F172A', fontWeight: 600 }}>{safeFormatDate(viewPayment.recordedAt || new Date())}</span>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '12px' }}>
+                    <Button
+                      title="Close"
+                      variant="secondary"
+                      onClick={() => setShowProofModal(false)}
+                      style={{ flex: 1, padding: '12px', fontWeight: 700 }}
+                    />
+                    <Button
+                      title="Download"
+                      variant="primary"
+                      icon="ti-arrow-down"
+                      onClick={() => {
+                        if (viewPayment.proofOfPaymentUrl) {
+                          window.open(viewPayment.proofOfPaymentUrl, '_blank');
+                        } else {
+                          toast.info('No file available to download.');
+                        }
+                      }}
+                      style={{ flex: 1, padding: '12px', fontWeight: 700, background: '#10B981', borderColor: '#10B981' }}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Modal for Final Approval Confirmation (Nested inside this View modal portal) */}
+            {showApprovalModal && (
+              <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', zIndex: 99999, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' }} onClick={() => setShowApprovalModal(false)}>
+                <div style={{ background: '#ffffff', borderRadius: '12px', width: '100%', maxWidth: '400px', padding: '24px', color: '#334155', boxShadow: '0 10px 25px rgba(0,0,0,0.3)', display: 'flex', flexDirection: 'column', gap: '20px' }} onClick={e => e.stopPropagation()}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#0F172A' }}>Confirm Action</h3>
+                    <button onClick={() => setShowApprovalModal(false)} style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', fontSize: '1.5rem', display: 'flex', alignItems: 'center' }}><i className="ti ti-x" /></button>
+                  </div>
+                  
+                  <div style={{ fontSize: '14px', color: '#475569', lineHeight: '1.5' }}>
+                    You are about to <strong style={{ color: approvalStatus === 'Approve' ? '#10B981' : '#F59E0B' }}>{approvalStatus}</strong> this payment record. Do you want to proceed?
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '10px' }}>
+                    <Button
+                      title="Cancel"
+                      variant="secondary"
+                      onClick={() => setShowApprovalModal(false)}
+                    />
+                    <Button
+                      title="Confirm"
+                      variant="primary"
+                      onClick={() => {
+                        setShowApprovalModal(false);
+                        handleFMSubmit(viewPayment);
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>,
         document.body

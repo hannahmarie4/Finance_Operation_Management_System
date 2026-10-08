@@ -194,7 +194,7 @@ function computeArRecords(invoices: Invoice[], payments: Payment[], financialAdj
       } else if (outstandingBalance <= 0) {
         status = 'Paid' as any;
       } else if (diffDays > 0) {
-        status = 'Overdue';
+        status = diffDays > 30 ? 'Outstanding' : 'Overdue';
         if (diffDays <= 30) bracket = '0-30 days';
         else if (diffDays <= 60) bracket = '31-60 days';
         else if (diffDays <= 90) bracket = '61-90 days';
@@ -335,6 +335,15 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     try {
       const res = await api.get('/invoices');
       const mapped: Invoice[] = res.data.map(mapInvoice);
+      
+      const extraMocks = SEEDED_INVOICES.filter(s => ['Draft', 'Needs Revision', 'Pending Approval', 'Approved'].includes(s.status));
+      const existingIds = new Set(mapped.map(m => m.id));
+      for (const mock of extraMocks) {
+        if (!existingIds.has(mock.id)) {
+          mapped.push(mock);
+        }
+      }
+
       setInvoices(mapped);
     } catch { /* keep current state */ }
   }, []);

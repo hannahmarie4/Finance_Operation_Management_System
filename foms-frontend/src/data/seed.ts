@@ -261,8 +261,8 @@ export interface Invoice {
   totalAmount: number;
   billingSchedule: 'Monthly' | 'Semi-monthly' | 'Weekly';
   billingPeriod: string;
-  status: 'Draft' | 'Pending Approval' | 'Needs Revision' | 'Approved' | 'Sent' | 'Paid' | 'Overdue';
-  paymentStatus?: 'Unpaid' | 'Due Soon' | 'Overdue' | 'Paid';
+  status: 'Draft' | 'Pending Approval' | 'Needs Revision' | 'Approved' | 'Sent' | 'Paid' | 'Overdue' | 'Outstanding';
+  paymentStatus?: 'Unpaid' | 'Due Soon' | 'Overdue' | 'Outstanding' | 'Paid';
   createdBy: string;
   createdAt: string;
   dueDate: string;
@@ -277,6 +277,54 @@ export interface Invoice {
 }
 
 export const SEEDED_INVOICES: Invoice[] = [
+  {
+    id: 'INV-005',
+    invoiceNumber: 'LZD-2026-0005',
+    clientId: 'CL-001',
+    waybillIds: ['WB-005'],
+    amount: 15000,
+    vatAmount: 1800,
+    surchargeAmount: 0,
+    totalAmount: 16800,
+    billingSchedule: 'Monthly',
+    billingPeriod: 'Apr 2026',
+    status: 'Draft',
+    createdBy: 'EMP-003',
+    createdAt: new Date().toISOString(),
+    dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: 'INV-006',
+    invoiceNumber: 'SHP-2026-0002',
+    clientId: 'CL-002',
+    waybillIds: ['WB-006', 'WB-007'],
+    amount: 32000,
+    vatAmount: 3840,
+    surchargeAmount: 200,
+    totalAmount: 36040,
+    billingSchedule: 'Monthly',
+    billingPeriod: 'Apr 2026',
+    status: 'Pending Approval',
+    createdBy: 'EMP-003',
+    createdAt: new Date().toISOString(),
+    dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: 'INV-007',
+    invoiceNumber: 'LZD-2026-0006',
+    clientId: 'CL-001',
+    waybillIds: ['WB-008'],
+    amount: 9500,
+    vatAmount: 1140,
+    surchargeAmount: 0,
+    totalAmount: 10640,
+    billingSchedule: 'Monthly',
+    billingPeriod: 'Apr 2026',
+    status: 'Needs Revision',
+    createdBy: 'EMP-003',
+    createdAt: new Date().toISOString(),
+    dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+  },
   {
     id: 'INV-001',
     invoiceNumber: 'LZD-2026-0001',
@@ -479,7 +527,7 @@ export interface ARRecord {
   outstandingBalance: number;
   agingBracket: 'Current' | '0-30 days' | '31-60 days' | '61-90 days' | '90+ days';
   agingDays: number;
-  status: 'Current' | 'Due Soon' | 'Overdue';
+  status: 'Current' | 'Due Soon' | 'Overdue' | 'Outstanding';
 }
 
 // Helper to compute aging bracket
@@ -724,12 +772,7 @@ export const NAV_CONFIG: Record<UserRole, { groups: { label?: string; items: Nav
           { label: 'Review History', path: '/review-history', icon: 'ti ti-history' },
         ],
       },
-      {
-        label: 'Collection Intelligence',
-        items: [
-          { label: 'Collection Priorities', path: '/collection-priorities', icon: 'ti ti-target' },
-        ]
-      },
+      
     ],
   },
   'Accountant': {
@@ -758,7 +801,6 @@ export const NAV_CONFIG: Record<UserRole, { groups: { label?: string; items: Nav
         items: [
           { label: 'Accounts Receivable', path: '/accounts-receivable', icon: 'ti ti-report-money' },
           { label: 'Payments', path: '/payments', icon: 'ti ti-cash' },
-          { label: 'Financial Adjustments', path: '/adjustments', icon: 'ti ti-adjustments-alt' },
           { label: 'SpeedPay Validation', path: '/speedpay-validation', icon: 'ti ti-device-mobile-message' },
           { label: 'Official Receipts', path: '/receipts', icon: 'ti ti-receipt' },
         ],
@@ -777,12 +819,7 @@ export const NAV_CONFIG: Record<UserRole, { groups: { label?: string; items: Nav
           { label: 'Review History', path: '/review-history', icon: 'ti ti-history' },
         ],
       },
-      {
-        label: 'Collection Intelligence',
-        items: [
-          { label: 'Collection Priorities', path: '/collection-priorities', icon: 'ti ti-target' },
-        ]
-      },
+      
       {
         label: 'Analytics',
         items: [
@@ -805,8 +842,6 @@ export const NAV_CONFIG: Record<UserRole, { groups: { label?: string; items: Nav
           { label: 'Invoice Review', path: '/invoice-review', icon: 'ti ti-file-check' },
           { label: 'Accounts Receivable', path: '/accounts-receivable', icon: 'ti ti-report-money' },
           { label: 'Payment Validation', path: '/payments', icon: 'ti ti-cash' },
-          { label: 'Financial Adjustments', path: '/adjustments', icon: 'ti ti-adjustments-alt' },
-          { label: 'SpeedPay Validation', path: '/speedpay-validation', icon: 'ti ti-device-mobile-message' },
         ],
       },
       {
@@ -817,12 +852,7 @@ export const NAV_CONFIG: Record<UserRole, { groups: { label?: string; items: Nav
           { label: 'Review History', path: '/review-history', icon: 'ti ti-history' },
         ],
       },
-      {
-        label: 'Collection Intelligence',
-        items: [
-          { label: 'For Review', path: '/for-review', icon: 'ti ti-clipboard-list' },
-        ]
-      },
+
       {
         label: 'Analytics & Control',
         items: [
@@ -843,8 +873,13 @@ export const NAV_CONFIG: Record<UserRole, { groups: { label?: string; items: Nav
       {
         label: 'Liquidation & Validation',
         items: [
-          { label: 'Liquidation Reports', path: '/liquidations', icon: 'ti ti-cash' },
-          { label: 'SpeedPay Validation', path: '/speedpay-validation', icon: 'ti ti-device-mobile-message' },
+          { label: 'Financial Adjustments', path: '/adjustments', icon: 'ti ti-adjustments-alt' },
+        ],
+      },
+      {
+        label: 'Receivables & Payments',
+        items: [
+          { label: 'Accounts Receivable', path: '/accounts-receivable', icon: 'ti ti-report-money' },
         ],
       },
       {
@@ -855,15 +890,11 @@ export const NAV_CONFIG: Record<UserRole, { groups: { label?: string; items: Nav
           { label: 'Review History', path: '/review-history', icon: 'ti ti-history' },
         ],
       },
-      {
-        label: 'Collection Intelligence',
-        items: [
-          { label: 'Collection Priorities', path: '/collection-priorities', icon: 'ti ti-target' },
-        ]
-      },
+      
       {
         label: 'Analytics & Control',
         items: [
+          { label: 'Reports', path: '/reports', icon: 'ti ti-chart-bar' },
           { label: 'Audit Logs', path: '/audit-logs', icon: 'ti ti-list-details' },
         ],
       },
@@ -880,8 +911,14 @@ export const NAV_CONFIG: Record<UserRole, { groups: { label?: string; items: Nav
       {
         label: 'Liquidation & Validation',
         items: [
-          { label: 'Liquidation Reports', path: '/liquidations', icon: 'ti ti-cash' },
+          { label: 'Financial Adjustments', path: '/adjustments', icon: 'ti ti-adjustments-alt' },
           { label: 'SpeedPay Validation', path: '/speedpay-validation', icon: 'ti ti-device-mobile-message' },
+        ],
+      },
+      {
+        label: 'Receivables & Payments',
+        items: [
+          { label: 'Accounts Receivable', path: '/accounts-receivable', icon: 'ti ti-report-money' },
         ],
       },
     ],
@@ -903,6 +940,7 @@ export const NAV_CONFIG: Record<UserRole, { groups: { label?: string; items: Nav
           { label: 'Settlement Validation', path: '/settlements', icon: 'ti ti-calculator' },
           { label: 'Financial Adjustments', path: '/adjustments', icon: 'ti ti-adjustments-alt' },
           { label: 'SpeedPay Validation', path: '/speedpay-validation', icon: 'ti ti-device-mobile-message' },
+          { label: 'Liquidation Reports', path: '/liquidations', icon: 'ti ti-cash' },
         ],
       },
 
@@ -914,12 +952,7 @@ export const NAV_CONFIG: Record<UserRole, { groups: { label?: string; items: Nav
           { label: 'Review History', path: '/review-history', icon: 'ti ti-history' },
         ],
       },
-      {
-        label: 'Collection Intelligence',
-        items: [
-          { label: 'For Review', path: '/for-review', icon: 'ti ti-clipboard-list' },
-        ]
-      },
+
       {
         label: 'Analytics & Control',
         items: [
@@ -946,6 +979,7 @@ export const NAV_CONFIG: Record<UserRole, { groups: { label?: string; items: Nav
           { label: 'Settlement Validation', path: '/settlements', icon: 'ti ti-calculator' },
           { label: 'Financial Adjustments', path: '/adjustments', icon: 'ti ti-adjustments-alt' },
           { label: 'SpeedPay Validation', path: '/speedpay-validation', icon: 'ti ti-device-mobile-message' },
+          { label: 'Liquidation Reports', path: '/liquidations', icon: 'ti ti-cash' },
         ],
       },
 

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Card } from '../components/Card';
 import { Button } from '../components/Buttons';
@@ -7,6 +7,7 @@ import { DataTable } from '../components/DataTable';
 import { StatusCard } from '../components/StatusCard';
 import Dropdown from '../components/Dropdown';
 import { useToast } from '../components/ToastContext';
+import { CalendarPicker } from '../components/FormModals';
 import { createPortal } from 'react-dom';
 
 interface Settlement {
@@ -106,10 +107,35 @@ const Settlements: React.FC = () => {
   const { toast } = useToast();
   
   const [settlements, setSettlements] = useState<Settlement[]>(MOCK_SETTLEMENTS);
-  const [filterTab, setFilterTab] = useState<'Pending' | 'Validated' | 'Rejected' | 'All'>('Pending');
+  const [filterTab, setFilterTab] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [showRecent, setShowRecent] = useState(false);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [typeFilter, setTypeFilter] = useState('');
-  
+  const [dateFrom, setDateFrom] = useState<string>('');
+  const [dateTo, setDateTo] = useState<string>('');
+
+  useEffect(() => {
+    const saved = localStorage.getItem('settlements_recentSearches');
+    if (saved) {
+      try { setRecentSearches(JSON.parse(saved)); } catch (e) {}
+    }
+  }, []);
+
+  const saveRecentSearch = (term: string) => {
+    if (!term.trim()) return;
+    setRecentSearches(prev => {
+      const updated = [term.trim(), ...prev.filter(t => t.toLowerCase() !== term.trim().toLowerCase())].slice(0, 5);
+      localStorage.setItem('settlements_recentSearches', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const handleSearchBlur = () => {
+    setTimeout(() => setShowRecent(false), 200);
+    saveRecentSearch(searchQuery);
+  };
+
   const [selectedRecord, setSelectedRecord] = useState<Settlement | null>(null);
   const [decision, setDecision] = useState('');
   const [rejectionReason, setRejectionReason] = useState('');
@@ -141,15 +167,32 @@ const Settlements: React.FC = () => {
       // Search query
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
-        return (
+        const matchesSearch = 
           s.id.toLowerCase().includes(q) ||
           s.courierName.toLowerCase().includes(q) ||
-          s.tripRef.toLowerCase().includes(q)
-        );
+          s.tripRef.toLowerCase().includes(q);
+        if (!matchesSearch) return false;
       }
+
+      // Date filtering
+      const submitDate = new Date(s.submittedAt);
+      submitDate.setHours(0, 0, 0, 0); // Normalize to start of day
+
+      if (dateFrom) {
+        const fromD = new Date(dateFrom);
+        fromD.setHours(0, 0, 0, 0);
+        if (submitDate < fromD) return false;
+      }
+      
+      if (dateTo) {
+        const toD = new Date(dateTo);
+        toD.setHours(23, 59, 59, 999);
+        if (submitDate > toD) return false;
+      }
+
       return true;
     });
-  }, [settlements, filterTab, searchQuery, typeFilter]);
+  }, [settlements, filterTab, searchQuery, typeFilter, dateFrom, dateTo]);
 
   const handleReviewClick = (row: Settlement) => {
     setSelectedRecord(row);
@@ -205,36 +248,99 @@ const Settlements: React.FC = () => {
 
       {/* Table Section */}
       <Card style={{ padding: '24px' }}>
-        <h2 style={{ margin: '0 0 20px', fontSize: '1.25rem', fontWeight: 800, color: '#0F172A' }}>Settlements from Accountant</h2>
+        <div>
+          <h2 style={{ margin: '0 0 4px', fontSize: '1.25rem', fontWeight: 800, color: '#0F172A' }}>Settlements</h2>
+          <p style={{ margin: '0 0 20px', fontSize: '0.85rem', color: '#64748B' }}>Review and validate leftover cash returns and reimbursement requests submitted by couriers.</p>
+        </div>
         
         {/* Filters */}
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '20px' }}>
-          <input 
-            type="text" 
-            placeholder="Search by ID, courier, or trip ref.." 
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #E2E8F0', fontSize: '13px', width: '250px', outline: 'none' }}
-          />
+          <div style={{ position: 'relative', width: '280px' }}>
+            <i className="ti ti-search" style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: '#64748B', fontSize: '16px' }} />
+            <input 
+              type="text" 
+              placeholder="Search by ID, courier, or trip ref.." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onFocus={(e) => {
+                setShowRecent(true);
+                e.currentTarget.style.background = '#ffffff';
+                e.currentTarget.style.border = '1px solid #0D9488';
+              }}
+              onBlur={(e) => {
+                handleSearchBlur();
+                e.currentTarget.style.background = '#F1F5F9';
+                e.currentTarget.style.border = '1px solid transparent';
+              }}
+              style={{ padding: '8px 16px 8px 40px', borderRadius: '28px', border: '1px solid transparent', fontSize: '13px', width: '100%', outline: 'none', background: '#F1F5F9', color: '#1E293B', transition: 'all 0.2s', boxSizing: 'border-box' }}
+            />
+            {showRecent && recentSearches.length > 0 && (
+              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 8, background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, boxShadow: '0 10px 25px -5px rgba(0,0,0,0.05)', zIndex: 100, paddingBottom: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', padding: '12px 16px 8px' }}>RECENT</div>
+                {recentSearches.map((term, i) => (
+                  <div key={i} onMouseDown={(e) => { e.preventDefault(); setSearchQuery(term); setShowRecent(false); }} style={{ display: 'flex', alignItems: 'center', padding: '10px 16px', cursor: 'pointer', transition: 'background 0.15s' }} onMouseEnter={e => e.currentTarget.style.background = '#F7F9FF'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                    <div style={{ width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: 12, fontSize: 16, background: '#F1F5F9', color: '#64748B' }}>
+                      <i className="ti ti-history" />
+                    </div>
+                    <span style={{ fontSize: 13, color: '#1E293B', fontWeight: 500, flex: 1 }}>{term}</span>
+                    <span style={{ fontSize: 12, color: '#94A3B8', marginLeft: 12 }}>Search</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           <select 
             value={filterTab} 
             onChange={(e) => setFilterTab(e.target.value as any)}
-            style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #E2E8F0', fontSize: '13px', outline: 'none' }}
+            style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #E2E8F0', fontSize: '13px', outline: 'none', background: '#F8FAFC', cursor: 'pointer', transition: 'border-color 0.2s, background-color 0.2s' }}
+            onFocus={(e) => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#3B82F6'; }}
+            onBlur={(e) => { e.currentTarget.style.background = '#F8FAFC'; e.currentTarget.style.borderColor = '#E2E8F0'; }}
           >
+            <option value="">Status</option>
             <option value="Pending">Pending ({pendingCount})</option>
             <option value="Validated">Validated ({validatedCount})</option>
             <option value="Rejected">Rejected ({rejectedCount})</option>
-            <option value="All">All ({allCount})</option>
           </select>
           <select 
             value={typeFilter} 
             onChange={(e) => setTypeFilter(e.target.value)}
-            style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #E2E8F0', fontSize: '13px', outline: 'none' }}
+            style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #E2E8F0', fontSize: '13px', outline: 'none', background: '#F8FAFC', cursor: 'pointer', transition: 'border-color 0.2s, background-color 0.2s' }}
+            onFocus={(e) => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#3B82F6'; }}
+            onBlur={(e) => { e.currentTarget.style.background = '#F8FAFC'; e.currentTarget.style.borderColor = '#E2E8F0'; }}
           >
             <option value="">Filter by Type</option>
             <option value="Leftover return">Leftover return</option>
             <option value="Reimbursement">Reimbursement</option>
           </select>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#64748B' }}>From:</span>
+              <div style={{ width: 140 }}>
+                <CalendarPicker
+                  label=""
+                  value={dateFrom}
+                  onChange={setDateFrom}
+                  placeholder="Start date..."
+                  variant="filter"
+                  maxDate="2024-12-31"
+                />
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#64748B' }}>To:</span>
+              <div style={{ width: 140 }}>
+                <CalendarPicker
+                  label=""
+                  value={dateTo}
+                  onChange={setDateTo}
+                  placeholder="End date..."
+                  variant="filter"
+                  minDate={dateFrom}
+                  maxDate="2024-12-31"
+                />
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Custom Table to exactly match the requested design */}
@@ -306,19 +412,17 @@ const Settlements: React.FC = () => {
                     </span>
                   </td>
                   <td style={tdStyle}>
-                    {row.status === 'For validation' && (
-                      <Dropdown
-                        align="right"
-                        items={[
-                          {
-                            key: 'review',
-                            label: 'Review Details',
-                            icon: 'ti-file-search',
-                            onClick: () => handleReviewClick(row)
-                          }
-                        ]}
-                      />
-                    )}
+                    <Dropdown
+                      align="right"
+                      items={[
+                        {
+                          key: 'review',
+                          label: row.status === 'For validation' ? 'Review Details' : 'View Details',
+                          icon: row.status === 'For validation' ? 'ti-file-search' : 'ti-eye',
+                          onClick: () => handleReviewClick(row)
+                        }
+                      ]}
+                    />
                   </td>
                 </tr>
               ))}
@@ -401,83 +505,95 @@ const Settlements: React.FC = () => {
                 Recorded by {selectedRecord.recordedBy} • {new Date(selectedRecord.recordedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}, {new Date(selectedRecord.recordedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
               </div>
 
-              <div style={{ marginBottom: decision ? '16px' : '24px' }}>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 800, color: '#0F172A', marginBottom: '6px' }}>Decision</label>
-                <select 
-                  value={decision}
-                  onChange={(e) => setDecision(e.target.value)}
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '14px', outline: 'none' }}
-                >
-                  <option value="">Select decision...</option>
-                  <option value="approve">✓ Validate</option>
-                  <option value="reject">✕ Reject</option>
-                </select>
-              </div>
-
-              {decision === 'reject' && (
+              {selectedRecord.status === 'For validation' ? (
                 <>
-                  <div style={{ marginBottom: '16px' }}>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 800, color: '#0F172A', marginBottom: '6px' }}>Reason for rejection</label>
+                  <div style={{ marginBottom: decision ? '16px' : '24px' }}>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 800, color: '#0F172A', marginBottom: '6px' }}>Decision</label>
                     <select 
-                      value={rejectionReason}
-                      onChange={(e) => setRejectionReason(e.target.value)}
+                      value={decision}
+                      onChange={(e) => setDecision(e.target.value)}
                       style={{ width: '100%', padding: '10px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '14px', outline: 'none' }}
                     >
-                      <option value="">Select a reason...</option>
-                      <option value="Cash short / over not explained">Cash short / over not explained</option>
-                      <option value="Wrong computation (advance / expenses)">Wrong computation (advance / expenses)</option>
-                      <option value="Envelope not received / wrong envelope no.">Envelope not received / wrong envelope no.</option>
-                      <option value="Missing original receipts">Missing original receipts</option>
-                      <option value="No prior supervisor approval">No prior supervisor approval</option>
-                      <option value="Duplicate record">Duplicate record</option>
-                      <option value="Other">Other</option>
+                      <option value="">Select decision...</option>
+                      <option value="approve">✓ Validate</option>
+                      <option value="reject">✕ Reject</option>
                     </select>
                   </div>
-                  <div style={{ marginBottom: '24px' }}>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 800, color: '#0F172A', marginBottom: '6px' }}>Details for the Accountant</label>
-                    <textarea 
-                      placeholder="What should be corrected?"
-                      value={remarks}
-                      onChange={(e) => setRemarks(e.target.value)}
-                      rows={3}
-                      style={{ width: '100%', padding: '10px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '14px', outline: 'none', resize: 'none' }}
-                    />
-                  </div>
-                </>
-              )}
 
-              {decision === 'approve' && (
-                <div style={{ marginBottom: '24px' }}>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 800, color: '#0F172A', marginBottom: '6px' }}>Remarks (optional)</label>
-                  <textarea 
-                    placeholder="Sent to Asst. Finance Manager for approval"
-                    value={remarks}
-                    onChange={(e) => setRemarks(e.target.value)}
-                    rows={2}
-                    style={{ width: '100%', padding: '10px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '14px', outline: 'none', resize: 'none' }}
-                  />
+                  {decision === 'reject' && (
+                    <>
+                      <div style={{ marginBottom: '16px' }}>
+                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 800, color: '#0F172A', marginBottom: '6px' }}>Reason for rejection</label>
+                        <select 
+                          value={rejectionReason}
+                          onChange={(e) => setRejectionReason(e.target.value)}
+                          style={{ width: '100%', padding: '10px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '14px', outline: 'none' }}
+                        >
+                          <option value="">Select a reason...</option>
+                          <option value="Cash short / over not explained">Cash short / over not explained</option>
+                          <option value="Wrong computation (advance / expenses)">Wrong computation (advance / expenses)</option>
+                          <option value="Envelope not received / wrong envelope no.">Envelope not received / wrong envelope no.</option>
+                          <option value="Missing original receipts">Missing original receipts</option>
+                          <option value="No prior supervisor approval">No prior supervisor approval</option>
+                          <option value="Duplicate record">Duplicate record</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </div>
+                      <div style={{ marginBottom: '24px' }}>
+                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 800, color: '#0F172A', marginBottom: '6px' }}>Details for the Accountant</label>
+                        <textarea 
+                          placeholder="What should be corrected?"
+                          value={remarks}
+                          onChange={(e) => setRemarks(e.target.value)}
+                          rows={3}
+                          style={{ width: '100%', padding: '10px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '14px', outline: 'none', resize: 'none' }}
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {decision === 'approve' && (
+                    <div style={{ marginBottom: '24px' }}>
+                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 800, color: '#0F172A', marginBottom: '6px' }}>Remarks (optional)</label>
+                      <textarea 
+                        placeholder="Sent to Asst. Finance Manager for approval"
+                        value={remarks}
+                        onChange={(e) => setRemarks(e.target.value)}
+                        rows={2}
+                        style={{ width: '100%', padding: '10px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '14px', outline: 'none', resize: 'none' }}
+                      />
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div style={{ marginBottom: '24px', padding: '16px', background: selectedRecord.status === 'Validated' ? '#ECFDF5' : '#FEF2F2', borderRadius: '8px', border: `1px solid ${selectedRecord.status === 'Validated' ? '#A7F3D0' : '#FECACA'}` }}>
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: selectedRecord.status === 'Validated' ? '#065F46' : '#991B1B' }}>
+                    This settlement was already {selectedRecord.status.toLowerCase()}.
+                  </div>
                 </div>
               )}
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
                 <Button title="Close" variant="secondary" onClick={() => setSelectedRecord(null)} />
-                <button 
-                  onClick={handleConfirmDecision}
-                  style={{ 
-                    padding: '8px 16px', 
-                    borderRadius: '6px', 
-                    fontSize: '13px', 
-                    fontWeight: 700, 
-                    border: 'none', 
-                    cursor: 'pointer',
-                    background: decision === 'reject' ? '#EF4444' : '#10B981',
-                    color: 'white',
-                    opacity: decision ? 1 : 0.5
-                  }}
-                  disabled={!decision}
-                >
-                  {decision === 'reject' ? 'Confirm reject' : decision === 'approve' ? 'Confirm validate' : 'Confirm'}
-                </button>
+                {selectedRecord.status === 'For validation' && (
+                  <button 
+                    onClick={handleConfirmDecision}
+                    style={{ 
+                      padding: '8px 16px', 
+                      borderRadius: '6px', 
+                      fontSize: '13px', 
+                      fontWeight: 700, 
+                      border: 'none', 
+                      cursor: 'pointer',
+                      background: decision === 'reject' ? '#EF4444' : '#10B981',
+                      color: 'white',
+                      opacity: decision ? 1 : 0.5
+                    }}
+                    disabled={!decision}
+                  >
+                    {decision === 'reject' ? 'Confirm reject' : decision === 'approve' ? 'Confirm validate' : 'Confirm'}
+                  </button>
+                )}
               </div>
             </div>
           </div>

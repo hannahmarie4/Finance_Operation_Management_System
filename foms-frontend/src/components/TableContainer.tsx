@@ -10,7 +10,7 @@ export interface TableContainerProps {
 
 export const TableContainer: React.FC<TableContainerProps> = ({ children, style, className }) => {
   return (
-    <Card noPadding className={`table-container ${className || ''}`} style={{ overflow: 'hidden', ...style }}>
+    <Card noPadding className={`table-container ${className || ''}`} style={{ overflow: 'visible', ...style }}>
       {children}
     </Card>
   );

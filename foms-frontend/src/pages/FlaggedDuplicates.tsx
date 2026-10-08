@@ -20,7 +20,7 @@ interface FlaggedDoc {
 
 const ROWS_PER_PAGE_OPTIONS = [10, 25, 50];
 
-const ActionMenu: React.FC<{ doc: FlaggedDoc; onAction: (action: string, doc: FlaggedDoc) => void }> = ({ doc, onAction }) => {
+const ActionMenu: React.FC<{ doc: FlaggedDoc; role?: string; onAction: (action: string, doc: FlaggedDoc) => void }> = ({ doc, role, onAction }) => {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -44,11 +44,16 @@ const ActionMenu: React.FC<{ doc: FlaggedDoc; onAction: (action: string, doc: Fl
     setOpen(!open);
   };
 
-  const actions = [
+  const isApprover = role === 'Head Accountant' || role === 'Finance Manager';
+
+  const actions = isApprover ? [
     { label: 'View Details', icon: 'ti-eye' },
     { label: 'Mark as Resolved', icon: 'ti-check' },
     { label: 'Dismiss Flag', icon: 'ti-x' },
     { label: 'Escalate', icon: 'ti-alert-triangle' },
+  ] : [
+    { label: 'View Details', icon: 'ti-eye' },
+    { label: 'Endorse to Manager', icon: 'ti-checkup-list' },
   ];
 
   return (
@@ -115,7 +120,7 @@ const FlaggedDuplicates: React.FC = () => {
       const res = await fetch('/api/ai/duplicates', {
         headers: { 'Authorization': `Bearer ${getToken()}` }
       });
-      let mapped = [];
+      let mapped: any[] = [];
       if (res.ok) {
         const json = await res.json();
         mapped = (Array.isArray(json) ? json : []).map((a: any) => ({
@@ -185,11 +190,17 @@ const FlaggedDuplicates: React.FC = () => {
     if (action === 'View Details') {
       setSelectedDoc(doc);
     } else if (action === 'Mark as Resolved') {
-      setData(prev => prev.map(d => d.flagId === doc.flagId ? { ...d, handlingAction: 'Resolved' } : d));
+      setData(prev => prev.map(d => d.flagId === doc.flagId ? { ...d, handlingAction: 'Resolved', status: 'Resolved' } : d));
       toast.success('Document marked as resolved.');
     } else if (action === 'Dismiss Flag') {
-      setData(prev => prev.map(d => d.flagId === doc.flagId ? { ...d, handlingAction: 'Dismissed' } : d));
+      setData(prev => prev.map(d => d.flagId === doc.flagId ? { ...d, handlingAction: 'Dismissed', status: 'Dismissed' } : d));
       toast.info('Flag dismissed.');
+    } else if (action === 'Escalate') {
+      setData(prev => prev.map(d => d.flagId === doc.flagId ? { ...d, handlingAction: 'Escalated', status: 'Escalated' } : d));
+      toast.success('Document escalated for further review.');
+    } else if (action === 'Endorse to Manager') {
+      setData(prev => prev.map(d => d.flagId === doc.flagId ? { ...d, handlingAction: 'Endorsed', status: 'Endorsed' } : d));
+      toast.success('Document endorsed to Manager.');
     } else {
       toast.info(`Action '${action}' triggered for ${doc.flagId}`);
     }
@@ -218,7 +229,19 @@ const FlaggedDuplicates: React.FC = () => {
   const handlingBadge = (action: string) => {
     if (action === 'Pending Review') return { bg: '#FEF3C7', color: '#D97706' };
     if (action === 'Resolved') return { bg: '#F0FDF4', color: '#16A34A' };
+    if (action === 'Escalated') return { bg: '#FEE2E2', color: '#DC2626' };
+    if (action === 'Endorsed') return { bg: '#E0E7FF', color: '#4338CA' };
+    if (action === 'Dismissed') return { bg: '#F3F4F6', color: '#4B5563' };
     return { bg: '#F1F5F9', color: '#64748B' };
+  };
+
+  const statusBadge = (status: string) => {
+    if (status === 'Pending') return { bg: '#FEF2F2', color: '#EF4444', border: '#FECACA' };
+    if (status === 'Resolved') return { bg: '#F0FDF4', color: '#16A34A', border: '#BBF7D0' };
+    if (status === 'Escalated') return { bg: '#FEF2F2', color: '#DC2626', border: '#FECACA' };
+    if (status === 'Endorsed') return { bg: '#EEF2FF', color: '#4338CA', border: '#C7D2FE' };
+    if (status === 'Dismissed') return { bg: '#F8FAFC', color: '#64748B', border: '#E2E8F0' };
+    return { bg: '#F1F5F9', color: '#64748B', border: '#E2E8F0' };
   };
 
   return (
@@ -226,10 +249,10 @@ const FlaggedDuplicates: React.FC = () => {
 
 
       {/* Table Card */}
-      <div style={{ background: '#fff', borderRadius: '14px', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
+      <div style={{ background: '#fff', borderRadius: '12px', padding: '24px', flex: 1, display: 'flex', flexDirection: 'column' }}>
 
         {/* Table Top Bar */}
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid #E2E8F0' }}>
+        <div style={{ paddingBottom: '20px' }}>
           <div style={{ fontWeight: 800, fontSize: '1.2rem', color: '#0F172A', marginBottom: 14 }}>
             Flagged Duplicate Documents
           </div>
@@ -297,7 +320,7 @@ const FlaggedDuplicates: React.FC = () => {
         </div>
 
         {/* Table */}
-        <div style={{ overflowX: 'auto' }}>
+        <div style={{ overflowX: 'auto', border: '1px solid #E2E8F0', borderRadius: '8px' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1200 }}>
             <thead>
               <tr style={{ background: '#F8FAFC' }}>
@@ -394,16 +417,18 @@ const FlaggedDuplicates: React.FC = () => {
                     <td style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>
                       <span style={{
                         display: 'inline-flex', alignItems: 'center', gap: 5,
-                        background: '#FEF2F2', color: '#EF4444',
+                        background: statusBadge(doc.status).bg, color: statusBadge(doc.status).color,
                         padding: '4px 10px', borderRadius: '9999px',
-                        fontSize: '0.75rem', fontWeight: 700, border: '1px solid #FECACA',
+                        fontSize: '0.75rem', fontWeight: 700, border: `1px solid ${statusBadge(doc.status).border}`,
                       }}>
-                        <i className="ti ti-clock" style={{ fontSize: '12px' }} />
+                        {doc.status === 'Pending' && <i className="ti ti-clock" style={{ fontSize: '12px' }} />}
+                        {doc.status === 'Resolved' && <i className="ti ti-check" style={{ fontSize: '12px' }} />}
+                        {doc.status === 'Escalated' && <i className="ti ti-alert-circle" style={{ fontSize: '12px' }} />}
                         {doc.status}
                       </span>
                     </td>
                     <td style={{ padding: '14px 8px' }}>
-                      <ActionMenu doc={doc} onAction={handleAction} />
+                      <ActionMenu doc={doc} role={user?.role} onAction={handleAction} />
                     </td>
                   </tr>
                 );
@@ -415,7 +440,7 @@ const FlaggedDuplicates: React.FC = () => {
         {/* Pagination */}
         <div style={{
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          padding: '14px 20px', borderTop: '1px solid #F1F5F9', flexWrap: 'wrap', gap: 10,
+          paddingTop: '14px', marginTop: '14px', flexWrap: 'wrap', gap: 10,
         }}>
           <span style={{ fontSize: '0.875rem', color: '#64748B' }}>
             {filtered.length === 0 ? 'No records' : `${filtered.length} record${filtered.length !== 1 ? 's' : ''}`}

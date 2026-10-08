@@ -27,14 +27,14 @@ export const AccountantDashboard: React.FC = () => {
   );
   const drafts = invoices.filter(i => i.status === 'Draft');
   const needsRevision = invoices.filter(i => i.status === 'Needs Revision');
-  const overdue = invoices.filter(i => i.status === 'Overdue');
+  const overdue = invoices.filter(i => i.status === 'Overdue' || i.status === 'Outstanding');
   const dueSoon = invoices.filter(i => {
     if (i.status !== 'Sent') return false;
     const days = Math.ceil((new Date(i.dueDate).getTime() - Date.now()) / 86400000);
     return days >= 0 && days <= 7;
   });
   const pendingApproval = invoices.filter(i => i.status === 'Pending Approval');
-  const toRecordPayment = invoices.filter(i => i.status === 'Sent' || i.status === 'Overdue');
+  const toRecordPayment = invoices.filter(i => i.status === 'Sent' || i.status === 'Overdue' || i.status === 'Outstanding');
   const pendingSpeedPay = speedPay?.filter((s: any) => s.status === 'Pending Validation').length || 0;
 
   // Work queue: things the accountant must act on, most urgent first

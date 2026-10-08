@@ -83,6 +83,7 @@ export interface DataTableProps<T> {
   defaultPageSize?: number;
   emptyMessage?: string;
   selectable?: boolean;
+  hideBulkActionBar?: boolean;
   selectedKeys?: (string | number)[];
   onSelectionChange?: (selectedKeys: (string | number)[]) => void;
   className?: string;
@@ -183,6 +184,7 @@ export function DataTable<T>({
   defaultPageSize = 10,
   emptyMessage = "No records found.",
   selectable = false,
+  hideBulkActionBar = false,
   onSelectionChange,
   className = "",
   loading = false,
@@ -563,7 +565,7 @@ export function DataTable<T>({
   return (
     <div className={`dt-root ${densityClass} ${className}`}>
       {title && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', paddingBottom: subtitle ? 12 : 20, paddingLeft: 24, paddingRight: 24, paddingTop: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', paddingBottom: subtitle ? 12 : 20 }}>
           <div>
             <h2 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#0F172A', margin: 0 }}>
               {title}
@@ -609,16 +611,23 @@ export function DataTable<T>({
             )}
             {showRecent && recentSearches.length > 0 && (
               <div className="dt-search-dropdown">
-                <div className="dt-search-dropdown-header">RECENT SEARCHES</div>
-                {recentSearches.map((term, i) => (
-                  <div key={i} className="dt-search-dropdown-item" onClick={() => handleSearchChange(term)}>
-                    <div className="dt-search-dropdown-icon" style={{ background: '#F1F5F9', color: '#64748B' }}>
-                      <i className="ti ti-clock" />
+                <div className="dt-search-dropdown-header">RECENT</div>
+                {recentSearches.map((term, i) => {
+                  const icon = 'ti-history';
+                  const bg = '#F1F5F9';
+                  const color = '#64748B';
+                  const type = 'Search';
+                  
+                  return (
+                    <div key={i} className="dt-search-dropdown-item" onClick={() => handleSearchChange(term)}>
+                      <div className="dt-search-dropdown-icon" style={{ background: bg, color: color }}>
+                        <i className={`ti ${icon}`} />
+                      </div>
+                      <span className="dt-search-dropdown-text" style={{fontSize: '13px', color: '#1E293B', fontWeight: 500}}>{term}</span>
+                      <span className="dt-search-dropdown-type" style={{marginLeft: 'auto', fontSize: '11px', color: '#94A3B8'}}>{type}</span>
                     </div>
-                    <span className="dt-search-dropdown-text">{term}</span>
-                    <span className="dt-search-dropdown-type">Search</span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -631,7 +640,9 @@ export function DataTable<T>({
               value={activeFilters[f.key] ?? ""}
               onChange={(e) => handleFilterChange(f.key, e.target.value)}
             >
-              <option value="">{f.label}</option>
+              {!f.options.some(opt => opt.value === "") && (
+                <option value="">{f.label}</option>
+              )}
               {f.options.map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
@@ -744,7 +755,7 @@ export function DataTable<T>({
       )}
 
       {/* ── Bulk action bar ── */}
-      {selectable && selectedCount > 0 && (
+      {selectable && selectedCount > 0 && !hideBulkActionBar && (
         <div className="dt-bulk-bar" role="toolbar" aria-label="Bulk actions">
           <div className="dt-bulk-bar-left">
             <span className="dt-bulk-count">
@@ -788,27 +799,7 @@ export function DataTable<T>({
         </div>
       )}
 
-      {/* ── No Results Banner ── */}
-      {paginated.length === 0 && hasActiveFilters && (
-        <div style={{ background: '#FFF7ED', border: '1px solid #FFEDD5', borderLeft: 'none', borderRight: 'none', padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0', overflow: 'hidden', boxSizing: 'border-box', flexWrap: 'wrap', gap: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#C2410C', minWidth: 0, flex: '1 1 auto' }}>
-            <i className="ti ti-search-off" style={{ fontSize: '18px', flexShrink: 0 }} />
-            <span style={{ fontSize: '14px', wordBreak: 'break-word' }}>
-              {search ? (
-                <>No results for <strong>"{search}"</strong></>
-              ) : (
-                <>No results found for applied filters</>
-              )}
-            </span>
-          </div>
-          <button 
-            onClick={clearAllFilters}
-            style={{ border: '1px solid #FED7AA', background: 'transparent', color: '#C2410C', padding: '6px 12px', borderRadius: '6px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', flexShrink: 0 }}
-          >
-            <i className="ti ti-x" /> Clear filters
-          </button>
-        </div>
-      )}
+
 
       {/* ── Table ── */}
       <div className="dt-table-wrap">

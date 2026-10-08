@@ -66,7 +66,8 @@ const ReportsContent: React.FC = () => {
   const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false);
 
   // Compile Parameters state
-  const [compileLedgerType, setCompileLedgerType] = useState('Duplicate Alert Summary');
+  const defaultLedger = (user?.role === 'Accountant') ? 'Aging of Accounts' : 'Duplicate Alert Summary';
+  const [compileLedgerType, setCompileLedgerType] = useState(defaultLedger);
   const [compileSearch, setCompileSearch] = useState('');
   const [compileDateRange, setCompileDateRange] = useState('Last 30 Days');
   const [compileStatus, setCompileStatus] = useState('All Statuses');
@@ -103,19 +104,30 @@ const ReportsContent: React.FC = () => {
   };
 
   const handleGenerateReport = () => {
-    if (!dateFrom) {
-      toast.error("Please select a 'Date From' value.");
-      return;
+    const now = new Date();
+    let start = new Date(now);
+    
+    if (compileDateRange === 'Last 7 Days') {
+      start.setDate(now.getDate() - 7);
+    } else if (compileDateRange === 'Last 30 Days') {
+      start.setDate(now.getDate() - 30);
+    } else if (compileDateRange === 'Last 90 Days') {
+      start.setDate(now.getDate() - 90);
+    } else if (compileDateRange === 'This Month') {
+      start = new Date(now.getFullYear(), now.getMonth(), 1);
+    } else if (compileDateRange === 'This Year') {
+      start = new Date(now.getFullYear(), 0, 1);
+    } else if (compileDateRange === 'All Time') {
+      start = new Date(2000, 0, 1);
     }
-    if (!dateTo) {
-      toast.error("Please select a 'Date To' value.");
-      return;
-    }
-    if (new Date(dateFrom) > new Date(dateTo)) {
-      toast.error("'Date From' cannot be after 'Date To'.");
-      return;
-    }
+
+    const newDateFrom = start.toISOString().split('T')[0];
+    const newDateTo = now.toISOString().split('T')[0];
+
+    setDateFrom(newDateFrom);
+    setDateTo(newDateTo);
     setIsGenerated(true);
+
     addAuditLog({
       id: `AL-${Date.now()}`,
       userId: user?.employeeId || 'U-000',
@@ -126,9 +138,11 @@ const ReportsContent: React.FC = () => {
       recordId: 'N/A',
       recordType: 'Report',
       ipAddress: '127.0.0.1',
-      details: `Generated ${reportType} report for ${dateFrom} to ${dateTo}`,
+      details: `Generated ${reportType} report for ${compileDateRange}`,
       timestamp: new Date().toISOString()
     });
+    
+    toast.success('Report generated successfully.');
   };
 
   const getFilteredAR = () => {
@@ -475,8 +489,9 @@ const ReportsContent: React.FC = () => {
             <i className="ti ti-filter" style={{ fontSize: '15px', color: '#0D9488' }} />
             <span style={{ fontSize: '0.875rem', fontWeight: 800, color: '#0F172A' }}>Compile Parameters</span>
           </div>
-          {/* Export buttons */}
+          {/* Export & Actions */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+
             <button
               onClick={() => window.print()}
               style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', background: '#fff', border: '1px solid #CBD5E1', borderRadius: 8, fontSize: '0.82rem', fontWeight: 600, color: '#0F172A', cursor: 'pointer', transition: 'background 0.15s', whiteSpace: 'nowrap' }}
@@ -510,17 +525,21 @@ const ReportsContent: React.FC = () => {
             <div style={{ position: 'relative' }}>
               <select value={compileLedgerType} onChange={e => { setCompileLedgerType(e.target.value); setReportType(e.target.value === 'Aging of Accounts' ? 'aging' : e.target.value === 'Invoice Summary' ? 'invoices' : e.target.value === 'Collection Summary' ? 'collections' : 'duplicate'); }}
                 style={{ width: '100%', appearance: 'none', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '9px 32px 9px 12px', fontSize: '0.85rem', color: '#0F172A', cursor: 'pointer', outline: 'none' }}>
-                <optgroup label="── Financial Reports ──">
-                  <option value="Aging of Accounts">Aging of Accounts</option>
-                  <option value="Invoice Summary">Invoice Summary</option>
-                  <option value="Collection Summary">Collection Summary</option>
-                </optgroup>
-                <optgroup label="── Duplicate Detection ──">
-                  <option value="Duplicate Alert Summary">Duplicate Alert Summary</option>
-                  <option value="Unique Document Ledger">Unique Document Ledger</option>
-                  <option value="Flagged Duplicates Log">Flagged Duplicates Log</option>
-                  <option value="Review History Audit">Review History Audit</option>
-                </optgroup>
+                {(user?.role === 'Finance Manager' || user?.role === 'Head Accountant' || user?.role === 'Accountant') && (
+                  <optgroup label="── Financial Reports ──">
+                    <option value="Aging of Accounts">Aging of Accounts</option>
+                    <option value="Invoice Summary">Invoice Summary</option>
+                    <option value="Collection Summary">Collection Summary</option>
+                  </optgroup>
+                )}
+                {(user?.role === 'Finance Manager' || user?.role === 'Head Accountant' || user?.role === 'Assistant of Finance Manager') && (
+                  <optgroup label="── Duplicate Detection ──">
+                    <option value="Duplicate Alert Summary">Duplicate Alert Summary</option>
+                    <option value="Unique Document Ledger">Unique Document Ledger</option>
+                    <option value="Flagged Duplicates Log">Flagged Duplicates Log</option>
+                    <option value="Review History Audit">Review History Audit</option>
+                  </optgroup>
+                )}
               </select>
               <i className="ti ti-chevron-down" style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: '#64748B', fontSize: '13px', pointerEvents: 'none' }} />
             </div>
@@ -570,14 +589,14 @@ const ReportsContent: React.FC = () => {
             </div>
           </div>
 
-          {/* Refresh Report */}
+          {/* Generate Report */}
           <div style={{ flexShrink: 0 }}>
-            <button onClick={() => {}}
-              style={{ background: '#fff', color: '#0F172A', padding: '9px 18px', borderRadius: 8, border: '1px solid #CBD5E1', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap', transition: 'background 0.15s' }}
-              onMouseEnter={e => (e.currentTarget.style.background = '#F8FAFC')}
-              onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
-              <i className="ti ti-refresh" style={{ fontSize: '15px', color: '#0D9488' }} />
-              Refresh Report
+            <button onClick={handleGenerateReport}
+              style={{ background: '#0D9488', color: '#ffffff', padding: '9px 18px', borderRadius: 8, border: 'none', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap', transition: 'background 0.15s', boxShadow: '0 2px 6px rgba(13,148,136,0.25)' }}
+              onMouseEnter={e => (e.currentTarget.style.background = '#0F766E')}
+              onMouseLeave={e => (e.currentTarget.style.background = '#0D9488')}>
+              <i className="ti ti-chart-pie" style={{ fontSize: '15px' }} />
+              Generate Report
             </button>
           </div>
         </div>

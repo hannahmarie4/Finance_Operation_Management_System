@@ -20,7 +20,7 @@ const ROWS_PER_PAGE_OPTIONS = [10, 25, 50];
 const VIEW_MODES = ['list', 'compact', 'card'] as const;
 type ViewMode = typeof VIEW_MODES[number];
 
-const ActionMenu: React.FC<{ doc: UniqueDoc; onAction: (action: string, doc: UniqueDoc) => void }> = ({ doc, onAction }) => {
+const ActionMenu: React.FC<{ doc: UniqueDoc; role?: string; onAction: (action: string, doc: UniqueDoc) => void }> = ({ doc, role, onAction }) => {
   const [open, setOpen] = useState(false);
   const ref = React.useRef<HTMLDivElement>(null);
   const btnRef = React.useRef<HTMLButtonElement>(null);
@@ -44,11 +44,18 @@ const ActionMenu: React.FC<{ doc: UniqueDoc; onAction: (action: string, doc: Uni
     setOpen(!open);
   };
 
-  const actions = [
+  const isApprover = role === 'Head Accountant' || role === 'Finance Manager';
+
+  const actions = isApprover ? [
     { label: 'View Details', icon: 'ti-eye' },
+    { label: 'Approve Document', icon: 'ti-check' },
     { label: 'Download', icon: 'ti-download' },
     { label: 'Flag for Review', icon: 'ti-alert-triangle' },
     { label: 'Remove', icon: 'ti-trash' }
+  ] : [
+    { label: 'View Details', icon: 'ti-eye' },
+    { label: 'Endorse for Approval', icon: 'ti-checkup-list' },
+    { label: 'Download', icon: 'ti-download' },
   ];
 
   return (
@@ -96,6 +103,28 @@ const UniqueDocuments: React.FC = () => {
   const handleAction = (action: string, doc: UniqueDoc) => {
     if (action === 'View Details') {
       setSelectedDoc(doc);
+    } else if (action === 'Approve Document') {
+      setDocs(prev => prev.map(d => d.id === doc.id ? { ...d, status: 'Verified' } : d));
+      toast.success(`Document ${doc.id} approved successfully.`);
+    } else if (action === 'Flag for Review') {
+      setDocs(prev => prev.map(d => d.id === doc.id ? { ...d, status: 'Flagged' } : d));
+      toast.info(`Document ${doc.id} flagged for review.`);
+    } else if (action === 'Remove') {
+      setDocs(prev => prev.filter(d => d.id !== doc.id));
+      toast.success(`Document ${doc.id} removed.`);
+    } else if (action === 'Endorse for Approval') {
+      toast.success(`Document ${doc.id} endorsed to Manager.`);
+    } else if (action === 'Download') {
+      toast.success(`Downloading ${doc.id}...`);
+      setTimeout(() => {
+        const blob = new Blob(['Dummy file data for ' + doc.id], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${doc.id}.txt`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }, 500);
     } else {
       toast.info(`Action '${action}' triggered for ${doc.id}`);
     }
@@ -107,7 +136,7 @@ const UniqueDocuments: React.FC = () => {
       const res = await fetch('/api/ai/duplicates/unique-documents', {
         headers: { 'Authorization': `Bearer ${getToken()}` }
       });
-      let mapped = [];
+      let mapped: any[] = [];
       if (res.ok) {
         const data = await res.json();
         mapped = (Array.isArray(data) ? data : []).map((u: any) => ({
@@ -195,9 +224,9 @@ const UniqueDocuments: React.FC = () => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       {/* Table Card */}
-      <div style={{ background: '#fff', borderRadius: '14px', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
+      <div style={{ background: '#fff', borderRadius: '12px', padding: '24px', flex: 1, display: 'flex', flexDirection: 'column' }}>
         {/* Top Bar */}
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid #E2E8F0' }}>
+        <div style={{ paddingBottom: '20px' }}>
           <div style={{ fontWeight: 800, fontSize: '1.2rem', color: '#0F172A', marginBottom: 14 }}>Unique Documents</div>
 
           {/* Decision Support Notice */}
@@ -234,7 +263,7 @@ const UniqueDocuments: React.FC = () => {
         </div>
 
         {/* Table */}
-        <div style={{ overflowX: 'auto' }}>
+        <div style={{ overflowX: 'auto', border: '1px solid #E2E8F0', borderRadius: '8px' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1300 }}>
             <thead>
               <tr style={{ background: '#F8FAFC' }}>
@@ -308,7 +337,7 @@ const UniqueDocuments: React.FC = () => {
                       <span style={{ background: sb.bg, color: sb.color, padding: '4px 10px', borderRadius: '9999px', fontSize: '0.75rem', fontWeight: 700, border: `1px solid ${sb.border}` }}>{doc.status}</span>
                     </td>
                     <td style={{ padding: '14px 8px' }}>
-                      <ActionMenu doc={doc} onAction={handleAction} />
+                      <ActionMenu doc={doc} role={user?.role} onAction={handleAction} />
                     </td>
                   </tr>
                 );
@@ -318,7 +347,7 @@ const UniqueDocuments: React.FC = () => {
         </div>
 
         {/* Pagination */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', borderTop: '1px solid #F1F5F9', flexWrap: 'wrap', gap: 10 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '14px', marginTop: '14px', flexWrap: 'wrap', gap: 10 }}>
           <span style={{ fontSize: '0.875rem', color: '#64748B' }}>
             {filtered.length === 0 ? 'No records' : `Showing ${(page - 1) * rowsPerPage + 1}–${Math.min(page * rowsPerPage, filtered.length)} of ${filtered.length} record${filtered.length !== 1 ? 's' : ''}`}
           </span>

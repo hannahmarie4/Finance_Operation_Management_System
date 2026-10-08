@@ -16,8 +16,8 @@
 
 /* 1. Success (Green variants e.g. ACTIVE, DONE, SUCCESS) */
 .badge-success { 
-  background: #ECFDF5;
-  color: #10B981; 
+  background: #E6F4EA;
+  color: #00796B; 
 }
 
 /* 2. Danger (Red variants e.g. FAILED, OUTFLOW, OVERDUE) */

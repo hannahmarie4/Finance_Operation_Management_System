@@ -16,16 +16,15 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, className = ''
   let iconClass = 'ti ti-alert-circle'; // default warning icon
 
   // 1. Success (Green)
-  if (['active', 'done', 'delivered', 'success', 'completed', 'paid', 'inflow', 'validated', 'validated (ctc)', 'billed', 'verified', 'verified & deposited', 'finalized'].includes(normalized)) {
+  if (['active', 'done', 'delivered', 'success', 'completed', 'paid', 'inflow', 'validated', 'validated (ctc)', 'billed', 'verified', 'verified & deposited', 'finalized', 'approved'].includes(normalized)) {
     tier = 'success';
-    iconClass = normalized === 'inflow' ? 'ti ti-arrow-down-left' : 'ti ti-check';
-    if (normalized === 'active' || normalized === 'success') iconClass = 'ti ti-circle-check';
+    iconClass = normalized === 'inflow' ? 'ti ti-arrow-down-left' : 'ti ti-circle-check';
   }
   // 2. Danger (Red)
-  else if (['failed', 'overdue', 'outflow', 'missing', 'rejected'].includes(normalized) || normalized.includes('60-90') || normalized.includes('90+')) {
+  else if (['failed', 'overdue', 'outstanding', 'outflow', 'missing', 'rejected', 'error'].includes(normalized) || normalized.includes('60-90') || normalized.includes('90+')) {
     tier = 'danger';
     iconClass = normalized === 'outflow' ? 'ti ti-arrow-up-right' : 
-                normalized === 'overdue' ? 'ti ti-clock-exclamation' : 'ti ti-circle-x';
+                (normalized === 'overdue' || normalized === 'outstanding') ? 'ti ti-clock-exclamation' : 'ti ti-circle-x';
   }
   // 3. Neutral (Grey)
   else if (['deactivated', 'returned', 'cancelled'].includes(normalized)) {

@@ -160,7 +160,7 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
                   outline: 'none'
                 }}
               >
-                {Array.from({ length: 21 }, (_, i) => 2015 + i).map(year => (
+                {Array.from({ length: 10 }, (_, i) => 2015 + i).map(year => (
                   <option key={year} value={year}>{year}</option>
                 ))}
               </select>

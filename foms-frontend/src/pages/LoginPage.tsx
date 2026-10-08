@@ -328,36 +328,6 @@ export function LoginPage() {
               )}
             </button>
 
-            {/* Create Account option */}
-            <div style={{ textAlign: 'center', marginTop: '16px', fontSize: '13px', color: '#64748B' }}>
-              New staff member?{' '}
-              <button
-                type="button"
-                onClick={() => {
-                  setShowCreateModal(true);
-                  setCreateError(null);
-                  setNewEmpId('');
-                  setNewFullName('');
-                  setNewRole('Accountant');
-                  setNewPassword('');
-                }}
-                style={{
-                  width: '100%',
-                  padding: '12px',
-                  background: 'transparent',
-                  border: '1.5px solid #1B254B',
-                  borderRadius: '8px',
-                  fontFamily: '"Inter", sans-serif',
-                  fontSize: '13px',
-                  fontWeight: 600,
-                  color: '#1B254B',
-                  cursor: 'pointer',
-                  marginTop: '8px'
-                }}
-              >
-                Create Account
-              </button>
-            </div>
           </form>
         </div>
 

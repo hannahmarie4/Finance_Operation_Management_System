@@ -143,6 +143,7 @@ export interface CalendarPickerProps {
   disablePastDates?: boolean;
   minDate?: string;
   maxDate?: string;
+  variant?: 'default' | 'toolbar' | 'filter';
 }
 
 export const CalendarPicker: React.FC<CalendarPickerProps> = ({
@@ -157,6 +158,7 @@ export const CalendarPicker: React.FC<CalendarPickerProps> = ({
   disablePastDates = false,
   minDate,
   maxDate,
+  variant = 'default',
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -205,8 +207,22 @@ export const CalendarPicker: React.FC<CalendarPickerProps> = ({
     setIsOpen(false);
   };
 
-  const navMonth = (offset: number) =>
-    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + offset, 1));
+  const navMonth = (offset: number) => {
+    const targetDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + offset, 1);
+    if (minDate) {
+      const minD = new Date(minDate);
+      minD.setDate(1);
+      minD.setHours(0,0,0,0);
+      if (targetDate < minD) return;
+    }
+    if (maxDate) {
+      const maxD = new Date(maxDate);
+      maxD.setDate(1);
+      maxD.setHours(0,0,0,0);
+      if (targetDate > maxD) return;
+    }
+    setCurrentDate(targetDate);
+  };
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -230,16 +246,44 @@ export const CalendarPicker: React.FC<CalendarPickerProps> = ({
   const hasHint = !!message;
 
   return (
-    <div className={`tf-group state-${computedState}`} ref={containerRef} style={{ position: 'relative' }}>
-      <label className="tf-label" htmlFor={pickerId}>
+    <div 
+      className={`tf-group state-${computedState}`} 
+      ref={containerRef} 
+      style={{ 
+        position: 'relative', 
+        ...(variant === 'toolbar' ? { flexDirection: 'row', alignItems: 'center', gap: 6, width: 'auto' } : {}) 
+      }}
+    >
+      <label 
+        className="tf-label" 
+        htmlFor={pickerId}
+        style={(variant === 'toolbar' || variant === 'filter') ? { fontSize: '0.75rem', fontWeight: 600, color: '#64748B', textTransform: 'none', letterSpacing: 'normal' } : undefined}
+      >
         {label}
         {required && <span className="tf-label-required"> *</span>}
       </label>
       <div
         className="tf-wrapper tf-calendar-trigger"
         onClick={() => state !== 'disabled' && setIsOpen(!isOpen)}
+        style={variant === 'toolbar' ? { 
+          padding: '5px 10px', 
+          borderRadius: 6, 
+          border: computedState === 'focused' ? '1px solid #00A99D' : '1px solid #E2E8F0', 
+          background: computedState === 'focused' ? '#fff' : '#F8FAFC', 
+          boxShadow: computedState === 'focused' ? '0 0 0 2px rgba(0,169,157,0.1)' : 'none',
+          minWidth: 130
+        } : variant === 'filter' ? {
+          padding: '8px 12px',
+          borderRadius: 8,
+          border: computedState === 'focused' ? '1px solid #3B82F6' : '1px solid #E2E8F0',
+          background: computedState === 'focused' ? '#fff' : '#F8FAFC',
+          minWidth: 130,
+          boxShadow: 'none'
+        } : undefined}
       >
-        <span className="tf-cal-icon"><CalendarIcon size={15} strokeWidth={2} /></span>
+        <span className="tf-cal-icon" style={(variant === 'toolbar' || variant === 'filter') ? { left: 8, color: (variant === 'filter' ? '#64748B' : '#00A99D') } : undefined}>
+          <CalendarIcon size={(variant === 'toolbar' || variant === 'filter') ? 14 : 15} strokeWidth={2} />
+        </span>
         <input
           id={pickerId}
           type="text"
@@ -247,6 +291,19 @@ export const CalendarPicker: React.FC<CalendarPickerProps> = ({
           placeholder={placeholder}
           readOnly
           className="tf-input tf-cal-input"
+          style={variant === 'toolbar' ? { 
+            padding: '0 0 0 22px', 
+            fontSize: '0.8rem', 
+            color: '#475569', 
+            fontWeight: 500,
+            background: 'transparent'
+          } : variant === 'filter' ? {
+            padding: '0 0 0 22px',
+            fontSize: '13px',
+            color: '#0F172A',
+            fontWeight: 400,
+            background: 'transparent'
+          } : undefined}
           aria-invalid={isError ? 'true' : 'false'}
           aria-describedby={hasHint ? hintId : undefined}
         />
@@ -283,9 +340,22 @@ export const CalendarPicker: React.FC<CalendarPickerProps> = ({
                   outline: 'none'
                 }}
               >
-                {monthNames.map((m, idx) => (
-                  <option key={m} value={idx}>{m.slice(0, 3)}</option>
-                ))}
+                {monthNames.map((m, idx) => {
+                  let disabled = false;
+                  if (minDate) {
+                    const minParts = minDate.split('-');
+                    if (year === parseInt(minParts[0], 10) && idx < parseInt(minParts[1], 10) - 1) disabled = true;
+                    if (year < parseInt(minParts[0], 10)) disabled = true;
+                  }
+                  if (maxDate) {
+                    const maxParts = maxDate.split('-');
+                    if (year === parseInt(maxParts[0], 10) && idx > parseInt(maxParts[1], 10) - 1) disabled = true;
+                    if (year > parseInt(maxParts[0], 10)) disabled = true;
+                  }
+                  return (
+                    <option key={m} value={idx} disabled={disabled}>{m.slice(0, 3)}</option>
+                  );
+                })}
               </select>
               <select
                 value={year}
@@ -305,7 +375,14 @@ export const CalendarPicker: React.FC<CalendarPickerProps> = ({
                   outline: 'none'
                 }}
               >
-                {Array.from({ length: 21 }, (_, i) => 2015 + i).map(y => (
+                {Array.from({ length: 21 }, (_, i) => new Date().getFullYear() - 10 + i)
+                  .filter(y => y >= 2024 && y <= new Date().getFullYear())
+                  .filter(y => {
+                    if (minDate && y < parseInt(minDate.split('-')[0], 10)) return false;
+                    if (maxDate && y > parseInt(maxDate.split('-')[0], 10)) return false;
+                    return true;
+                  })
+                  .map(y => (
                   <option key={y} value={y}>{y}</option>
                 ))}
               </select>

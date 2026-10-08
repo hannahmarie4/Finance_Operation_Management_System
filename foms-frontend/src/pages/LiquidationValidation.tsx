@@ -10,6 +10,7 @@ import { useToast } from '../components/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { RecordHistoryModal } from '../components/RecordHistoryModal';
 import Dropdown from '../components/Dropdown';
+import { CalendarPicker } from '../components/FormModals';
 import '../components/FormModals.css';
 
 export default function LiquidationValidation() {
@@ -24,6 +25,19 @@ export default function LiquidationValidation() {
   const [isRejecting, setIsRejecting] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [selectedDoc, setSelectedDoc] = useState<any>(null);
+
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+
+  const filteredLiquidations = liquidations.filter(row => {
+    if (fromDate && new Date(row.submittedAt) < new Date(fromDate)) return false;
+    if (toDate) {
+      const t = new Date(toDate);
+      t.setHours(23, 59, 59, 999);
+      if (new Date(row.submittedAt) > t) return false;
+    }
+    return true;
+  });
 
   const columns = [
     { key: 'reference', label: 'REFERENCE NO.', sortable: true },
@@ -304,7 +318,7 @@ export default function LiquidationValidation() {
       <TableContainer>
         <DataTable
           title="Liquidation Validation Queue"
-          data={liquidations}
+          data={filteredLiquidations}
           columns={columns}
           actions={actions}
           rowKey="id"
@@ -323,6 +337,37 @@ export default function LiquidationValidation() {
               filterFn: (row: any, value: string) => row.status === value
             }
           ]}
+          customFilters={
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: '13px', color: '#64748B', fontWeight: 600 }}>From:</span>
+                <div style={{ width: '140px' }}>
+                  <CalendarPicker 
+                    label=""
+                    value={fromDate} 
+                    onChange={setFromDate} 
+                    placeholder="Start date..." 
+                    variant="filter"
+                    maxDate="2024-12-31"
+                  />
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: '13px', color: '#64748B', fontWeight: 600 }}>To:</span>
+                <div style={{ width: '140px' }}>
+                  <CalendarPicker 
+                    label=""
+                    value={toDate} 
+                    onChange={setToDate} 
+                    placeholder="End date..." 
+                    variant="filter"
+                    minDate={fromDate}
+                    maxDate="2024-12-31"
+                  />
+                </div>
+              </div>
+            </div>
+          }
         />
       </TableContainer>
     </div>

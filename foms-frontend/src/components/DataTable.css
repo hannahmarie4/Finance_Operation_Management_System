@@ -1,5 +1,7 @@
 .dt-root {
   width: 100%;
+  box-sizing: border-box;
+  padding: 24px;
   font-family: var(--fb, var(--font-sans, 'Inter', sans-serif));
   position: relative;
 }
@@ -19,10 +21,10 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  flex-wrap: nowrap;
-  overflow-x: auto;
+  flex-wrap: wrap;
+  overflow: visible;
   margin-bottom: 10px;
-  padding: 0 14px 4px;
+  padding: 0 0 4px 0;
 }
 
 .dt-toolbar-left {
@@ -52,10 +54,10 @@
   width: 100%;
   height: 42px;
   padding: 0 32px 0 40px;
-  border: none;
+  border: 1px solid transparent;
   border-radius: 28px;
-  background: #EAEDF3;
-  color: #1C1B1F;
+  background: #F1F5F9;
+  color: #1E293B;
   font-size: 0.9375rem;
   transition: all 0.2s;
   text-overflow: ellipsis;
@@ -65,7 +67,8 @@
 
 .dt-search:focus {
   outline: none;
-  background: #E2E8F0;
+  background: #ffffff;
+  border: 1px solid #0D9488;
   padding: 0 32px 0 40px;
 }
 
@@ -144,10 +147,6 @@
   font-size: 16px;
 }
 
-.dt-search-dropdown-icon.bg-gray {
-  background: #F1F5F9;
-  color: #64748B;
-}
 
 .dt-search-dropdown-icon.bg-teal {
   background: var(--teal-bg, rgba(0,169,157,0.08));
@@ -463,6 +462,7 @@
 
 .dt-table-wrap {
   width: 100%;
+  box-sizing: border-box;
   overflow-x: auto;
   border: 1px solid var(--border, #E2E8F0);
   border-radius: 10px;

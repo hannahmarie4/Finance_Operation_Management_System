@@ -353,6 +353,17 @@ export const InvoiceCreation: React.FC = () => {
               searchFields={['clientName']}
               defaultPageSize={10}
               emptyMessage="No clients have unbilled validated waybills."
+              filters={[
+                {
+                  key: 'schedule',
+                  label: 'Billing Cycle',
+                  options: [
+                    { label: 'Monthly', value: 'Monthly' },
+                    { label: 'Semi-monthly', value: 'Semi-monthly' },
+                    { label: 'Weekly', value: 'Weekly' }
+                  ]
+                }
+              ]}
               actions={[
                 {
                   label: 'Select Client',
@@ -379,140 +390,52 @@ export const InvoiceCreation: React.FC = () => {
       {step === 2 && (
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
           
-          <div style={{ display: 'flex', gap: 24, flex: 1 }}>
+          <div style={{ display: 'flex', gap: 24, flex: 1, alignItems: 'flex-start' }}>
             {/* Custom Left Table Container */}
-            <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', background: '#fff', border: '1px solid #E2E8F0', borderRadius: 8 }}>
-              
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px', borderBottom: '1px solid #E2E8F0', flexShrink: 0, gap: '16px', flexWrap: 'wrap' }}>
-                <div style={{ flex: 1, minWidth: 250 }}>
-                  <h2 style={{ margin: '0 0 4px', fontSize: '1.25rem', fontWeight: 700, color: '#0F172A' }}>Select Waybills for {invoiceClient?.name}</h2>
-                  <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748B' }}>Only Validated waybills can be billed. Click a row to see its computation.</p>
-                </div>
-              </div>
-
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                
-                {/* Banner */}
-                <div style={{ background: selectedWaybills.length > 0 ? '#ECFDF5' : '#F8FAFC', borderBottom: '1px solid #E2E8F0', padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', transition: 'background 0.2s' }}>
-                  <div style={{ position: 'relative', width: 250 }}>
-                    <i className="ti ti-search" style={{ position: 'absolute', left: 16, top: 10, color: '#94A3B8', fontSize: '1.1rem' }} />
-                    <input 
-                      type="text" 
-                      placeholder="Search waybill no..." 
-                      value={searchQuery}
-                      onChange={e => setSearchQuery(e.target.value)}
-                      style={{ width: '100%', padding: '8px 16px 8px 42px', borderRadius: 24, border: '1px solid #E2E8F0', background: '#fff', fontSize: '0.9rem', outline: 'none' }} 
-                    />
-                  </div>
-                  {selectedWaybills.length > 0 && (
-                    <button onClick={() => setSelectedWaybills([])} style={{ background: 'none', border: 'none', color: '#64748B', fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <i className="ti ti-x" /> Deselect all
-                    </button>
+            {/* Custom Left Table Container replaced by DataTable */}
+            <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', background: '#fff', border: '1px solid #E2E8F0', borderRadius: 8, padding: 24 }}>
+              <DataTable
+                title={`Select Waybills for ${invoiceClient?.name || ''}`}
+                subtitle="Only Validated waybills can be billed. Click a row to see its computation."
+                searchPlaceholder="Search waybill no..."
+                searchFields={['waybillNumber', 'area', 'deliveryDate']}
+                rowKey="id"
+                data={clientWaybills}
+                selectable
+                hideBulkActionBar
+                selectedKeys={selectedWaybills}
+                onSelectionChange={(keys) => setSelectedWaybills(keys as string[])}
+                isRowSelectable={(w: any) => w.status === 'Validated'}
+                onRowClick={(w: any) => setSelectedWaybillForDetails(selectedWbDetail?.id === w.id ? null : w.id)}
+                columns={[
+                  { key: 'waybillNumber', label: 'WAYBILL NO.', sortable: true, render: (row: any) => <span style={{ borderBottom: '1px dotted #CBD5E1', cursor: 'pointer', color: '#0F172A', fontWeight: 600 }}>{row.waybillNumber}</span> },
+                  { key: 'deliveryDate', label: 'DELIVERY DATE', sortable: true, render: (row: any) => new Date(row.deliveryDate).toLocaleDateString('en-US') },
+                  { key: 'area', label: 'AREA', sortable: true, render: (row: any) => row.area === 'NCR' ? 'NCR/Metro Manila' : row.area },
+                  { key: 'weight', label: 'CHARGEABLE WT.', render: (row: any) => (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ color: '#0F172A', fontWeight: 500 }}>{row.chargeableWt?.toFixed(2) || '0.00'} kg</span>
+                      <span style={{ fontSize: '0.65rem', border: '1px solid #E2E8F0', color: '#64748B', padding: '1px 6px', borderRadius: 12, fontWeight: 700, textTransform: 'uppercase' }}>
+                        {row.weightBasis === 'Volume Weight' ? 'VOLUME' : 'ACTUAL'}
+                      </span>
+                    </div>
+                  )},
+                  { key: 'status', label: 'DOC STATUS', render: (row: any) => <StatusBadge status={row.status} /> },
+                  { key: 'amount', label: 'AMOUNT', align: 'right', render: (row: any) => (
+                    <span style={{ color: '#0F172A', fontWeight: 700 }}>
+                      ₱{(row.baseRate || 0).toLocaleString('en-PH', {minimumFractionDigits: 2})}
+                    </span>
                   )}
-                </div>
-
-                {/* Table */}
-                <div style={{ flex: 1 }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                    <thead style={{ position: 'sticky', top: 0, background: '#fff', zIndex: 10 }}>
-                      <tr>
-                        <th style={{ padding: '16px 20px', borderBottom: '1px solid #E2E8F0', width: 40 }}>
-                          <input
-                            type="checkbox"
-                            checked={isAllSelected}
-                            onChange={() => {
-                              const validWaybills = filteredWaybills.filter(w => w.status === 'Validated');
-                              if (isAllSelected) setSelectedWaybills([]);
-                              else setSelectedWaybills(validWaybills.map(w => w.id));
-                            }}
-                            style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#059669' }}
-                          />
-                        </th>
-                        <th style={{ padding: '16px 20px 16px 0', borderBottom: '1px solid #E2E8F0', color: '#64748B', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.05em' }}>WAYBILL NO.</th>
-                        <th style={{ padding: '16px 20px 16px 0', borderBottom: '1px solid #E2E8F0', color: '#64748B', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.05em' }}>DELIVERY DATE</th>
-                        <th style={{ padding: '16px 20px 16px 0', borderBottom: '1px solid #E2E8F0', color: '#64748B', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.05em' }}>AREA</th>
-                        <th style={{ padding: '16px 20px 16px 0', borderBottom: '1px solid #E2E8F0', color: '#64748B', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.05em' }}>CHARGEABLE WT.</th>
-                        <th style={{ padding: '16px 20px 16px 0', borderBottom: '1px solid #E2E8F0', color: '#64748B', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.05em' }}>DOC STATUS</th>
-                        <th style={{ padding: '16px 20px 16px 0', borderBottom: '1px solid #E2E8F0', color: '#64748B', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.05em', textAlign: 'right' }}>AMOUNT</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredWaybills.map((row) => {
-                        const isSelected = selectedWaybills.includes(row.id);
-                        const isFocused = selectedWbDetail?.id === row.id;
-                        const isValidated = row.status === 'Validated';
-                        return (
-                          <tr 
-                            key={row.id} 
-                            style={{ 
-                              background: isSelected ? '#F0FDF4' : (isFocused ? '#F8FAFC' : '#fff'), 
-                              borderBottom: '1px solid #F1F5F9'
-                            }}
-                          >
-                            <td 
-                              style={{ padding: '16px 20px', cursor: isValidated ? 'pointer' : 'not-allowed' }}
-                              onClick={(e) => {
-                                if (e.target instanceof HTMLInputElement && e.target.type === 'checkbox') return;
-                                if (!isValidated) return;
-                                if (isSelected) setSelectedWaybills(selectedWaybills.filter(id => id !== row.id));
-                                else setSelectedWaybills([...selectedWaybills, row.id]);
-                              }}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={isSelected}
-                                disabled={!isValidated}
-                                onChange={(e) => {
-                                  if (!isValidated) return;
-                                  if (e.target.checked) setSelectedWaybills([...selectedWaybills, row.id]);
-                                  else setSelectedWaybills(selectedWaybills.filter(id => id !== row.id));
-                                }}
-                                style={{ width: 16, height: 16, cursor: isValidated ? 'pointer' : 'not-allowed', accentColor: '#059669' }}
-                              />
-                            </td>
-                            <td 
-                              onClick={() => setSelectedWaybillForDetails(isFocused ? null : row.id)}
-                              style={{ padding: '16px 20px 16px 0', fontSize: '0.9rem', color: '#0F172A', fontWeight: 600, cursor: 'pointer' }}
-                            >
-                              <span style={{ borderBottom: '1px dotted #CBD5E1' }}>{row.waybillNumber}</span>
-                            </td>
-                            <td style={{ padding: '16px 20px 16px 0', fontSize: '0.9rem', color: '#475569' }}>
-                              {new Date(row.deliveryDate).toLocaleDateString('en-US')}
-                            </td>
-                            <td style={{ padding: '16px 20px 16px 0', fontSize: '0.9rem', color: '#475569' }}>
-                              {row.area === 'NCR' ? 'NCR/Metro Manila' : row.area}
-                            </td>
-                            <td style={{ padding: '16px 20px 16px 0', fontSize: '0.9rem' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <span style={{ color: '#0F172A', fontWeight: 500 }}>{row.chargeableWt.toFixed(2)} kg</span>
-                                <span style={{ fontSize: '0.65rem', border: '1px solid #E2E8F0', color: '#64748B', padding: '2px 6px', borderRadius: 12, fontWeight: 700, textTransform: 'uppercase' }}>
-                                  {row.weightBasis === 'Volume Weight' ? 'VOLUME' : 'ACTUAL'}
-                                </span>
-                              </div>
-                            </td>
-                            <td style={{ padding: '16px 20px 16px 0' }}>
-                              <StatusBadge status={row.status} />
-                            </td>
-                            <td style={{ padding: '16px 20px 16px 0', fontSize: '0.9rem', color: '#0F172A', fontWeight: 700, textAlign: 'right' }}>
-                              ₱{(row.baseRate || 0).toLocaleString('en-PH', {minimumFractionDigits: 2})}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                  <div style={{ padding: '12px 20px', background: '#fff', borderTop: '1px solid #E2E8F0', borderBottom: '1px solid #E2E8F0', fontSize: '0.75rem', color: '#64748B' }}>
-                    Amount = freight + valuation + ODA + 12% VAT + fuel surcharge, computed per waybill.
-                  </div>
-                </div>
+                ]}
+              />
+              <div style={{ padding: '12px 20px', background: '#fff', fontSize: '0.75rem', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: 8, marginTop: 12 }}>
+                Amount = freight + valuation + ODA + 12% VAT + fuel surcharge, computed per waybill.
               </div>
-
             </div>
 
             {/* Right Panel: Rate Config */}
-            <div style={{ width: 320, flexShrink: 0, display: 'flex', flexDirection: 'column', background: '#fff', border: '1px solid #E2E8F0', borderRadius: 8 }}>
+            <div style={{ width: 300, flexShrink: 0, display: 'flex', flexDirection: 'column', background: '#fff', border: '1px solid #E2E8F0', borderRadius: 8 }}>
               
-              <div style={{ padding: 24 }}>
+              <div style={{ padding: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                   <h4 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: '#0F172A' }}>Billing Rates</h4>
                   <span style={{ fontSize: '0.65rem', border: '1px solid #E2E8F0', color: '#64748B', padding: '2px 8px', borderRadius: 4, fontWeight: 700, letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -569,27 +492,27 @@ export const InvoiceCreation: React.FC = () => {
           </div>
 
           {/* Sticky Footer */}
-          <div style={{ position: 'sticky', bottom: 0, zIndex: 100, background: '#fff', borderTop: '1px solid #E2E8F0', padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0, marginTop: 24, borderRadius: 8, boxShadow: '0 -4px 12px rgba(0,0,0,0.05)' }}>
+          <div style={{ position: 'sticky', bottom: 0, zIndex: 100, background: '#fff', borderTop: '1px solid #E2E8F0', padding: '16px 32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0, marginTop: 24, marginLeft: -32, marginRight: -32, boxShadow: '0 -4px 12px rgba(0,0,0,0.05)' }}>
             <div style={{ display: 'flex', gap: 32 }}>
               <div>
                 <span style={{ display: 'block', fontSize: '0.75rem', color: '#64748B', fontWeight: 600 }}>Selected</span>
-                <span style={{ display: 'block', fontSize: '1.1rem', color: '#0F172A', fontWeight: 800 }}>{selectedWaybills.length}</span>
+                <span style={{ display: 'block', fontSize: '1.1rem', color: '#0F172A', fontWeight: 800 }}>{selectedWaybills.length || '-'}</span>
               </div>
               <div>
                 <span style={{ display: 'block', fontSize: '0.75rem', color: '#64748B', fontWeight: 600 }}>Subtotal</span>
-                <span style={{ display: 'block', fontSize: '1rem', color: '#334155', fontWeight: 700 }}>₱{calc.totalSubtotal.toLocaleString('en-PH', {minimumFractionDigits: 2})}</span>
+                <span style={{ display: 'block', fontSize: '1rem', color: '#334155', fontWeight: 700 }}>{calc.totalSubtotal ? `₱${calc.totalSubtotal.toLocaleString('en-PH', {minimumFractionDigits: 2})}` : '-'}</span>
               </div>
               <div>
                 <span style={{ display: 'block', fontSize: '0.75rem', color: '#64748B', fontWeight: 600 }}>VAT 12%</span>
-                <span style={{ display: 'block', fontSize: '1rem', color: '#334155', fontWeight: 700 }}>₱{calc.totalVAT.toLocaleString('en-PH', {minimumFractionDigits: 2})}</span>
+                <span style={{ display: 'block', fontSize: '1rem', color: '#334155', fontWeight: 700 }}>{calc.totalVAT ? `₱${calc.totalVAT.toLocaleString('en-PH', {minimumFractionDigits: 2})}` : '-'}</span>
               </div>
               <div>
                 <span style={{ display: 'block', fontSize: '0.75rem', color: '#64748B', fontWeight: 600 }}>Fuel surcharge</span>
-                <span style={{ display: 'block', fontSize: '1rem', color: '#334155', fontWeight: 700 }}>₱{calc.totalFuelSurcharge.toLocaleString('en-PH', {minimumFractionDigits: 2})}</span>
+                <span style={{ display: 'block', fontSize: '1rem', color: '#334155', fontWeight: 700 }}>{calc.totalFuelSurcharge ? `₱${calc.totalFuelSurcharge.toLocaleString('en-PH', {minimumFractionDigits: 2})}` : '-'}</span>
               </div>
               <div>
                 <span style={{ display: 'block', fontSize: '0.75rem', color: '#64748B', fontWeight: 600 }}>Grand total</span>
-                <span style={{ display: 'block', fontSize: '1.1rem', color: '#059669', fontWeight: 800 }}>₱{calc.totalGrand.toLocaleString('en-PH', {minimumFractionDigits: 2})}</span>
+                <span style={{ display: 'block', fontSize: '1.1rem', color: '#059669', fontWeight: 800 }}>{calc.totalGrand ? `₱${calc.totalGrand.toLocaleString('en-PH', {minimumFractionDigits: 2})}` : '-'}</span>
               </div>
             </div>
             <Button title="Next: Confirm & Submit" variant="success" onClick={() => {
@@ -784,11 +707,11 @@ export const InvoiceCreation: React.FC = () => {
       {/* SLIDE-OVER MODAL FOR WAYBILL DETAILS */}
       {selectedWbDetail && (
         <div 
-          style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', justifyContent: 'flex-end', transition: 'all 0.3s' }} 
+          style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' }} 
           onClick={() => setSelectedWaybillForDetails(null)}
         >
           <div 
-            style={{ width: 450, background: '#fff', height: '100%', overflowY: 'auto', padding: 32, boxShadow: '-4px 0 15px rgba(0,0,0,0.1)' }} 
+            style={{ width: 750, maxWidth: '95%', background: '#fff', maxHeight: '90vh', borderRadius: 12, overflowY: 'auto', padding: 32, boxShadow: '0 10px 25px rgba(0,0,0,0.1)' }} 
             onClick={e => e.stopPropagation()}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
@@ -810,7 +733,7 @@ export const InvoiceCreation: React.FC = () => {
               <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: '0.85rem', color: '#64748B' }}>Courier</span><span style={{ fontSize: '0.85rem', color: '#0F172A', fontWeight: 500 }}>{selectedWbDetail.assignedCourier || '-'}</span></div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: '0.85rem', color: '#64748B' }}>Delivery date</span><span style={{ fontSize: '0.85rem', color: '#0F172A', fontWeight: 500 }}>{new Date(selectedWbDetail.deliveryDate).toLocaleDateString('en-US')}</span></div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: '0.85rem', color: '#64748B' }}>Items</span><span style={{ fontSize: '0.85rem', color: '#0F172A', fontWeight: 500 }}>{selectedWbDetail.itemQuantity} box{(selectedWbDetail as any).itemDimensions ? ` • ${(selectedWbDetail as any).itemDimensions.length}x${(selectedWbDetail as any).itemDimensions.width}x${(selectedWbDetail as any).itemDimensions.height} cm` : ''}</span></div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: '0.85rem', color: '#64748B' }}>Declared value</span><span style={{ fontSize: '0.85rem', color: '#0F172A', fontWeight: 500 }}>₱{(selectedWbDetail.declaredValue || 0).toLocaleString('en-PH', {minimumFractionDigits: 2})}</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: '0.85rem', color: '#64748B' }}>Declared value</span><span style={{ fontSize: '0.85rem', color: '#0F172A', fontWeight: 500 }}>{selectedWbDetail.declaredValue ? `₱${selectedWbDetail.declaredValue.toLocaleString('en-PH', {minimumFractionDigits: 2})}` : '-'}</span></div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: '0.85rem', color: '#64748B' }}>Remarks</span><span style={{ fontSize: '0.85rem', color: '#0F172A', fontWeight: 500 }}>{selectedWbDetail.specialInstructions || '-'}</span></div>
             </div>
 
@@ -834,19 +757,19 @@ export const InvoiceCreation: React.FC = () => {
                       )}
                     </div>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: '0.85rem', color: '#64748B' }}>Valuation ({rateConfig.valuationRate}%)</span><span style={{ fontSize: '0.85rem', color: '#0F172A', fontWeight: 500 }}>₱{selectedWbDetail.breakdown.valuation.toLocaleString('en-PH', {minimumFractionDigits: 2})}</span></div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: '0.85rem', color: '#64748B' }}>ODA</span><span style={{ fontSize: '0.85rem', color: '#0F172A', fontWeight: 500 }}>₱{selectedWbDetail.breakdown.odaCharge.toLocaleString('en-PH', {minimumFractionDigits: 2})}</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: '0.85rem', color: '#64748B' }}>Valuation ({rateConfig.valuationRate}%)</span><span style={{ fontSize: '0.85rem', color: '#0F172A', fontWeight: 500 }}>{selectedWbDetail.breakdown.valuation ? `₱${selectedWbDetail.breakdown.valuation.toLocaleString('en-PH', {minimumFractionDigits: 2})}` : '-'}</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: '0.85rem', color: '#64748B' }}>ODA</span><span style={{ fontSize: '0.85rem', color: '#0F172A', fontWeight: 500 }}>{selectedWbDetail.breakdown.odaCharge ? `₱${selectedWbDetail.breakdown.odaCharge.toLocaleString('en-PH', {minimumFractionDigits: 2})}` : '-'}</span></div>
                   
-                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 12, borderTop: '1px dashed #E2E8F0' }}><span style={{ fontSize: '0.85rem', color: '#0F172A', fontWeight: 700 }}>Subtotal</span><span style={{ fontSize: '0.85rem', color: '#0F172A', fontWeight: 700 }}>₱{selectedWbDetail.breakdown.subtotal.toLocaleString('en-PH', {minimumFractionDigits: 2})}</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 12, borderTop: '1px dashed #E2E8F0' }}><span style={{ fontSize: '0.85rem', color: '#0F172A', fontWeight: 700 }}>Subtotal</span><span style={{ fontSize: '0.85rem', color: '#0F172A', fontWeight: 700 }}>{selectedWbDetail.breakdown.subtotal ? `₱${selectedWbDetail.breakdown.subtotal.toLocaleString('en-PH', {minimumFractionDigits: 2})}` : '-'}</span></div>
                   
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: '0.85rem', color: '#64748B' }}>VAT ({rateConfig.vatRate}%)</span><span style={{ fontSize: '0.85rem', color: '#0F172A', fontWeight: 500 }}>₱{selectedWbDetail.breakdown.vat.toLocaleString('en-PH', {minimumFractionDigits: 2})}</span></div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: '0.85rem', color: '#64748B' }}>Fuel surcharge ({rateConfig.fuelSurchargeRate}% of freight)</span><span style={{ fontSize: '0.85rem', color: '#0F172A', fontWeight: 500 }}>₱{selectedWbDetail.breakdown.fuelSurcharge.toLocaleString('en-PH', {minimumFractionDigits: 2})}</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: '0.85rem', color: '#64748B' }}>VAT ({rateConfig.vatRate}%)</span><span style={{ fontSize: '0.85rem', color: '#0F172A', fontWeight: 500 }}>{selectedWbDetail.breakdown.vat ? `₱${selectedWbDetail.breakdown.vat.toLocaleString('en-PH', {minimumFractionDigits: 2})}` : '-'}</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: '0.85rem', color: '#64748B' }}>Fuel surcharge ({rateConfig.fuelSurchargeRate}% of freight)</span><span style={{ fontSize: '0.85rem', color: '#0F172A', fontWeight: 500 }}>{selectedWbDetail.breakdown.fuelSurcharge ? `₱${selectedWbDetail.breakdown.fuelSurcharge.toLocaleString('en-PH', {minimumFractionDigits: 2})}` : '-'}</span></div>
                 </div>
 
                 <div style={{ height: 2, background: '#0F172A', margin: '16px 0' }} />
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontWeight: 800, fontSize: '1.1rem', color: '#0F172A' }}>Grand total</span>
-                  <span style={{ fontWeight: 800, fontSize: '1.4rem', color: '#059669' }}>₱{selectedWbDetail.breakdown.grandTotal.toLocaleString('en-PH', {minimumFractionDigits: 2})}</span>
+                  <span style={{ fontWeight: 800, fontSize: '1.4rem', color: '#059669' }}>{selectedWbDetail.breakdown.grandTotal ? `₱${selectedWbDetail.breakdown.grandTotal.toLocaleString('en-PH', {minimumFractionDigits: 2})}` : '-'}</span>
                 </div>
               </div>
             )}

@@ -1,5 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useAppData } from '../context/AppDataContext';
+import { CalendarPicker } from '../components/FormModals';
+import '../components/FormModals.css';
 
 /* ─── helpers ─── */
 const fmtDate = (ts: string) =>
@@ -93,6 +95,8 @@ export const AuditLogs: React.FC = () => {
   const { auditLogs } = useAppData();
 
   const [search, setSearch]         = useState('');
+  const [showRecent, setShowRecent] = useState(false);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [eventType, setEventType]   = useState('');
   const [resultFilter, setResult]   = useState('');
   const [userFilter, setUserFilter] = useState('');
@@ -103,6 +107,27 @@ export const AuditLogs: React.FC = () => {
   const [sortDir, setSortDir]       = useState<'asc' | 'desc'>('desc');
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('auditLogs_recentSearches');
+    if (saved) {
+      try { setRecentSearches(JSON.parse(saved)); } catch (e) {}
+    }
+  }, []);
+
+  const saveRecentSearch = (term: string) => {
+    if (!term.trim()) return;
+    setRecentSearches(prev => {
+      const updated = [term.trim(), ...prev.filter(t => t.toLowerCase() !== term.trim().toLowerCase())].slice(0, 5);
+      localStorage.setItem('auditLogs_recentSearches', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const handleSearchBlur = () => {
+    setTimeout(() => setShowRecent(false), 200);
+    saveRecentSearch(search);
+  };
 
   const uniqueActions = useMemo(() => Array.from(new Set(auditLogs.map(l => l.action))).sort(), [auditLogs]);
   const uniqueUsers   = useMemo(() => Array.from(new Set(auditLogs.map(l => l.userFullName))).sort(), [auditLogs]);
@@ -173,11 +198,11 @@ export const AuditLogs: React.FC = () => {
       </div>
 
       {/* ── Audit Trail Card ── */}
-      <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', boxShadow: '0 1px 4px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
+      <div style={{ background: '#fff', borderRadius: '12px', padding: '24px', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
 
         {/* ── Card Header: title + Export + Refresh ── */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 24px', borderBottom: '1px solid #F1F5F9' }}>
-          <h2 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#0F172A' }}>Audit Trail</h2>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '20px' }}>
+          <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: '#0F172A' }}>Audit Trail</h2>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <button style={{ height: 36, padding: '0 14px', background: '#fff', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: '0.82rem', fontWeight: 600, color: '#374151', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
               onMouseEnter={e => (e.currentTarget.style.background = '#F8FAFC')}
@@ -193,27 +218,52 @@ export const AuditLogs: React.FC = () => {
         </div>
 
         {/* ── Toolbar: filters ── */}
-        <div style={{ padding: '14px 24px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', borderBottom: '1px solid #F1F5F9' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'nowrap', paddingBottom: '20px', overflowX: 'auto' }}>
 
           {/* Search — matches app search bar style */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '0 14px', flex: '1 1 200px', minWidth: 180, height: 38 }}>
-            <i className="ti ti-search" style={{ color: '#94A3B8', fontSize: 15, flexShrink: 0 }} />
+          <div style={{ position: 'relative', flex: '1 1 200px', minWidth: 180 }}>
+            <i className="ti ti-search" style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: '#64748B', fontSize: '16px' }} />
             <input
+              type="text"
               value={search}
               onChange={e => setSearch(e.target.value)}
+              onFocus={(e) => {
+                setShowRecent(true);
+                e.currentTarget.style.background = '#ffffff';
+                e.currentTarget.style.border = '1px solid #0D9488';
+              }}
+              onBlur={(e) => {
+                handleSearchBlur();
+                e.currentTarget.style.background = '#F1F5F9';
+                e.currentTarget.style.border = '1px solid transparent';
+              }}
               placeholder="Search audit events..."
-              style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: '0.85rem', color: '#0F172A', width: '100%' }}
+              style={{ padding: '8px 16px 8px 40px', borderRadius: '28px', border: '1px solid transparent', fontSize: '13px', width: '100%', outline: 'none', background: '#F1F5F9', color: '#1E293B', transition: 'all 0.2s', boxSizing: 'border-box' }}
             />
+            {showRecent && recentSearches.length > 0 && (
+              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 8, background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, boxShadow: '0 10px 25px -5px rgba(0,0,0,0.05)', zIndex: 100, paddingBottom: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', padding: '12px 16px 8px' }}>RECENT</div>
+                {recentSearches.map((term, i) => (
+                  <div key={i} onMouseDown={(e) => { e.preventDefault(); setSearch(term); setShowRecent(false); }} style={{ display: 'flex', alignItems: 'center', padding: '10px 16px', cursor: 'pointer', transition: 'background 0.15s' }} onMouseEnter={e => e.currentTarget.style.background = '#F7F9FF'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                    <div style={{ width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: 12, fontSize: 16, background: '#F1F5F9', color: '#64748B' }}>
+                      <i className="ti ti-history" />
+                    </div>
+                    <span style={{ fontSize: 13, color: '#1E293B', fontWeight: 500, flex: 1 }}>{term}</span>
+                    <span style={{ fontSize: 12, color: '#94A3B8', marginLeft: 12 }}>Search</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Event Type */}
           <div style={{ position: 'relative' }}>
             <select value={eventType} onChange={e => setEventType(e.target.value)}
-              style={{ ...selStyle, paddingRight: 28, minWidth: 150, border: '1.5px solid #0D9488', color: eventType ? '#0D9488' : '#374151', fontWeight: 600 }}>
+              style={{ ...selStyle, paddingRight: 28, minWidth: 150 }}>
               <option value="">All Event Types</option>
               {uniqueActions.map(a => <option key={a} value={a}>{a.replace(/_/g, ' ')}</option>)}
             </select>
-            <i className="ti ti-chevron-down" style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', color: '#0D9488', fontSize: 12, pointerEvents: 'none' }} />
+            <i className="ti ti-chevron-down" style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', color: '#94A3B8', fontSize: 12, pointerEvents: 'none' }} />
           </div>
 
           {/* All Results */}
@@ -236,18 +286,26 @@ export const AuditLogs: React.FC = () => {
           </div>
 
           {/* From */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#64748B', whiteSpace: 'nowrap' }}>From:</span>
-            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-              style={{ ...selStyle, width: 140, padding: '0 10px', appearance: 'auto' as any }} />
-          </div>
+          <CalendarPicker
+            label="From:"
+            placeholder="Start date..."
+            value={dateFrom}
+            onChange={date => setDateFrom(date)}
+            minDate={new Date(new Date().setFullYear(new Date().getFullYear() - 2)).toISOString().split('T')[0]}
+            maxDate={dateTo || new Date().toISOString().split('T')[0]}
+            variant="toolbar"
+          />
 
           {/* To */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#64748B', whiteSpace: 'nowrap' }}>To:</span>
-            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-              style={{ ...selStyle, width: 140, padding: '0 10px', appearance: 'auto' as any }} />
-          </div>
+          <CalendarPicker
+            label="To:"
+            placeholder="End date..."
+            value={dateTo}
+            onChange={date => setDateTo(date)}
+            minDate={dateFrom || new Date(new Date().setFullYear(new Date().getFullYear() - 2)).toISOString().split('T')[0]}
+            maxDate={new Date().toISOString().split('T')[0]}
+            variant="toolbar"
+          />
 
           {(search || eventType || resultFilter || userFilter || dateFrom || dateTo) && (
             <button onClick={resetFilters}
@@ -258,7 +316,7 @@ export const AuditLogs: React.FC = () => {
         </div>
 
         {/* ── Table ── */}
-        <div style={{ overflowX: 'auto' }}>
+        <div style={{ overflowX: 'auto', border: '1px solid #E2E8F0', borderRadius: '8px' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
             <thead>
               <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>

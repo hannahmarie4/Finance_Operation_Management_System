@@ -140,7 +140,7 @@ export const InvoiceReview: React.FC = () => {
                 <span style={{ fontSize: '11px', color: '#94A3B8', borderBottom: '1px dashed #94A3B8' }}>full ID</span>
               </div>
               <h2 style={{ margin: '4px 0', fontSize: '1.25rem', color: '#0F172A', fontWeight: 800 }}>{client?.name || 'Unknown'}</h2>
-              <div style={{ display: 'inline-block', padding: '2px 10px', borderRadius: '999px', background: selectedInvoice.status === 'Overdue' ? '#FFFBEB' : '#F1F5F9', color: selectedInvoice.status === 'Overdue' ? '#D97706' : '#64748B', fontSize: '0.75rem', fontWeight: 700, width: 'fit-content' }}>
+              <div style={{ display: 'inline-block', padding: '2px 10px', borderRadius: '999px', background: (selectedInvoice.status === 'Overdue' || selectedInvoice.status === 'Outstanding') ? '#FFFBEB' : '#F1F5F9', color: (selectedInvoice.status === 'Overdue' || selectedInvoice.status === 'Outstanding') ? '#D97706' : '#64748B', fontSize: '0.75rem', fontWeight: 700, width: 'fit-content' }}>
                 {selectedInvoice.status === 'Pending Approval' ? 'Pending Review' : selectedInvoice.status}
               </div>
             </div>
@@ -396,15 +396,6 @@ export const InvoiceReview: React.FC = () => {
                       </div>
                     </div>
 
-                    <div style={{ marginTop: 0 }}>
-                      <span style={{ display: 'block', fontSize: '0.65rem', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', marginBottom: 2, letterSpacing: '0.5px' }}>Action Basis</span>
-                      <p style={{ margin: 0, fontSize: '0.75rem', color: '#334155', lineHeight: 1.3 }}>
-                        {isPending
-                          ? "Invoice requires review and approval before it can be sent to the client. Please verify all waybill calculations."
-                          : `Invoice has been processed and is currently ${inv.status}.`}
-                      </p>
-                    </div>
-
                     {isPending ? (
                       <div style={{ marginTop: 4 }}>
                         <button
@@ -420,9 +411,9 @@ export const InvoiceReview: React.FC = () => {
                       <div style={{ marginTop: 4 }}>
                         <button
                           onClick={() => setSelectedInvoice(inv)}
-                          style={{ width: '100%', padding: '8px', borderRadius: '6px', background: '#0F172A', color: '#fff', fontSize: '0.8rem', fontWeight: 800, border: 'none', cursor: 'pointer', transition: 'background 0.2s' }}
-                          onMouseEnter={(e) => e.currentTarget.style.background = '#1E293B'}
-                          onMouseLeave={(e) => e.currentTarget.style.background = '#0F172A'}
+                          style={{ width: '100%', padding: '8px', borderRadius: '6px', background: '#10B981', color: '#fff', fontSize: '0.8rem', fontWeight: 800, border: 'none', cursor: 'pointer', transition: 'background 0.2s' }}
+                          onMouseEnter={(e) => e.currentTarget.style.background = '#059669'}
+                          onMouseLeave={(e) => e.currentTarget.style.background = '#10B981'}
                         >
                           View Details
                         </button>
