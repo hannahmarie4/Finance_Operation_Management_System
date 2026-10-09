@@ -39,19 +39,7 @@ function generateNotifications(
   const notes: NotificationItem[] = [];
   const { waybills, invoices, payments, speedPay, arRecords, liquidations, financialAdjustments } = data;
 
-  if (role === 'Coordinator') {
-    const forChecking = waybills.filter(w => w.status === 'For Checking');
-    forChecking.forEach(w => {
-      notes.push({ id: `coord-fc-${w.id}`, title: 'New Waybill Awaiting Check', description: `Waybill ${w.waybillNumber} has arrived and needs your review.`, timestamp: relTs(w.uploaded_date || now), read: false, type: 'info', category: 'logistics', isToday: isToday(w.uploaded_date || now), link: `/waybills` });
-    });
-    const missing = waybills.filter(w => w.status === 'Missing');
-    missing.forEach(w => {
-      const daysDiff = Math.floor((Date.now() - new Date(w.deliveryDate).getTime()) / 86400000);
-      if (daysDiff >= 1) {
-        notes.push({ id: `coord-miss-${w.id}`, title: 'Missing POD Reminder', description: `Waybill ${w.waybillNumber} has been missing for ${daysDiff} day(s). Please submit CTC if original is unavailable.`, timestamp: relTs(w.deliveryDate), read: false, type: 'alert', category: 'logistics', isToday: false, link: `/waybills` });
-      }
-    });
-  }
+
 
   if (role === 'Accountant') {
     const validated = waybills.filter(w => w.status === 'Validated' || w.status === 'CTC Submitted');

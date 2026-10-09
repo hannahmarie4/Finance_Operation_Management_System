@@ -14,7 +14,7 @@ function getEmployeeName(userId: string): string {
   if (userId === 'EMP-001') return 'Crystalyn Joyce C. Fajardo';
   if (userId === 'EMP-002') return 'Misty';
   if (userId === 'EMP-003') return 'Maria Mariel Jane Anonuevo';
-  if (userId === 'EMP-004') return 'Hannah Estrera';
+
   if (userId === 'EMP-005') return 'Joana Marie Ogaya';
   return userId;
 }

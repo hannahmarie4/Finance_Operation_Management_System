@@ -92,6 +92,7 @@ export interface DataTableProps<T> {
   onExport?: (data: T[], columns: ColumnDef<T>[]) => void;
   columnToggle?: boolean;
   densityToggle?: boolean;
+  hideSearch?: boolean;
 
   // Server-side Pagination & Operations Props
   serverSide?: boolean;
@@ -192,6 +193,7 @@ export function DataTable<T>({
   onExport,
   columnToggle = true,
   densityToggle = true,
+  hideSearch = false,
 
   // Server-side props
   serverSide = false,
@@ -581,8 +583,9 @@ export function DataTable<T>({
       {/* ── Toolbar ── */}
       <div className="dt-toolbar">
         <div className="dt-toolbar-left">
-          <div className="dt-search-wrap">
-            <i className="ti ti-search dt-search-icon" aria-hidden="true" />
+          {!hideSearch && (
+            <div className="dt-search-wrap">
+              <i className="ti ti-search dt-search-icon" aria-hidden="true" />
             <input
                 id="dt-search-input"
                 type="text"
@@ -631,6 +634,7 @@ export function DataTable<T>({
               </div>
             )}
           </div>
+          )}
 
           {filters.map((f) => (
             <select

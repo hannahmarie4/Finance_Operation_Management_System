@@ -470,7 +470,6 @@ export function LoginPage() {
                     <option value="Finance Manager">Finance Manager</option>
                     <option value="Head Accountant">Head Accountant</option>
                     <option value="Accountant">Accountant</option>
-                    <option value="Coordinator">Coordinator</option>
                     <option value="Assistant of Financial Manager">Assistant of Financial Manager</option>
                   </select>
                 </div>

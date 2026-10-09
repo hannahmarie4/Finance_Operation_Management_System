@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAppData } from '../context/AppDataContext';
 import { DataTable } from '../components/DataTable';
 import { TableContainer } from '../components/TableContainer';
@@ -18,7 +18,7 @@ export default function LiquidationValidation() {
   const { user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { id } = useParams();
+  const [selectedLiquidationId, setSelectedLiquidationId] = useState<string | null>(null);
 
   const [remarks, setRemarks] = useState('');
   const [reviewDecision, setReviewDecision] = useState('Validate Liquidation');
@@ -65,11 +65,11 @@ export default function LiquidationValidation() {
     {
       label: 'Review Liquidation',
       icon: 'ti-file-search',
-      onClick: (row: any) => navigate(`/liquidations/${row.id}`)
+      onClick: (row: any) => setSelectedLiquidationId(row.id)
     }
   ];
 
-  const viewRecord = liquidations.find(l => l.id === id);
+  const viewRecord = liquidations.find(l => l.id === selectedLiquidationId);
 
   const handleLogDecision = () => {
     if (reviewDecision === 'Validate Liquidation') {
@@ -108,7 +108,7 @@ export default function LiquidationValidation() {
     });
 
     toast.success(`Liquidation ${viewRecord.id} successfully validated.`, 'Success');
-    navigate('/liquidations');
+    setSelectedLiquidationId(null);
   };
 
   const handleReject = () => {
@@ -136,14 +136,20 @@ export default function LiquidationValidation() {
     toast.error(`Liquidation ${viewRecord.id} returned for correction.`, 'Returned');
     setIsRejecting(false);
     setRemarks('');
-    navigate('/liquidations');
+    setSelectedLiquidationId(null);
   };
 
-  if (viewRecord) {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-        <Card style={{ padding: '40px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      {viewRecord && (
+        <div className="modal-overlay" style={{ zIndex: 999 }}>
+          <div className="modal-card" style={{ width: '800px', maxWidth: '95vw', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div className="modal-hd">
+              <h3 className="modal-hd-title">Liquidation Details</h3>
+              <button className="modal-x-btn" onClick={() => setSelectedLiquidationId(null)}>&times;</button>
+            </div>
+            <div className="modal-bd" style={{ padding: '24px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
             <h3 style={{ margin: 0, fontSize: '1.75rem', color: '#0F172A', fontWeight: 800 }}>{viewRecord.id}</h3>
             <StatusBadge status={viewRecord.status} />
           </div>
@@ -247,11 +253,7 @@ export default function LiquidationValidation() {
           )}
 
           {viewRecord.status === 'Pending Validation' ? (
-            <div style={{ border: '2px solid #14B8A6', borderRadius: '8px', overflow: 'hidden', background: '#fff' }}>
-              <div style={{ background: '#F0FDFA', borderBottom: '1px solid #CCFBF1', padding: '16px 24px' }}>
-                <h4 style={{ margin: 0, fontSize: '15px', fontWeight: 800, color: '#047857' }}>Finance review</h4>
-              </div>
-              <div style={{ padding: '24px' }}>
+            <div style={{ marginTop: '8px', borderTop: '1px solid #E2E8F0', paddingTop: '24px' }}>
                 <div className="tf-group state-default" style={{ marginBottom: '20px' }}>
                   <label className="tf-label" style={{ fontSize: '12px', color: '#64748B', fontWeight: 600 }}>Review decision</label>
                   <div className="tf-wrapper">
@@ -282,7 +284,7 @@ export default function LiquidationValidation() {
 
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
                   <button
-                    onClick={() => navigate('/liquidations')}
+                    onClick={() => setSelectedLiquidationId(null)}
                     style={{ padding: '10px 24px', background: '#fff', color: '#0F172A', border: '1px solid #E2E8F0', borderRadius: '6px', fontSize: '14px', fontWeight: 700, cursor: 'pointer' }}
                   >
                     Cancel
@@ -294,27 +296,23 @@ export default function LiquidationValidation() {
                     Log decision
                   </button>
                 </div>
-              </div>
             </div>
           ) : (
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '24px' }}>
-              <Button title="Close" variant="secondary" onClick={() => navigate('/liquidations')} />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px', borderTop: '1px solid #E2E8F0', paddingTop: '24px' }}>
+              <Button title="Close" variant="secondary" onClick={() => setSelectedLiquidationId(null)} />
             </div>
           )}
-        </Card>
+          </div>
+        </div>
+      </div>
+      )}
 
         <RecordHistoryModal
           isOpen={isHistoryOpen}
           onClose={() => setIsHistoryOpen(false)}
-          recordId={viewRecord.id}
+          recordId={viewRecord?.id || ''}
           recordType="Liquidation"
         />
-      </div>
-    );
-  }
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       <TableContainer>
         <DataTable
           title="Liquidation Validation Queue"

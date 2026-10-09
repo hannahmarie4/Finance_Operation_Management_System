@@ -60,6 +60,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
     // Old sessions don't have accessToken — they are incompatible with the
     // new real-API login. Clear them so the user gets sent to login fresh.
     if (stored) {
+      // ── Hard reject deleted roles/users ──
+      if ((stored.role as string) === 'Coordinator' || stored.employeeId === 'EMP-004') {
+        clearSession();
+        return { user: null, isAuthenticated: false, isLoading: false };
+      }
+
       const raw = sessionStorage.getItem(SESSION_CONFIG.STORAGE_KEY);
       try {
         const parsed = JSON.parse(raw || '{}');
@@ -147,7 +153,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           'Financial Manager': 'Financial Manager',
           'Head Accountant': 'Head Accountant',
           'Accountant': 'Accountant',
-          'Coordinator': 'Coordinator',
+
           'Assistant of Finance Manager': 'Assistant of Finance Manager',
           'Assistant of Financial Manager': 'Assistant of Financial Manager',
         };

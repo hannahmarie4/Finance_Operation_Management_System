@@ -36,13 +36,7 @@ export const SEEDED_USERS: SeededUser[] = [
     avatarInitials: 'MA',
     password: 'Password@123',
   },
-  {
-    employeeId: 'EMP-004',
-    fullName: 'Hannah Estrera',
-    role: 'Coordinator',
-    avatarInitials: 'HE',
-    password: 'Password@123',
-  },
+
   {
     employeeId: 'EMP-005',
     fullName: 'Joana Marie Ogaya',
@@ -93,7 +87,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   'Accountant': 'Accountant',
   'Assistant of Finance Manager': 'Asst. Finance Manager',
   'Assistant of Financial Manager': 'Asst. Financial Manager',
-  'Coordinator': 'Coordinator',
+
 };
 
 // ─── Clients ──────────────────────────────────────────────────────
@@ -226,24 +220,24 @@ export interface Waybill {
 
 export const SEEDED_WAYBILLS: Waybill[] = [
   { 
-    id: 'WB-001', waybillNumber: 'WB-2026-0001', clientCode: 'CL-001', deliveryDate: new Date().toISOString(), status: 'Validated', hasOriginalPOD: true, hasApprovedCTC: true, encodedBy: 'EMP-004', encodedAt: new Date().toISOString(),
+    id: 'WB-001', waybillNumber: 'WB-2026-0001', clientCode: 'CL-001', deliveryDate: new Date().toISOString(), status: 'Validated', hasOriginalPOD: true, hasApprovedCTC: true, encodedBy: 'EMP-003', encodedAt: new Date().toISOString(),
     senderName: 'Lazada Philippines', senderContact: '0917-123-4567', senderAddress: 'Rockwell Dr., Makati City',
     receiverName: 'Juan Dela Cruz', receiverContact: '0999-888-7777', receiverAddress: '123 Sampaguita St., Quezon City',
     itemDescription: 'Electronics & Gadgets', itemQuantity: 2, itemWeight: '1.5 kg',
     deliveryType: 'Delivery', assignedCourier: 'Rider John Doe', specialInstructions: 'Fragile, please handle with care.'
   },
   { 
-    id: 'WB-002', waybillNumber: 'WB-2026-0002', clientCode: 'CL-001', deliveryDate: new Date().toISOString(), status: 'Pending', is_ctc: false, hasOriginalPOD: true, hasApprovedCTC: false, encodedBy: 'EMP-004', encodedAt: new Date().toISOString(), pod_image_url: 'https://images.unsplash.com/photo-1586281380349-632531db7ed4?q=80&w=600&auto=format&fit=crop',
+    id: 'WB-002', waybillNumber: 'WB-2026-0002', clientCode: 'CL-001', deliveryDate: new Date().toISOString(), status: 'Pending', is_ctc: false, hasOriginalPOD: true, hasApprovedCTC: false, encodedBy: 'EMP-003', encodedAt: new Date().toISOString(), pod_image_url: 'https://images.unsplash.com/photo-1586281380349-632531db7ed4?q=80&w=600&auto=format&fit=crop',
     senderName: 'Lazada Philippines', senderContact: '0917-123-4567', senderAddress: 'Rockwell Dr., Makati City',
     receiverName: 'Maria Santos', receiverContact: '0918-222-3333', receiverAddress: '456 Mango Ave., Cebu City',
     itemDescription: 'Clothing & Apparel', itemQuantity: 5, itemWeight: '2.0 kg',
     deliveryType: 'Delivery', assignedCourier: 'Rider Jane Smith', specialInstructions: 'Leave at the front desk.'
   },
-  { id: 'WB-003', waybillNumber: 'WB-2026-0003', clientCode: 'CL-001', deliveryDate: new Date().toISOString(), status: 'Missing', hasOriginalPOD: false, hasApprovedCTC: false, encodedBy: 'EMP-004', encodedAt: new Date().toISOString(), senderName: 'Shopee Express', senderContact: '0917-555-9876', senderAddress: 'Ayala Ave., Makati City', receiverName: 'Pedro Penduko', receiverContact: '0922-333-4444', receiverAddress: '789 Rizal St., Davao City', itemDescription: 'Home Appliances', itemQuantity: 1, itemWeight: '5.5 kg', deliveryType: 'Pick Up', assignedCourier: 'Rider Mark', specialInstructions: 'Heavy item.' },
-  { id: 'WB-004', waybillNumber: 'WB-2026-0004', clientCode: 'CL-003', deliveryDate: new Date().toISOString(), status: 'Pending', is_ctc: false, hasOriginalPOD: true, hasApprovedCTC: false, encodedBy: 'EMP-004', encodedAt: new Date().toISOString(), pod_image_url: 'https://images.unsplash.com/photo-1586281380349-632531db7ed4?q=80&w=600&auto=format&fit=crop', senderName: 'TikTok Shop', senderContact: '0917-333-4444', senderAddress: 'BGC High St., Taguig City', receiverName: 'Ana Gomez', receiverContact: '0919-444-5555', receiverAddress: '101 Mabini St., Manila', itemDescription: 'Cosmetics', itemQuantity: 10, itemWeight: '0.5 kg', deliveryType: 'Delivery', assignedCourier: 'Rider Paul', specialInstructions: 'Do not expose to direct sunlight.' },
-  { id: 'WB-E2E-001', waybillNumber: 'WB-E2E-001', clientCode: 'CA-001', deliveryDate: new Date().toISOString(), status: 'Validated', hasOriginalPOD: true, hasApprovedCTC: true, encodedBy: 'EMP-004', encodedAt: new Date().toISOString(), senderName: 'Lazada Account', senderContact: '0917-123-4567', senderAddress: 'Rockwell Dr., Makati City', receiverName: 'Customer A', receiverContact: '0900-000-0001', receiverAddress: 'Makati City, Metro Manila', itemDescription: 'General Merchandise', itemQuantity: 1, itemWeight: '1.0 kg', deliveryType: 'Delivery', assignedCourier: 'Rider A', specialInstructions: 'None' },
-  { id: 'WB-E2E-002', waybillNumber: 'WB-E2E-002', clientCode: 'CA-001', deliveryDate: new Date().toISOString(), status: 'Pending', is_ctc: false, hasOriginalPOD: true, hasApprovedCTC: false, encodedBy: 'EMP-004', encodedAt: new Date().toISOString(), pod_image_url: 'https://images.unsplash.com/photo-1586281380349-632531db7ed4?q=80&w=600&auto=format&fit=crop', senderName: 'Lazada Account', senderContact: '0917-123-4567', senderAddress: 'Rockwell Dr., Makati City', receiverName: 'Customer B', receiverContact: '0900-000-0002', receiverAddress: 'Cebu Business Park, Cebu City', itemDescription: 'General Merchandise', itemQuantity: 1, itemWeight: '1.0 kg', deliveryType: 'Delivery', assignedCourier: 'Rider B', specialInstructions: 'None' },
-  { id: 'WB-E2E-003', waybillNumber: 'WB-E2E-003', clientCode: 'CA-002', deliveryDate: new Date().toISOString(), status: 'Validated', hasOriginalPOD: true, hasApprovedCTC: true, encodedBy: 'EMP-004', encodedAt: new Date().toISOString(), senderName: 'Shopee Express Account', senderContact: '0917-555-9876', senderAddress: 'Ayala Ave., Makati City', receiverName: 'Customer C', receiverContact: '0900-000-0003', receiverAddress: 'BGC, Taguig City', itemDescription: 'General Merchandise', itemQuantity: 1, itemWeight: '1.0 kg', deliveryType: 'Pick Up', assignedCourier: 'Rider C', specialInstructions: 'None' }
+  { id: 'WB-003', waybillNumber: 'WB-2026-0003', clientCode: 'CL-001', deliveryDate: new Date().toISOString(), status: 'Missing', hasOriginalPOD: false, hasApprovedCTC: false, encodedBy: 'EMP-003', encodedAt: new Date().toISOString(), senderName: 'Shopee Express', senderContact: '0917-555-9876', senderAddress: 'Ayala Ave., Makati City', receiverName: 'Pedro Penduko', receiverContact: '0922-333-4444', receiverAddress: '789 Rizal St., Davao City', itemDescription: 'Home Appliances', itemQuantity: 1, itemWeight: '5.5 kg', deliveryType: 'Pick Up', assignedCourier: 'Rider Mark', specialInstructions: 'Heavy item.' },
+  { id: 'WB-004', waybillNumber: 'WB-2026-0004', clientCode: 'CL-003', deliveryDate: new Date().toISOString(), status: 'Pending', is_ctc: false, hasOriginalPOD: true, hasApprovedCTC: false, encodedBy: 'EMP-003', encodedAt: new Date().toISOString(), pod_image_url: 'https://images.unsplash.com/photo-1586281380349-632531db7ed4?q=80&w=600&auto=format&fit=crop', senderName: 'TikTok Shop', senderContact: '0917-333-4444', senderAddress: 'BGC High St., Taguig City', receiverName: 'Ana Gomez', receiverContact: '0919-444-5555', receiverAddress: '101 Mabini St., Manila', itemDescription: 'Cosmetics', itemQuantity: 10, itemWeight: '0.5 kg', deliveryType: 'Delivery', assignedCourier: 'Rider Paul', specialInstructions: 'Do not expose to direct sunlight.' },
+  { id: 'WB-E2E-001', waybillNumber: 'WB-E2E-001', clientCode: 'CA-001', deliveryDate: new Date().toISOString(), status: 'Validated', hasOriginalPOD: true, hasApprovedCTC: true, encodedBy: 'EMP-003', encodedAt: new Date().toISOString(), senderName: 'Lazada Account', senderContact: '0917-123-4567', senderAddress: 'Rockwell Dr., Makati City', receiverName: 'Customer A', receiverContact: '0900-000-0001', receiverAddress: 'Makati City, Metro Manila', itemDescription: 'General Merchandise', itemQuantity: 1, itemWeight: '1.0 kg', deliveryType: 'Delivery', assignedCourier: 'Rider A', specialInstructions: 'None' },
+  { id: 'WB-E2E-002', waybillNumber: 'WB-E2E-002', clientCode: 'CA-001', deliveryDate: new Date().toISOString(), status: 'Pending', is_ctc: false, hasOriginalPOD: true, hasApprovedCTC: false, encodedBy: 'EMP-003', encodedAt: new Date().toISOString(), pod_image_url: 'https://images.unsplash.com/photo-1586281380349-632531db7ed4?q=80&w=600&auto=format&fit=crop', senderName: 'Lazada Account', senderContact: '0917-123-4567', senderAddress: 'Rockwell Dr., Makati City', receiverName: 'Customer B', receiverContact: '0900-000-0002', receiverAddress: 'Cebu Business Park, Cebu City', itemDescription: 'General Merchandise', itemQuantity: 1, itemWeight: '1.0 kg', deliveryType: 'Delivery', assignedCourier: 'Rider B', specialInstructions: 'None' },
+  { id: 'WB-E2E-003', waybillNumber: 'WB-E2E-003', clientCode: 'CA-002', deliveryDate: new Date().toISOString(), status: 'Validated', hasOriginalPOD: true, hasApprovedCTC: true, encodedBy: 'EMP-003', encodedAt: new Date().toISOString(), senderName: 'Shopee Express Account', senderContact: '0917-555-9876', senderAddress: 'Ayala Ave., Makati City', receiverName: 'Customer C', receiverContact: '0900-000-0003', receiverAddress: 'BGC, Taguig City', itemDescription: 'General Merchandise', itemQuantity: 1, itemWeight: '1.0 kg', deliveryType: 'Pick Up', assignedCourier: 'Rider C', specialInstructions: 'None' }
 ];
 
 
@@ -290,8 +284,8 @@ export const SEEDED_INVOICES: Invoice[] = [
     billingPeriod: 'Apr 2026',
     status: 'Draft',
     createdBy: 'EMP-003',
-    createdAt: new Date().toISOString(),
-    dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    createdAt: new Date(Date.now() - 40 * 24 * 60 * 60 * 1000).toISOString(),
+    dueDate: new Date(Date.now() - 35 * 24 * 60 * 60 * 1000).toISOString(),
   },
   {
     id: 'INV-006',
@@ -511,6 +505,52 @@ export const SEEDED_PAYMENTS: Payment[] = [
     validatedBy: 'EMP-002',
     validatedAt: new Date().toISOString(),
     status: 'Validated'
+  },
+  {
+    id: 'PAY-003',
+    invoiceId: 'INV-003',
+    invoiceNumber: 'LZD-2026-CA001',
+    clientId: 'CA-001',
+    clientName: 'Lazada Account',
+    amount: 25000,
+    paymentMethod: 'Bank Transfer',
+    referenceNumber: 'REF-889933',
+    bankConfirmed: true,
+    recordedBy: 'EMP-003',
+    recordedAt: new Date().toISOString(),
+    validatedBy: 'EMP-002',
+    validatedAt: new Date().toISOString(),
+    status: 'Validated'
+  },
+  {
+    id: 'PAY-004',
+    invoiceId: 'INV-004',
+    invoiceNumber: 'SHP-2026-CA002',
+    clientId: 'CA-002',
+    clientName: 'Shopee Express Account',
+    amount: 14200,
+    paymentMethod: 'Check',
+    referenceNumber: 'CHK-999777',
+    bankConfirmed: false,
+    recordedBy: 'EMP-003',
+    recordedAt: new Date().toISOString(),
+    status: 'Pending Validation'
+  },
+  {
+    id: 'PAY-005',
+    invoiceId: 'INV-005',
+    invoiceNumber: 'TIK-2026-0001',
+    clientId: 'CL-003',
+    clientName: 'TikTok Shop',
+    amount: 9800,
+    paymentMethod: 'GCash',
+    referenceNumber: 'GCH-112233',
+    bankConfirmed: true,
+    recordedBy: 'EMP-003',
+    recordedAt: new Date().toISOString(),
+    validatedBy: 'EMP-002',
+    validatedAt: new Date().toISOString(),
+    status: 'Validated'
   }
 ];
 
@@ -674,9 +714,9 @@ export const SEEDED_AUDIT_LOGS: AuditLog[] = [
   {
     id: 'AL-1001',
     timestamp: '2026-09-26T08:30:00Z',
-    userId: 'EMP-004',
-    userFullName: 'Hannah Estrera',
-    userRole: 'Coordinator',
+    userId: 'EMP-003',
+    userFullName: 'Maria Mariel Jane Anonuevo',
+    userRole: 'Accountant',
     action: 'CREATE_WAYBILL',
     module: 'Operations',
     recordId: 'WB-12345',
@@ -749,32 +789,6 @@ export interface NavLinkConfig {
 }
 
 export const NAV_CONFIG: Record<UserRole, { groups: { label?: string; items: NavLinkConfig[] }[] }> = {
-  'Coordinator': {
-    groups: [
-      {
-        label: 'Overview',
-        items: [
-          { label: 'Dashboard', path: '/dashboard', icon: 'ti ti-layout-dashboard' },
-        ],
-      },
-      {
-        label: 'Operations',
-        items: [
-          { label: 'Client Search', path: '/clients', icon: 'ti ti-search' },
-          { label: 'Waybill / POD Records', path: '/waybills', icon: 'ti ti-file-import' },
-        ],
-      },
-      {
-        label: 'Duplicate Detection',
-        items: [
-          { label: 'Unique Documents', path: '/unique-documents', icon: 'ti ti-file-check' },
-          { label: 'Flagged Duplicates', path: '/flagged-duplicates', icon: 'ti ti-alert-triangle' },
-          { label: 'Review History', path: '/review-history', icon: 'ti ti-history' },
-        ],
-      },
-      
-    ],
-  },
   'Accountant': {
     groups: [
       {
@@ -874,6 +888,7 @@ export const NAV_CONFIG: Record<UserRole, { groups: { label?: string; items: Nav
         label: 'Liquidation & Validation',
         items: [
           { label: 'Financial Adjustments', path: '/adjustments', icon: 'ti ti-adjustments-alt' },
+          { label: 'Record Settlement', path: '/record-settlement', icon: 'ti ti-receipt' },
         ],
       },
       {
@@ -1222,4 +1237,98 @@ export const SEEDED_CASH_FLOW_RECORDS: CashFlowRecord[] = [
   { id: 'CF-022', type: 'Outflow', amount: 50000, sourceReference: 'Petron NLEX (Fuel)', date: '2026-09-19T10:00:00Z', recordedBy: 'System' },
   { id: 'CF-023', type: 'Inflow', amount: 55000, sourceReference: 'TikTok Shop', date: '2026-09-25T10:00:00Z', recordedBy: 'System' },
   { id: 'CF-024', type: 'Outflow', amount: 60000, sourceReference: 'PLDT (Internet)', date: '2026-09-26T10:00:00Z', recordedBy: 'System' },
+];
+
+// ─── Settlements ───────────────────────────────────────────────────
+
+export interface Settlement {
+  id: string;
+  type: 'Leftover return' | 'Reimbursement';
+  courierName: string;
+  tripRef: string;
+  submittedAt: string;
+  amount: number;
+  discrepancy?: number;
+  status: 'For validation' | 'Validated' | 'Rejected';
+  cashAdvance: number;
+  totalExpenses: number;
+  envelopeNo?: string;
+  cashCounted?: number;
+  recordedBy: string;
+  recordedAt: string;
+}
+
+export const SEEDED_SETTLEMENTS: Settlement[] = [
+  {
+    id: 'CF-007',
+    type: 'Leftover return',
+    courierName: 'Juan Dela Cruz',
+    tripRef: 'TRIP-MNL-CEB-001',
+    submittedAt: '2026-09-29T10:15:00',
+    amount: 4550.00,
+    status: 'For validation',
+    cashAdvance: 20000.00,
+    totalExpenses: 15450.00,
+    envelopeNo: 'ENV-JDC-0929',
+    cashCounted: 4550.00,
+    recordedBy: 'Maria Mariel Jane A. (Accountant)',
+    recordedAt: '2026-09-29T10:15:00'
+  },
+  {
+    id: 'CF-008',
+    type: 'Leftover return',
+    courierName: 'Luis Garcia',
+    tripRef: 'TRIP-MNL-ILO-004',
+    submittedAt: '2026-09-29T10:40:00',
+    amount: 5000.00,
+    discrepancy: 200.00,
+    status: 'For validation',
+    cashAdvance: 25000.00,
+    totalExpenses: 19800.00,
+    envelopeNo: 'ENV-LG-0929',
+    cashCounted: 5000.00,
+    recordedBy: 'Maria Mariel Jane A. (Accountant)',
+    recordedAt: '2026-09-29T10:40:00'
+  },
+  {
+    id: 'CF-009',
+    type: 'Reimbursement',
+    courierName: 'Pedro Ramos',
+    tripRef: 'TRIP-MNL-DVO-002',
+    submittedAt: '2026-09-29T11:05:00',
+    amount: 3100.00,
+    status: 'For validation',
+    cashAdvance: 15000.00,
+    totalExpenses: 18100.00,
+    recordedBy: 'Maria Mariel Jane A. (Accountant)',
+    recordedAt: '2026-09-29T11:05:00'
+  },
+  {
+    id: 'CF-005',
+    type: 'Leftover return',
+    courierName: 'Mark Reyes',
+    tripRef: 'TRIP-MNL-CEB-005',
+    submittedAt: '2026-09-28T09:15:00',
+    amount: 1500.00,
+    status: 'Validated',
+    cashAdvance: 10000.00,
+    totalExpenses: 8500.00,
+    envelopeNo: 'ENV-MR-0928',
+    cashCounted: 1500.00,
+    recordedBy: 'Maria Mariel Jane A. (Accountant)',
+    recordedAt: '2026-09-28T09:15:00'
+  },
+  {
+    id: 'CF-006',
+    type: 'Reimbursement',
+    courierName: 'Alex Santos',
+    tripRef: 'TRIP-MNL-MIN-010',
+    submittedAt: '2026-09-28T14:20:00',
+    amount: 2000.00,
+    status: 'Rejected',
+    cashAdvance: 12000.00,
+    totalExpenses: 14000.00,
+    recordedBy: 'Maria Mariel Jane A. (Accountant)',
+    recordedAt: '2026-09-28T14:20:00'
+  }
 ];

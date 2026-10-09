@@ -13,6 +13,7 @@ import { TableContainer } from '../components/TableContainer';
 import { Dropdown } from '../components/Dropdown';
 import { Users, FileText, Phone, Mail, MapPin, Calendar as CalIcon, Hash, Settings, CreditCard } from 'lucide-react';
 import api from '../services/api';
+import { CalendarPicker } from '../components/FormModals';
 import { computeFreightCost } from '../utils/billing';
 
 export const ClientManagement: React.FC = () => {
@@ -39,6 +40,11 @@ export const ClientManagement: React.FC = () => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedInvoiceForModal, setSelectedInvoiceForModal] = useState<any | null>(null);
   const [selectedReceiptForModal, setSelectedReceiptForModal] = useState<any | null>(null);
+  const [billingDateFrom, setBillingDateFrom] = useState('');
+  const [billingDateTo, setBillingDateTo] = useState('');
+  const [paymentDateFrom, setPaymentDateFrom] = useState('');
+  const [paymentDateTo, setPaymentDateTo] = useState('');
+
   // Sync form data when editing client changes (for Detail View)
   useEffect(() => {
     if (id) {
@@ -60,6 +66,83 @@ export const ClientManagement: React.FC = () => {
   const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleDownloadReceipt = () => {
+    if (!selectedReceiptForModal) return;
+    const editingClient = clients.find(c => c.id === id);
+    
+    const receiptHtml = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Official Receipt - ${selectedReceiptForModal.orNumber || selectedReceiptForModal.referenceNumber || selectedReceiptForModal.id}</title>
+          <style>
+            body { font-family: 'Inter', 'Segoe UI', sans-serif; padding: 40px; color: #334155; background: #fff; }
+            .receipt-container { border: 2px solid #E2E8F0; padding: 40px; border-radius: 8px; max-width: 800px; margin: 0 auto; background: #F8FAFC; box-sizing: border-box; }
+            .text-center { text-align: center; }
+            h2 { margin: 0 0 8px 0; color: #0F172A; font-size: 1.5rem; font-weight: 900; letter-spacing: -0.5px; }
+            p { margin: 0; color: #475569; font-size: 0.9rem; }
+            h3 { margin-top: 32px; color: #2563EB; letter-spacing: 3px; text-transform: uppercase; font-size: 1.3rem; font-weight: 800; }
+            .flex-between { display: flex; justify-content: space-between; margin-bottom: 32px; border-bottom: 1px dashed #CBD5E1; padding-bottom: 24px; }
+            .info-p { margin: 0 0 6px 0; font-size: 0.95rem; }
+            strong { color: #0F172A; }
+            .text-right { text-align: right; }
+            .highlight { color: #EF4444; font-weight: 700; font-size: 1.1rem; }
+            .amount-text { font-size: 1.1rem; line-height: 1.8; color: #334155; margin-bottom: 40px; }
+            .amount-val { color: #0F172A; font-size: 1.2rem; text-decoration: underline; font-weight: bold; }
+            .sign-area { display: flex; justify-content: flex-end; margin-top: 64px; }
+            .sign-box { width: 250px; text-align: center; }
+            .sign-line { border-bottom: 1px solid #0F172A; margin-bottom: 8px; padding-bottom: 4px; }
+          </style>
+        </head>
+        <body>
+          <div class="receipt-container">
+            <div class="text-center" style="margin-bottom: 32px;">
+              <h2>FOMS COURIER & FORWARDER, INC.</h2>
+              <p>123 Logistics Way, Transport City, Metro Manila</p>
+              <p>VAT Reg. TIN: 000-123-456-000</p>
+              <h3>Official Receipt</h3>
+            </div>
+            
+            <div class="flex-between">
+              <div>
+                <p class="info-p"><strong>Received From:</strong> ${selectedReceiptForModal.clientName || editingClient?.name}</p>
+                <p class="info-p"><strong>Address:</strong> ${editingClient?.address || 'N/A'}</p>
+              </div>
+              <div class="text-right">
+                <p class="info-p"><strong>Date:</strong> ${new Date(selectedReceiptForModal.recordedAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
+                <p class="info-p"><strong>O.R. No.:</strong> <span class="highlight">${selectedReceiptForModal.orNumber || selectedReceiptForModal.referenceNumber || selectedReceiptForModal.id}</span></p>
+                <p class="info-p"><strong>Method:</strong> ${selectedReceiptForModal.paymentMethod}</p>
+              </div>
+            </div>
+            
+            <p class="amount-text">
+              Received the sum of <span class="amount-val">PHP ${selectedReceiptForModal.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span> in partial/full payment of <strong>Invoice No. ${selectedReceiptForModal.invoiceNumber || selectedReceiptForModal.invoiceId || 'N/A'}</strong>.
+            </p>
+            
+            <div class="sign-area">
+              <div class="sign-box">
+                <div class="sign-line">
+                  <strong>Crystalyn Joyce C. Fajardo</strong>
+                </div>
+                <span style="font-size: 0.85rem; color: #64748B; text-transform: uppercase; letter-spacing: 1px;">Authorized Representative</span>
+              </div>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    const blob = new Blob([receiptHtml], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `OR_${selectedReceiptForModal.orNumber || selectedReceiptForModal.referenceNumber || selectedReceiptForModal.id}.html`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('Official Receipt downloaded successfully!');
   };
 
   const handleEditSubmit = (e: React.FormEvent) => {
@@ -158,6 +241,28 @@ export const ClientManagement: React.FC = () => {
     const overdue = billedInvoices.filter(inv => inv.status === 'Overdue' || inv.status === 'Outstanding').reduce((sum, inv) => sum + inv.totalAmount, 0);
     const clientPayments = payments.filter(p => p.clientId === editingClient.id);
 
+    const filteredBilledInvoices = billedInvoices.filter(inv => {
+      const invDate = new Date(inv.createdAt);
+      if (billingDateFrom && invDate < new Date(billingDateFrom)) return false;
+      if (billingDateTo) {
+        const to = new Date(billingDateTo);
+        to.setHours(23, 59, 59, 999);
+        if (invDate > to) return false;
+      }
+      return true;
+    });
+
+    const filteredClientPayments = clientPayments.filter(pay => {
+      const payDate = new Date(pay.recordedAt);
+      if (paymentDateFrom && payDate < new Date(paymentDateFrom)) return false;
+      if (paymentDateTo) {
+        const to = new Date(paymentDateTo);
+        to.setHours(23, 59, 59, 999);
+        if (payDate > to) return false;
+      }
+      return true;
+    });
+
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             {/* Header Card */}
@@ -228,9 +333,30 @@ export const ClientManagement: React.FC = () => {
 
             {/* Billing History Card */}
             <div style={{ background: '#fff', border: '1px solid #E2E8F0', padding: '24px', borderRadius: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-                <FileText size={18} color="#F59E0B" />
-                <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0F172A' }}>Billing History</h3>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <FileText size={18} color="#F59E0B" />
+                  <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0F172A' }}>Billing History</h3>
+                </div>
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                  <CalendarPicker
+                    label="From:"
+                    placeholder="Start date..."
+                    value={billingDateFrom}
+                    onChange={date => setBillingDateFrom(date)}
+                    maxDate={billingDateTo || "2026-12-31"}
+                    variant="toolbar"
+                  />
+                  <CalendarPicker
+                    label="To:"
+                    placeholder="End date..."
+                    value={billingDateTo}
+                    onChange={date => setBillingDateTo(date)}
+                    minDate={billingDateFrom}
+                    maxDate="2026-12-31"
+                    variant="toolbar"
+                  />
+                </div>
               </div>
               <div style={{ borderRadius: '8px', overflow: 'visible' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
@@ -246,8 +372,8 @@ export const ClientManagement: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {billedInvoices.length > 0 ? (
-                      billedInvoices.map(inv => (
+                    {filteredBilledInvoices.length > 0 ? (
+                      filteredBilledInvoices.map(inv => (
                         <tr key={inv.id} style={{ borderBottom: '1px solid #E2E8F0', background: 'transparent' }}>
                           <td style={{ padding: '12px 16px', color: '#0F172A', fontWeight: 600 }}>
                             {inv.invoiceNumber}
@@ -290,9 +416,30 @@ export const ClientManagement: React.FC = () => {
             {/* Payment Records Card */}
             {user?.role === 'Accountant' && (
               <div style={{ background: '#fff', border: '1px solid #E2E8F0', padding: '24px', borderRadius: '12px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-                  <CreditCard size={18} color="#10B981" />
-                  <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0F172A' }}>Payment Records</h3>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <CreditCard size={18} color="#10B981" />
+                    <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0F172A' }}>Payment Records</h3>
+                  </div>
+                  <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                    <CalendarPicker
+                      label="From:"
+                      placeholder="Start date..."
+                      value={paymentDateFrom}
+                      onChange={date => setPaymentDateFrom(date)}
+                      maxDate={paymentDateTo || "2026-12-31"}
+                      variant="toolbar"
+                    />
+                    <CalendarPicker
+                      label="To:"
+                      placeholder="End date..."
+                      value={paymentDateTo}
+                      onChange={date => setPaymentDateTo(date)}
+                      minDate={paymentDateFrom}
+                      maxDate="2026-12-31"
+                      variant="toolbar"
+                    />
+                  </div>
                 </div>
                 <div style={{ borderRadius: '8px', overflow: 'visible' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
@@ -308,8 +455,8 @@ export const ClientManagement: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {clientPayments.length > 0 ? (
-                        clientPayments.map(pay => (
+                      {filteredClientPayments.length > 0 ? (
+                        filteredClientPayments.map(pay => (
                           <tr key={pay.id} style={{ borderBottom: '1px solid #E2E8F0' }}>
                             <td style={{ padding: '12px 16px', color: '#0F172A', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
                               {pay.orNumber || pay.referenceNumber || pay.id} <FileText size={14} color="#94A3B8" />
@@ -348,9 +495,27 @@ export const ClientManagement: React.FC = () => {
             {selectedInvoiceForModal && createPortal(
               <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', zIndex: 99999, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' }} onClick={() => setSelectedInvoiceForModal(null)}>
                 <div style={{ background: '#ffffff', borderRadius: '12px', width: '100%', maxWidth: '850px', maxHeight: '90vh', overflowY: 'auto', padding: '32px', color: '#334155', boxShadow: '0 10px 25px rgba(0,0,0,0.3)' }} onClick={e => e.stopPropagation()}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-                    <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: '#0F172A' }}>Invoice Details</h3>
-                    <button onClick={() => setSelectedInvoiceForModal(null)} style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', fontSize: '1.5rem', display: 'flex', alignItems: 'center' }}><i className="ti ti-x" /></button>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
+                    {(() => {
+                      let invoiceWaybills = waybills.filter(w => w.invoiceId === selectedInvoiceForModal.id || w.invoiceId === selectedInvoiceForModal.invoiceNumber || selectedInvoiceForModal.waybillIds?.includes(w.id));
+                      if (invoiceWaybills.length === 0) {
+                        invoiceWaybills = waybills.filter(w => w.clientCode === selectedInvoiceForModal.clientId);
+                      }
+                      
+                      const earliestDate = invoiceWaybills.length > 0 
+                        ? new Date(Math.min(...invoiceWaybills.map(w => new Date(w.deliveryDate).getTime()))) 
+                        : new Date();
+                        
+                      return (
+                        <>
+                          <div>
+                            <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: '#0F172A', marginBottom: '4px' }}>Invoice details</h3>
+                            <p style={{ margin: 0, fontSize: '0.85rem', color: '#475569', fontWeight: 600 }}>{invoiceWaybills.length} waybill{invoiceWaybills.length !== 1 ? 's' : ''} - Delivered {earliestDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                          </div>
+                          <button onClick={() => setSelectedInvoiceForModal(null)} style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', fontSize: '1.2rem', display: 'flex', alignItems: 'center' }}><i className="ti ti-x" /></button>
+                        </>
+                      );
+                    })()}
                   </div>
 
                   {(() => {
@@ -360,106 +525,80 @@ export const ClientManagement: React.FC = () => {
                       invoiceWaybills = waybills.filter(w => w.clientCode === selectedInvoiceForModal.clientId);
                     }
                     return (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                        {/* Included Waybills */}
-                        <div style={{ border: '1px solid var(--border, #E2E8F0)', borderRadius: '8px', overflow: 'hidden' }}>
-                          <div style={{ background: 'var(--s1, #F7F9FF)', padding: '10px 14px', borderBottom: '1px solid var(--border, #E2E8F0)', fontSize: '11px', fontWeight: 700, color: 'var(--tt, #6B7280)', textTransform: 'uppercase', letterSpacing: '0.6px' }}>
-                            Included Waybills ({invoiceWaybills.length})
-                          </div>
-                          <div style={{ padding: '0 14px', maxHeight: '160px', overflowY: 'auto' }}>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1fr 1fr', padding: '10px 0', borderBottom: '1px solid var(--border, #E2E8F0)', fontSize: '11px', fontWeight: 700, color: 'var(--tt, #6B7280)', textTransform: 'uppercase' }}>
-                              <span>Waybill No.</span>
-                              <span>Delivery Date</span>
-                              <span>Status</span>
-                              <span>Docs</span>
-                              <span style={{ textAlign: 'right' }}>Amount</span>
-                            </div>
-                            {invoiceWaybills.map((wb, i) => {
-                              let freightAmount = 0;
-                              let errorMsg = null;
-                              try {
-                                const breakdown = computeFreightCost(wb, billingRates);
-                                freightAmount = breakdown.grandTotal;
-                              } catch (e) {
-                                errorMsg = 'No Rate config';
-                              }
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                        {invoiceWaybills.map((wb, i) => {
+                          let fd = null;
+                          let errorMsg = null;
+                          let freightAmount = 0;
+                          try {
+                            const br = computeFreightCost(wb, billingRates);
+                            fd = {
+                              area: br.area || 'Unknown',
+                              chargeableWeight: br.chargeableWeight,
+                              weightBasis: br.volumeWeight > br.actualWeight ? 'volume weight' : 'actual weight',
+                              freightCost: br.freightCost,
+                              vat: br.vat || 0,
+                              fuelSurcharge: br.fuelSurcharge || 0,
+                            };
+                            freightAmount = br.grandTotal;
+                          } catch (e) {
+                            errorMsg = 'No Rate config';
+                          }
 
-                              return (
-                                <div key={wb.id} style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1fr 1fr', padding: '10px 0', borderBottom: i < invoiceWaybills.length - 1 ? '1px solid #F1F5F9' : 'none', fontSize: '13px', color: 'var(--ts, #374151)', alignItems: 'center' }}>
-                                  <span style={{ fontWeight: 600, color: 'var(--tp, #0F172A)' }}>{wb.waybillNumber}</span>
-                                  <span>{new Date(wb.deliveryDate).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
-                                  <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '999px', background: wb.status === 'Validated' ? '#DCFCE7' : '#F1F5F9', color: wb.status === 'Validated' ? '#166534' : '#475569', display: 'inline-block', width: 'fit-content', fontWeight: 600 }}>{wb.status}</span>
-                                  <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '999px', background: wb.hasOriginalPOD ? '#DBEAFE' : (wb.hasApprovedCTC ? '#FEF9C3' : '#FEE2E2'), color: wb.hasOriginalPOD ? '#1E40AF' : (wb.hasApprovedCTC ? '#854D0E' : '#991B1B'), display: 'inline-block', width: 'fit-content', fontWeight: 600 }}>
-                                    {wb.hasOriginalPOD ? 'Orig POD' : (wb.hasApprovedCTC ? 'CTC' : 'Missing')}
-                                  </span>
-                                  <span style={{ textAlign: 'right', fontWeight: 600 }}>
-                                    {errorMsg ? <span style={{ color: '#DC2626', fontSize: '11px' }}>{errorMsg}</span> : `₱${freightAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`}
-                                  </span>
+                          return (
+                            <div key={wb.id} style={{ border: '1px solid #E2E8F0', borderRadius: '12px', padding: '16px', background: '#fff' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <span style={{ fontWeight: 800, color: '#0F172A', fontSize: '0.95rem' }}>{wb.waybillNumber}</span>
+                                  <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', background: '#DCFCE7', color: '#166534', fontWeight: 700 }}>Validated</span>
+                                  <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '4px', background: '#F1F5F9', color: '#475569', fontWeight: 700 }}>{fd?.area || 'NCR'}</span>
                                 </div>
-                              );
-                            })}
-                            {invoiceWaybills.length === 0 && (
-                              <div style={{ padding: '16px', textAlign: 'center', color: '#94A3B8' }}>No waybill details found for this invoice.</div>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Computation Breakdown */}
-                        <div style={{ background: 'var(--s1, #F7F9FF)', padding: '16px', borderRadius: '8px', border: '1px solid var(--border, #E2E8F0)' }}>
-                          {/* Per-waybill freight details */}
-                          {invoiceWaybills.map((wb) => {
-                            let fd = null;
-                            let errorMsg = null;
-                            try {
-                              const br = computeFreightCost(wb, billingRates);
-                              fd = {
-                                area: br.area || 'Unknown',
-                                chargeableWeight: br.chargeableWeight,
-                                weightBasis: br.volumeWeight > br.actualWeight ? 'Volume Weight' : 'Actual Weight',
-                                freightCost: br.freightCost,
-                                valuation: br.valuation || 0,
-                                odaCharge: br.odaCharge || 0,
-                              };
-                            } catch (e) {
-                              errorMsg = 'No Rate config';
-                            }
-                            
-                            return (
-                              <div key={wb.id} style={{ marginBottom: 10, padding: '10px 12px', background: '#fff', borderRadius: 6, border: '1px solid #E2E8F0' }}>
-                                <div style={{ fontSize: '11px', fontWeight: 700, color: '#0F172A', marginBottom: 6 }}>{wb.waybillNumber} {fd ? `— ${fd.area}` : ''}</div>
-                                {errorMsg ? (
-                                  <div style={{ color: '#DC2626', fontSize: '12px', fontWeight: 600 }}>
-                                    <i className="ti ti-alert-circle" style={{ marginRight: 4 }}></i>
-                                    {errorMsg}
-                                  </div>
-                                ) : fd ? (
-                                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 12px', fontSize: '11px', color: '#475569' }}>
-                                    <span>Chargeable Weight</span><span style={{ textAlign: 'right', fontWeight: 600 }}>{fd.chargeableWeight.toFixed(2)} kg ({fd.weightBasis})</span>
-                                    <span>Freight Cost</span><span style={{ textAlign: 'right', fontWeight: 600 }}>₱{fd.freightCost.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
-                                    {fd.valuation > 0 && <><span>Valuation (1%)</span><span style={{ textAlign: 'right', fontWeight: 600 }}>₱{fd.valuation.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></>}
-                                    {fd.odaCharge > 0 && <><span>ODA Charge</span><span style={{ textAlign: 'right', fontWeight: 600 }}>₱{fd.odaCharge.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></>}
-                                  </div>
-                                ) : null}
+                                <span style={{ fontWeight: 800, color: '#0F172A', fontSize: '1rem' }}>₱{freightAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
                               </div>
-                            );
-                          })}
-                          {/* Grand totals */}
-                          <div style={{ marginTop: 8 }}>
-                            {[
-                              { label: 'Total Freight Cost', val: selectedInvoiceForModal.amount },
-                              { label: 'Subtotal (Freight + Valuation + ODA)', val: selectedInvoiceForModal.amount },
-                              { label: '12% VAT (on Subtotal)', val: selectedInvoiceForModal.vatAmount },
-                              { label: 'Fuel Surcharge (15% of Freight)', val: selectedInvoiceForModal.surchargeAmount },
-                            ].map((row, i) => (
-                              <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '13px' }}>
-                                <span style={{ color: 'var(--ts, #374151)' }}>{row.label}</span>
-                                <span style={{ fontWeight: 600, color: 'var(--tp, #0F172A)' }}>₱{row.val.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                              
+                              <div style={{ fontSize: '0.85rem', color: '#475569', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '16px', fontWeight: 600 }}>
+                                <i className="ti ti-paperclip" style={{ fontSize: '14px', color: '#94A3B8' }}></i>
+                                {wb.hasOriginalPOD ? 'Orig POD' : (wb.hasApprovedCTC ? 'CTC' : 'Missing')} - {fd ? `${fd.chargeableWeight.toFixed(2)} kg ${fd.weightBasis}` : 'Unknown weight'}
                               </div>
-                            ))}
-                            <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '10px', borderTop: '2px solid var(--border, #0F172A)', fontSize: '14px' }}>
-                              <span style={{ color: 'var(--tp, #0F172A)', fontWeight: 800 }}>GRAND TOTAL</span>
-                              <span style={{ fontWeight: 800, color: 'var(--ok, #059669)', fontSize: '16px' }}>₱{selectedInvoiceForModal.totalAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                              
+                              <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                                  <span style={{ color: '#475569', fontWeight: 600 }}>Freight</span>
+                                  <span style={{ color: '#0F172A', fontWeight: 700 }}>₱{fd?.freightCost.toLocaleString('en-PH', { minimumFractionDigits: 2 }) || '0.00'}</span>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                                  <span style={{ color: '#475569', fontWeight: 600 }}>VAT 12%</span>
+                                  <span style={{ color: '#0F172A', fontWeight: 700 }}>₱{fd?.vat.toLocaleString('en-PH', { minimumFractionDigits: 2 }) || '0.00'}</span>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                                  <span style={{ color: '#475569', fontWeight: 600 }}>Fuel surcharge 15%</span>
+                                  <span style={{ color: '#0F172A', fontWeight: 700 }}>₱{fd?.fuelSurcharge.toLocaleString('en-PH', { minimumFractionDigits: 2 }) || '0.00'}</span>
+                                </div>
+                              </div>
                             </div>
+                          );
+                        })}
+                        
+                        {/* Grand Totals Card */}
+                        <div style={{ border: '1px solid #E2E8F0', borderRadius: '12px', padding: '16px', marginTop: '8px', background: '#FAFAFA' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                              <span style={{ color: '#475569', fontWeight: 600 }}>Freight</span>
+                              <span style={{ color: '#0F172A', fontWeight: 700 }}>₱{selectedInvoiceForModal.amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                              <span style={{ color: '#475569', fontWeight: 600 }}>VAT 12%</span>
+                              <span style={{ color: '#0F172A', fontWeight: 700 }}>₱{selectedInvoiceForModal.vatAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                              <span style={{ color: '#475569', fontWeight: 600 }}>Fuel surcharge 15%</span>
+                              <span style={{ color: '#0F172A', fontWeight: 700 }}>₱{selectedInvoiceForModal.surchargeAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                            </div>
+                          </div>
+                          
+                          <div style={{ borderTop: '1px solid #E2E8F0', paddingTop: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: '1rem', fontWeight: 800, color: '#0F172A' }}>Grand total</span>
+                            <span style={{ fontSize: '1.1rem', fontWeight: 800, color: '#16A34A' }}>₱{selectedInvoiceForModal.totalAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
                           </div>
                         </div>
                       </div>
@@ -482,7 +621,12 @@ export const ClientManagement: React.FC = () => {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
                     <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: '#0F172A' }}>Official Receipt</h3>
                     <div style={{ display: 'flex', gap: '12px' }}>
-                      <button style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#3B82F6', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '6px', fontWeight: 600, cursor: 'pointer', transition: 'background 0.2s' }} onMouseOver={e => e.currentTarget.style.background = '#2563EB'} onMouseOut={e => e.currentTarget.style.background = '#3B82F6'}>
+                      <button 
+                        onClick={handleDownloadReceipt}
+                        style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#10B981', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '6px', fontWeight: 600, cursor: 'pointer', transition: 'background 0.2s' }} 
+                        onMouseOver={e => e.currentTarget.style.background = '#059669'} 
+                        onMouseOut={e => e.currentTarget.style.background = '#10B981'}
+                      >
                         <i className="ti ti-download" /> Download
                       </button>
                       <button onClick={() => setSelectedReceiptForModal(null)} style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', fontSize: '1.5rem', display: 'flex', alignItems: 'center' }}><i className="ti ti-x" /></button>
@@ -502,7 +646,6 @@ export const ClientManagement: React.FC = () => {
                       <div>
                         <p style={{ margin: '0 0 6px 0', fontSize: '0.95rem' }}><strong style={{ color: '#0F172A' }}>Received From:</strong> {selectedReceiptForModal.clientName || editingClient.name}</p>
                         <p style={{ margin: '0 0 6px 0', fontSize: '0.95rem' }}><strong style={{ color: '#0F172A' }}>Address:</strong> {editingClient.address}</p>
-                        <p style={{ margin: '0 0 6px 0', fontSize: '0.95rem' }}><strong style={{ color: '#0F172A' }}>TIN:</strong> N/A</p>
                       </div>
                       <div style={{ textAlign: 'right' }}>
                         <p style={{ margin: '0 0 6px 0', fontSize: '0.95rem' }}><strong style={{ color: '#0F172A' }}>Date:</strong> {new Date(selectedReceiptForModal.recordedAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
@@ -520,7 +663,7 @@ export const ClientManagement: React.FC = () => {
                     <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '64px' }}>
                       <div style={{ width: '250px', textAlign: 'center' }}>
                         <div style={{ borderBottom: '1px solid #0F172A', marginBottom: '8px', paddingBottom: '4px' }}>
-                          <strong style={{ color: '#0F172A' }}>{selectedReceiptForModal.recordedBy || 'Authorized Signatory'}</strong>
+                          <strong style={{ color: '#0F172A' }}>Crystalyn Joyce C. Fajardo</strong>
                         </div>
                         <span style={{ fontSize: '0.85rem', color: '#64748B', textTransform: 'uppercase', letterSpacing: '1px' }}>Authorized Representative</span>
                       </div>
@@ -720,7 +863,7 @@ export const ClientManagement: React.FC = () => {
       {/* Data Table */}
       <TableContainer>
         <DataTable
-          title={user?.role === 'Coordinator' ? "Client Search" : "Client Accounts"}
+          title="Client Accounts"
           data={clients}
           columns={tableColumns}
           actions={tableActions}

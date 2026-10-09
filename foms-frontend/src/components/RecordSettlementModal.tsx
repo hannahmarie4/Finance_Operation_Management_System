@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import Button from './Buttons';
 import { useToast } from './ToastContext';
+import { useAppData } from '../context/AppDataContext';
+import { useAuth } from '../context/AuthContext';
 
 interface RecordSettlementModalProps {
   isOpen: boolean;
@@ -10,11 +12,17 @@ interface RecordSettlementModalProps {
 
 const RecordSettlementModal: React.FC<RecordSettlementModalProps> = ({ isOpen, onClose }) => {
   const { toast } = useToast();
+  const { addSettlement } = useAppData();
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'leftover' | 'overspending'>('leftover');
   
   // Form State
+  const [courierName, setCourierName] = useState('');
+  const [tripRef, setTripRef] = useState('');
   const [cashAdvanceGiven, setCashAdvanceGiven] = useState(0);
   const [totalExpenses, setTotalExpenses] = useState(0);
+  const [envelopeNo, setEnvelopeNo] = useState('');
+  const [cashCounted, setCashCounted] = useState(0);
   
   if (!isOpen) return null;
 
@@ -25,7 +33,24 @@ const RecordSettlementModal: React.FC<RecordSettlementModalProps> = ({ isOpen, o
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    toast.success('Settlement record sent to Head Accountant for validation.');
+    
+    addSettlement({
+      id: `CF-${Math.floor(100 + Math.random() * 900)}`,
+      type: activeTab === 'leftover' ? 'Leftover return' : 'Reimbursement',
+      courierName: courierName || 'Unknown Courier',
+      tripRef: tripRef || 'Unknown Trip',
+      submittedAt: new Date().toISOString(),
+      amount: Math.abs(variance),
+      status: 'For validation',
+      cashAdvance: cashAdvanceGiven,
+      totalExpenses: totalExpenses,
+      envelopeNo: activeTab === 'leftover' ? envelopeNo : undefined,
+      cashCounted: activeTab === 'leftover' ? cashCounted : undefined,
+      recordedBy: user?.fullName || 'Asst. Finance Manager',
+      recordedAt: new Date().toISOString()
+    });
+
+    toast.success('Settlement record sent to Finance Manager for validation.');
     onClose();
   };
 
@@ -51,7 +76,7 @@ const RecordSettlementModal: React.FC<RecordSettlementModalProps> = ({ isOpen, o
             <div>
               <h2 style={{ margin: '0 0 4px', fontSize: '1.25rem', fontWeight: 700, color: '#0F172A' }}>Record Settlement</h2>
               <p style={{ margin: 0, fontSize: '0.875rem', color: '#64748B' }}>
-                Sent to the Head Accountant for validation after you submit.
+                Sent to the Finance Manager for validation after you submit.
               </p>
             </div>
             <button 
@@ -105,14 +130,14 @@ const RecordSettlementModal: React.FC<RecordSettlementModalProps> = ({ isOpen, o
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>Courier</label>
-                <input type="text" placeholder="Full name" style={inputStyle} required />
+                <input type="text" placeholder="Full name" style={inputStyle} value={courierName} onChange={e => setCourierName(e.target.value)} required />
               </div>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>Trip ref.</label>
-                <input type="text" placeholder="TRIP-MNL-XXX-000" style={inputStyle} required />
+                <input type="text" placeholder="TRIP-MNL-XXX-000" style={inputStyle} value={tripRef} onChange={e => setTripRef(e.target.value)} required />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>Cash advance given (₱)</label>
@@ -178,7 +203,7 @@ const RecordSettlementModal: React.FC<RecordSettlementModalProps> = ({ isOpen, o
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>Envelope no.</label>
-                    <input type="text" placeholder="e.g. ENV-JDC-0929" style={inputStyle} required />
+                    <input type="text" placeholder="e.g. ENV-JDC-0929" style={inputStyle} value={envelopeNo} onChange={e => setEnvelopeNo(e.target.value)} required />
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>Date received</label>
@@ -188,7 +213,7 @@ const RecordSettlementModal: React.FC<RecordSettlementModalProps> = ({ isOpen, o
 
                 <div style={{ marginBottom: '16px' }}>
                   <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>Cash counted in envelope (₱)</label>
-                  <input type="number" placeholder="0.00" step="0.01" style={inputStyle} required />
+                  <input type="number" placeholder="0.00" step="0.01" style={inputStyle} value={cashCounted || ''} onChange={e => setCashCounted(parseFloat(e.target.value) || 0)} required />
                 </div>
 
                 <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -253,13 +278,9 @@ const RecordSettlementModal: React.FC<RecordSettlementModalProps> = ({ isOpen, o
 
         {/* Footer */}
         <div style={{ padding: '16px 24px', background: '#F8FAFC', borderTop: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <div style={{ fontSize: '0.75rem', color: '#64748B', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <i className="ti ti-route" style={{ fontSize: '1rem' }}></i>
-            Routing: Accountant records &rarr; Head Accountant validates &rarr; Asst. Finance Manager approves
-          </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
             <Button title="Cancel" variant="secondary" onClick={onClose} />
-            <Button title="Submit to Head Accountant" variant="primary" form="settlement-form" type="submit" />
+            <Button title="Submit to Finance Manager" variant="primary" form="settlement-form" type="submit" />
           </div>
         </div>
       </div>

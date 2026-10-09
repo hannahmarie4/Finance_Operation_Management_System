@@ -43,7 +43,7 @@ const WaybillDetailCard: React.FC<{ waybill: Waybill, onUpdate: (id: string, upd
         id: `AL-${Date.now()}`,
         userId: user?.employeeId || 'U-000',
         userFullName: user?.fullName || 'System',
-        userRole: user?.role || 'Coordinator',
+        userRole: user?.role || 'Accountant',
         action: 'VALIDATE_WAYBILL',
         module: 'Waybills',
         recordId: waybill.waybillNumber,
@@ -369,13 +369,7 @@ export const Waybills: React.FC = () => {
   const navigate = useNavigate();
   const { waybills, updateWaybill, addWaybill, clients } = useAppData();
 
-  // Coordinator sees: For Checking + Missing
-  // Accountant also sees: CTC Submitted (needs their validation action)
-  const isAccountant = user?.role === 'Accountant' || user?.role === 'Head Accountant';
-  const coordinatorWaybills = waybills.filter(wb =>
-    (wb.status as string) === 'Pending' || (wb.status as string) === 'Missing' || (wb.status as string) === 'Returned' ||
-    (isAccountant && (wb.status as string) === 'Pending')
-  );
+
 
   const [isRecording, setIsRecording] = useState(false);
   const { toast } = useToast();
@@ -398,7 +392,7 @@ export const Waybills: React.FC = () => {
       status: newWaybill.deliveryStatus === 'Completed' ? 'For Checking' : 'Not Completed',
       hasOriginalPOD: false,
       hasApprovedCTC: false,
-      encodedBy: user?.employeeId || 'EMP-004',
+      encodedBy: user?.employeeId || 'EMP-003',
       encodedAt: new Date().toISOString(),
     });
 
@@ -575,7 +569,7 @@ export const Waybills: React.FC = () => {
           columns={tableColumns}
           actions={actions}
           rowKey="id"
-          createButtons={user?.role === 'Coordinator' ? [] : [{ label: 'Record Waybill/POD', icon: 'ti-file-plus', onClick: () => setIsRecording(true), variant: 'primary' }]}
+          createButtons={[{ label: 'Record Waybill/POD', icon: 'ti-file-plus', onClick: () => setIsRecording(true), variant: 'primary' }]}
           emptyMessage="No waybills found."
           searchPlaceholder="Search clients..."
           searchFields={['clientName']}

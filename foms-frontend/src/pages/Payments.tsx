@@ -23,7 +23,7 @@ const getEmployeeName = (id: string, def: string) => {
   if (id === 'EMP-001') return 'Crystalyn Joyce C. Fajardo';
   if (id === 'EMP-002') return 'Misty';
   if (id === 'EMP-003') return 'Maria Mariel Jane Anonuevo';
-  if (id === 'EMP-004') return 'Hannah Estrera';
+
   if (id === 'EMP-005') return 'Joana Marie Ogaya';
   if (id === 'SYSTEM') return 'System';
   return (def === 'System' || !def) ? 'Crystalyn Joyce C. Fajardo' : def;

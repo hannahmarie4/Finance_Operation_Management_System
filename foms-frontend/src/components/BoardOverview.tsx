@@ -32,18 +32,7 @@ const BoardOverview: React.FC = () => {
   let title = 'Overview';
 
   // Mapping logic based on user request
-  if (role === 'Coordinator') {
-    if (path.startsWith('/dashboard')) {
-      pageName = 'Dashboard';
-      title = 'Overview';
-    } else if (path.startsWith('/clients')) {
-      pageName = 'Client Accounts';
-      title = 'Client Records';
-    } else if (path.startsWith('/waybills')) {
-      pageName = 'Waybill / POD Records';
-      title = 'Waybill & POD Verification';
-    }
-  } else if (role === 'Accountant') {
+  if (role === 'Accountant') {
     if (path.startsWith('/dashboard')) {
       pageName = 'Dashboard';
       title = 'Overview';

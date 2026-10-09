@@ -12,6 +12,7 @@ import { useAuth } from '../context/AuthContext';
 import { TableContainer } from '../components/TableContainer';
 import { useToast } from '../components/ToastContext';
 import { ClientInfoCard } from '../components/ClientInfoCard';
+import { CalendarPicker } from '../components/FormModals';
 // @ts-ignore
 import html2pdf from 'html2pdf.js';
 
@@ -66,6 +67,9 @@ export const InvoicingDesk: React.FC = () => {
 
   const selectedClientId = viewClient ? viewClient.id : null;
 
+  const [filterDateFrom, setFilterDateFrom] = useState('');
+  const [filterDateTo, setFilterDateTo] = useState('');
+
   // Enrich invoices with derived payment status
   const enrichedInvoices = useMemo(() => {
     const base = selectedClientId
@@ -73,7 +77,24 @@ export const InvoicingDesk: React.FC = () => {
       : invoices;
 
     // Show only active invoices (in creation/approval phase) for the Invoice List
-    const activeInvoices = base.filter(inv => ['Draft', 'Needs Revision', 'Pending Approval', 'Approved'].includes(inv.status));
+    const activeInvoices = base.filter(inv => {
+      if (!['Draft', 'Needs Revision', 'Pending Approval', 'Approved'].includes(inv.status)) return false;
+      if (filterDateFrom || filterDateTo) {
+        const itemDate = new Date(inv.createdAt);
+        itemDate.setHours(0, 0, 0, 0);
+        if (filterDateFrom) {
+          const fromDate = new Date(filterDateFrom);
+          fromDate.setHours(0, 0, 0, 0);
+          if (itemDate < fromDate) return false;
+        }
+        if (filterDateTo) {
+          const toDate = new Date(filterDateTo);
+          toDate.setHours(23, 59, 59, 999);
+          if (itemDate > toDate) return false;
+        }
+      }
+      return true;
+    });
 
     return activeInvoices.map(inv => {
       const client = clients.find(c => c.id === inv.clientId);
@@ -456,6 +477,27 @@ export const InvoicingDesk: React.FC = () => {
               options: filterOptions.map(opt => ({ label: opt, value: opt }))
             }
           ]}
+          customFilters={
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <CalendarPicker
+                label="From:"
+                placeholder="Start date..."
+                value={filterDateFrom}
+                onChange={date => setFilterDateFrom(date)}
+                maxDate={filterDateTo || "2026-12-31"}
+                variant="toolbar"
+              />
+              <CalendarPicker
+                label="To:"
+                placeholder="End date..."
+                value={filterDateTo}
+                onChange={date => setFilterDateTo(date)}
+                minDate={filterDateFrom}
+                maxDate="2026-12-31"
+                variant="toolbar"
+              />
+            </div>
+          }
           columnToggle={true}
           densityToggle={true}
           exportable={false}

@@ -18,81 +18,6 @@ import { DashboardBanner, peso } from '../components/DashboardWidgets';
 
 // ── Role Dashboard Components ──────────────────────────────────────
 
-const CoordinatorDashboard: React.FC = () => {
-  const { waybills, clients, auditLogs } = useAppData();
-  const pendingWaybills = waybills.filter(w => w.status === 'Pending Validation' || w.status === 'Validated (CTC)').length;
-  const todayIntake = waybills.filter(w => new Date(w.encodedAt).toDateString() === new Date().toDateString()).length;
-  const activeClients = clients.filter((c: any) => c.status === 'Active').length;
-  const recentActivity = auditLogs.filter(log => log.userRole === 'Coordinator').slice(0, 5);
-  const navigate = useNavigate();
-
-  const { user: authUser } = useAuth();
-  const bannerName = (authUser?.fullName || 'Coordinator').split(' ')[0];
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      <DashboardBanner
-        eyebrow="Coordinator · My Workspace"
-        title={`Hi ${bannerName}, ${pendingWaybills} waybill${pendingWaybills !== 1 ? 's' : ''} need validation`}
-        subtitle={`${todayIntake} waybill(s) recorded today · ${activeClients} active client(s).`}
-        gradient="linear-gradient(135deg, #2563EB 0%, #1D4ED8 55%, #1E3A8A 100%)"
-        icon="ti-file-import"
-        cta={{ label: 'Waybill / POD Records', icon: 'ti-file-import', onClick: () => navigate('/waybills') }}
-        secondaryCta={{ label: 'Client Search', onClick: () => navigate('/clients') }}
-      />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
-        <StatusCard label="Today's Intake" value={todayIntake} icon="ti-file-import" variant="new" periodText="Waybills recorded today" />
-        <StatusCard label="Pending Validation" value={pendingWaybills} icon="ti-clock-hour-4" variant="warning" periodText="Awaiting POD check" />
-        <StatusCard label="Total Active Clients" value={activeClients} icon="ti-users" variant="success" periodText="Registered clients" />
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-        {/* Waybill Status Chart */}
-        <DonutWidget
-          title="Waybill Status Overview"
-          subtitle="Distribution of waybills by current status"
-          icon="ti-chart-pie"
-          data={[
-            { name: 'Pending Validation', value: waybills.filter(w => w.status === 'Pending Validation').length, color: '#F59E0B' },
-            { name: 'Validated (CTC)', value: waybills.filter(w => w.status === 'Validated (CTC)').length, color: '#3B82F6' },
-            { name: 'Validated', value: waybills.filter(w => w.status === 'Validated').length, color: '#10B981' }
-          ].filter(d => d.value > 0)}
-          centerLabel="WAYBILLS"
-          footerLeftIcon="ti-file-invoice"
-          footerLeftLabel="Total Processed"
-          footerLeftValue={waybills.length.toString()}
-        />
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <Card>
-            <div onClick={() => navigate('/clients')} style={{ padding: '24px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '16px', transition: 'background 0.2s', borderRadius: '12px' }} onMouseEnter={(e) => e.currentTarget.style.background = '#F8FAFC'} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
-              <div style={{ background: '#EFF6FF', color: '#3B82F6', width: 48, height: 48, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>
-                <i className="ti ti-search" />
-              </div>
-              <div>
-                <h3 style={{ margin: '0 0 4px', fontSize: '1.1rem', fontWeight: 600, color: '#0F172A' }}>Client Search</h3>
-                <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748B' }}>Find client accounts and details</p>
-              </div>
-            </div>
-          </Card>
-          <Card>
-            <div onClick={() => navigate('/waybills')} style={{ padding: '24px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '16px', transition: 'background 0.2s', borderRadius: '12px' }} onMouseEnter={(e) => e.currentTarget.style.background = '#F8FAFC'} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
-              <div style={{ background: '#EEF2FF', color: '#6366F1', width: 48, height: 48, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>
-                <i className="ti ti-file-import" />
-              </div>
-              <div>
-                <h3 style={{ margin: '0 0 4px', fontSize: '1.1rem', fontWeight: 600, color: '#0F172A' }}>Waybill / POD Records</h3>
-                <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748B' }}>Encode waybills and validate PODs</p>
-              </div>
-            </div>
-          </Card>
-        </div>
-      </div>
-
-      <RecentActivity logs={recentActivity} />
-    </div>
-  );
-};
 
 
 const AsstFinanceDashboard: React.FC = () => {
@@ -179,12 +104,7 @@ const AsstFinanceDashboard: React.FC = () => {
         <StatusCard label="Pending Liquidations" value={pendingLiquidationCount} icon="ti-file-search" variant="warning" periodText="Awaiting Review/Approval" />
       </div>
       
-      {/* Secondary Metrics */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
-        <StatusCard label="Total Outstanding AR" value={`₱${totalAR.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`} icon="ti-report-money" variant="new" />
-        <StatusCard label="Near-Due Accounts" value={nearDue} icon="ti-calendar-time" variant="warning" periodText="Due within 7 days" />
-        <StatusCard label="Recent Payments" value={recentPayments} icon="ti-coin" variant="success" periodText="Recorded this week" />
-      </div>
+      {/* Secondary Metrics removed per request */}
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 20 }}>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -202,27 +122,27 @@ const AsstFinanceDashboard: React.FC = () => {
                 <AreaChart data={liquidationTrendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <defs>
                     <linearGradient id="colorValidated" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.4} />
-                      <stop offset="95%" stopColor="#3B82F6" stopOpacity={0} />
+                      <stop offset="5%" stopColor="#10B981" stopOpacity={0.4} />
+                      <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
                     </linearGradient>
                     <linearGradient id="colorPending" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#F59E0B" stopOpacity={0.4} />
-                      <stop offset="95%" stopColor="#F59E0B" stopOpacity={0} />
+                      <stop offset="5%" stopColor="#0D9488" stopOpacity={0.6} />
+                      <stop offset="95%" stopColor="#0D9488" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
                   <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748B', fontWeight: 500 }} dy={10} />
                   <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748B', fontWeight: 500 }} />
                   <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }} labelStyle={{ fontWeight: 700, color: '#0F172A', marginBottom: '4px' }} />
-                  <Area type="monotone" dataKey="validated" name="Validated" stroke="#3B82F6" strokeWidth={2} fillOpacity={1} fill="url(#colorValidated)" activeDot={{ r: 5 }} />
-                  <Area type="monotone" dataKey="pending" name="Pending" stroke="#F59E0B" strokeWidth={2} fillOpacity={1} fill="url(#colorPending)" activeDot={{ r: 5 }} />
+                  <Area type="monotone" dataKey="validated" name="Validated" stroke="#10B981" strokeWidth={2} fillOpacity={1} fill="url(#colorValidated)" activeDot={{ r: 5 }} />
+                  <Area type="monotone" dataKey="pending" name="Pending" stroke="#0D9488" strokeWidth={2} fillOpacity={1} fill="url(#colorPending)" activeDot={{ r: 5 }} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'center', gap: '24px', marginTop: '16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><div style={{ width: 10, height: 10, borderRadius: '50%', background: '#3B82F6' }} /><span style={{ fontSize: '0.85rem', color: '#475569', fontWeight: 500 }}>Validated</span></div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><div style={{ width: 10, height: 10, borderRadius: '50%', background: '#F59E0B' }} /><span style={{ fontSize: '0.85rem', color: '#475569', fontWeight: 500 }}>Pending Validation</span></div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><div style={{ width: 10, height: 10, borderRadius: '50%', background: '#10B981' }} /><span style={{ fontSize: '0.85rem', color: '#475569', fontWeight: 500 }}>Validated</span></div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><div style={{ width: 10, height: 10, borderRadius: '50%', background: '#0D9488' }} /><span style={{ fontSize: '0.85rem', color: '#475569', fontWeight: 500 }}>Pending Validation</span></div>
             </div>
           </Card>
         </div>
@@ -720,7 +640,6 @@ const FinanceManagerDashboard: React.FC = () => {
 
 // ── Main Dashboard ─────────────────────────────────────────────────
 const DASHBOARD_MAP: Record<UserRole, React.FC> = {
-  'Coordinator': CoordinatorDashboard,
   'Accountant': AccountantDashboard,
   'Head Accountant': HeadAccountantDashboard,
   'Assistant of Finance Manager': AsstFinanceDashboard,

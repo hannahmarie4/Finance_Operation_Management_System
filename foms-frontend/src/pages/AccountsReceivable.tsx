@@ -20,7 +20,6 @@ const getEmployeeNameByRole = (role: string, defaultName: string) => {
   if (r.includes('assistant of finance manager') || r.includes('assistant of fm')) return 'Joana Marie Ogaya';
   if (r.includes('finance manager')) return 'Crystalyn Joyce C. Fajardo';
   if (r.includes('accountant')) return 'Maria Mariel Jane Anonuevo';
-  if (r.includes('coordinator')) return 'Hannah Estrera';
   return defaultName;
 };
 
@@ -499,8 +498,8 @@ const AccountantView = ({ token, user, arRecords }: any) => {
 
   const priorityList = useMemo(() => {
     const list = arRecords
-      .filter(r => r.outstandingBalance > 0 && getDaysOverdue(r.dueDate) >= 1)
-      .map(r => {
+      .filter((r: any) => r.outstandingBalance > 0 && getDaysOverdue(r.dueDate) >= 1)
+      .map((r: any) => {
         const overdue = getDaysOverdue(r.dueDate);
         let level = 'Low Priority';
         let score = 30;
@@ -529,7 +528,7 @@ const AccountantView = ({ token, user, arRecords }: any) => {
           rec_id: rejectedRec?.id || null
         };
       })
-      .sort((a, b) => b.priority_score - a.priority_score);
+      .sort((a: any, b: any) => b.priority_score - a.priority_score);
 
     if (list.length === 0) {
       return [
@@ -610,7 +609,7 @@ const AccountantView = ({ token, user, arRecords }: any) => {
       setModalLoading(false);
     }
   };
-  const filteredPriorityList = priorityList.filter(row => {
+  const filteredPriorityList = priorityList.filter((row: any) => {
     const matchesSearch = (row.client_name || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
                           (row.invoice_number || '').toLowerCase().includes(searchQuery.toLowerCase());
     const matchesPriority = priorityFilter === 'All' || (row.priority_level || '').toLowerCase().includes(priorityFilter.toLowerCase());
@@ -637,7 +636,7 @@ const AccountantView = ({ token, user, arRecords }: any) => {
             </div>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 20 }}>
-              {filteredPriorityList.map((row, i) => {
+              {filteredPriorityList.map((row: any, i: number) => {
                 const p = String(row.priority_level).toUpperCase();
                 const isHigh = p.includes('HIGH');
                 const isMed = p.includes('MEDIUM');

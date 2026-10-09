@@ -9,8 +9,7 @@ export type UserRole =
   | 'Head Accountant'
   | 'Accountant'
   | 'Assistant of Finance Manager'
-  | 'Assistant of Financial Manager'
-  | 'Coordinator';
+  | 'Assistant of Financial Manager';
 
 export interface User {
   employeeId: string;

@@ -10,103 +10,13 @@ import { useToast } from '../components/ToastContext';
 import { CalendarPicker } from '../components/FormModals';
 import { createPortal } from 'react-dom';
 
-interface Settlement {
-  id: string;
-  type: 'Leftover return' | 'Reimbursement';
-  courierName: string;
-  tripRef: string;
-  submittedAt: string;
-  amount: number;
-  discrepancy?: number;
-  status: 'For validation' | 'Validated' | 'Rejected';
-  cashAdvance: number;
-  totalExpenses: number;
-  envelopeNo?: string;
-  cashCounted?: number;
-  recordedBy: string;
-  recordedAt: string;
-}
-
-const MOCK_SETTLEMENTS: Settlement[] = [
-  {
-    id: 'CF-007',
-    type: 'Leftover return',
-    courierName: 'Juan Dela Cruz',
-    tripRef: 'TRIP-MNL-CEB-001',
-    submittedAt: '2026-09-29T10:15:00',
-    amount: 4550.00,
-    status: 'For validation',
-    cashAdvance: 20000.00,
-    totalExpenses: 15450.00,
-    envelopeNo: 'ENV-JDC-0929',
-    cashCounted: 4550.00,
-    recordedBy: 'Maria Mariel Jane A. (Accountant)',
-    recordedAt: '2026-09-29T10:15:00'
-  },
-  {
-    id: 'CF-008',
-    type: 'Leftover return',
-    courierName: 'Luis Garcia',
-    tripRef: 'TRIP-MNL-ILO-004',
-    submittedAt: '2026-09-29T10:40:00',
-    amount: 5000.00,
-    discrepancy: 200.00,
-    status: 'For validation',
-    cashAdvance: 25000.00,
-    totalExpenses: 19800.00,
-    envelopeNo: 'ENV-LG-0929',
-    cashCounted: 5000.00,
-    recordedBy: 'Maria Mariel Jane A. (Accountant)',
-    recordedAt: '2026-09-29T10:40:00'
-  },
-  {
-    id: 'CF-009',
-    type: 'Reimbursement',
-    courierName: 'Pedro Ramos',
-    tripRef: 'TRIP-MNL-DVO-002',
-    submittedAt: '2026-09-29T11:05:00',
-    amount: 3100.00,
-    status: 'For validation',
-    cashAdvance: 15000.00,
-    totalExpenses: 18100.00,
-    recordedBy: 'Maria Mariel Jane A. (Accountant)',
-    recordedAt: '2026-09-29T11:05:00'
-  },
-  {
-    id: 'CF-005',
-    type: 'Leftover return',
-    courierName: 'Mark Reyes',
-    tripRef: 'TRIP-MNL-CEB-005',
-    submittedAt: '2026-09-28T09:15:00',
-    amount: 1500.00,
-    status: 'Validated',
-    cashAdvance: 10000.00,
-    totalExpenses: 8500.00,
-    envelopeNo: 'ENV-MR-0928',
-    cashCounted: 1500.00,
-    recordedBy: 'Maria Mariel Jane A. (Accountant)',
-    recordedAt: '2026-09-28T09:15:00'
-  },
-  {
-    id: 'CF-006',
-    type: 'Reimbursement',
-    courierName: 'Alex Santos',
-    tripRef: 'TRIP-MNL-MIN-010',
-    submittedAt: '2026-09-28T14:20:00',
-    amount: 2000.00,
-    status: 'Rejected',
-    cashAdvance: 12000.00,
-    totalExpenses: 14000.00,
-    recordedBy: 'Maria Mariel Jane A. (Accountant)',
-    recordedAt: '2026-09-28T14:20:00'
-  }
-];
+import { useAppData } from '../context/AppDataContext';
 
 const Settlements: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  
-  const [settlements, setSettlements] = useState<Settlement[]>(MOCK_SETTLEMENTS);
+  const { settlements, updateSettlement, addCashFlowRecord } = useAppData();
+
   const [filterTab, setFilterTab] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
   const [showRecent, setShowRecent] = useState(false);
@@ -136,7 +46,7 @@ const Settlements: React.FC = () => {
     saveRecentSearch(searchQuery);
   };
 
-  const [selectedRecord, setSelectedRecord] = useState<Settlement | null>(null);
+  const [selectedRecord, setSelectedRecord] = useState<any | null>(null);
   const [decision, setDecision] = useState('');
   const [rejectionReason, setRejectionReason] = useState('');
   const [remarks, setRemarks] = useState('');
@@ -194,7 +104,7 @@ const Settlements: React.FC = () => {
     });
   }, [settlements, filterTab, searchQuery, typeFilter, dateFrom, dateTo]);
 
-  const handleReviewClick = (row: Settlement) => {
+  const handleReviewClick = (row: any) => {
     setSelectedRecord(row);
     setDecision('');
     setRejectionReason('');
@@ -207,13 +117,20 @@ const Settlements: React.FC = () => {
       return;
     }
     
-    // Update local state for mock
-    setSettlements(prev => prev.map(s => {
-      if (s.id === selectedRecord?.id) {
-        return { ...s, status: decision === 'approve' ? 'Validated' : 'Rejected' };
-      }
-      return s;
-    }));
+    updateSettlement(selectedRecord!.id, { status: decision === 'approve' ? 'Validated' : 'Rejected' });
+    
+    // Add to cash flow if validated
+    if (decision === 'approve') {
+      const isLeftover = selectedRecord?.type === 'Leftover return';
+      addCashFlowRecord({
+        id: `CFR-${Date.now()}`,
+        type: isLeftover ? 'Inflow' : 'Outflow',
+        amount: selectedRecord!.amount,
+        sourceReference: selectedRecord!.id,
+        date: new Date().toISOString(),
+        recordedBy: user?.employeeId || 'System'
+      });
+    }
     
     toast.success(`Settlement ${selectedRecord?.id} has been ${decision === 'approve' ? 'validated' : 'rejected'}.`);
     setSelectedRecord(null);

@@ -39,6 +39,8 @@ import {
   SEEDED_RATES,
   BillingRecord,
   SEEDED_BILLING_RECORDS,
+  Settlement,
+  SEEDED_SETTLEMENTS,
 } from '../data/seed';
 
 // ─── Backend → Frontend map helpers ──────────────────────────────
@@ -47,7 +49,7 @@ function getEmployeeName(userId: string, defaultName: string): string {
   if (userId === 'EMP-001') return 'Crystalyn Joyce C. Fajardo';
   if (userId === 'EMP-002') return 'Misty';
   if (userId === 'EMP-003') return 'Maria Mariel Jane Anonuevo';
-  if (userId === 'EMP-004') return 'Hannah Estrera';
+
   if (userId === 'EMP-005') return 'Joana Marie Ogaya';
   return (defaultName === 'System' || !defaultName) ? 'Crystalyn Joyce C. Fajardo' : defaultName;
 }
@@ -56,7 +58,7 @@ function getEmployeeRole(userId: string, defaultRole: string): string {
   if (userId === 'EMP-001') return 'Finance Manager';
   if (userId === 'EMP-002') return 'Head Accountant';
   if (userId === 'EMP-003') return 'Accountant';
-  if (userId === 'EMP-004') return 'Coordinator';
+
   if (userId === 'EMP-005') return 'Assistant of Finance Manager';
   return (defaultRole === 'System' || !defaultRole) ? 'Finance Manager' : defaultRole;
 }
@@ -238,6 +240,7 @@ export interface AppDataContextValue {
   financialAdjustments: FinancialAdjustment[];
   billingRates: BillingRate[];
   billingRecords: BillingRecord[];
+  settlements: Settlement[];
 
   // DB Refresh actions — call after any mutation to re-sync from DB
   refreshPayments: () => Promise<void>;
@@ -290,6 +293,10 @@ export interface AppDataContextValue {
   updateBillingRate: (id: string, changes: Partial<BillingRate>) => void;
   addBillingRecord: (record: BillingRecord) => void;
   updateBillingRecord: (id: string, changes: Partial<BillingRecord>) => void;
+
+  // Settlements
+  addSettlement: (settlement: Settlement) => void;
+  updateSettlement: (id: string, changes: Partial<Settlement>) => void;
 }
 
 const AppDataContext = createContext<AppDataContextValue | null>(null);
@@ -321,6 +328,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
   const [billingRates, setBillingRates] = useState<BillingRate[]>(SEEDED_RATES);
   const [billingRecords, setBillingRecords] = useState<BillingRecord[]>(SEEDED_BILLING_RECORDS);
+  const [settlements, setSettlements] = useState<Settlement[]>(SEEDED_SETTLEMENTS);
 
   // ── Refresh functions — REPLACE state from DB (never merge) ──────
   const refreshClients = useCallback(async () => {
@@ -352,8 +360,18 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     try {
       const res = await api.get('/payments');
       const mapped: Payment[] = res.data.map(mapPayment);
-      if (mapped.length > 0) setPayments(mapped);
-    } catch { /* keep current state */ }
+      
+      const existingIds = new Set(mapped.map(m => m.id));
+      for (const mock of SEEDED_PAYMENTS) {
+        if (!existingIds.has(mock.id)) {
+          mapped.push(mock);
+        }
+      }
+
+      setPayments(mapped);
+    } catch {
+      setPayments([...SEEDED_PAYMENTS]);
+    }
   }, []);
 
   const refreshSpeedPay = useCallback(async () => {
@@ -400,7 +418,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
           status: (w.status === 'Validated' || w.status === 'Validated (CTC)' || w.status === 'Pending') ? w.status : 'Validated',
           hasOriginalPOD: w.hasOriginalPOD ?? false,
           hasApprovedCTC: w.hasApprovedCTC ?? false,
-          encodedBy: w.encodedBy ?? 'EMP-004',
+          encodedBy: w.encodedBy ?? 'EMP-003',
           encodedAt: w.encodedAt ?? new Date().toISOString(),
           destinationArea: w.destinationArea ?? 'Unknown',
           invoiceId: w.invoiceId
@@ -569,6 +587,14 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     setBillingRecords(prev => prev.map(r => r.id === id ? { ...r, ...changes } : r));
   }, []);
 
+  const addSettlement = useCallback((settlement: Settlement) => {
+    setSettlements(prev => [settlement, ...prev]);
+  }, []);
+
+  const updateSettlement = useCallback((id: string, changes: Partial<Settlement>) => {
+    setSettlements(prev => prev.map(s => s.id === id ? { ...s, ...changes } : s));
+  }, []);
+
   const value: AppDataContextValue = {
     waybills,
     invoices,
@@ -584,6 +610,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     financialAdjustments,
     billingRates,
     billingRecords,
+    settlements,
     refreshPayments,
     refreshInvoices,
     refreshSpeedPay,
@@ -610,6 +637,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     updateBillingRate,
     addBillingRecord,
     updateBillingRecord,
+    addSettlement,
+    updateSettlement,
   };
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;

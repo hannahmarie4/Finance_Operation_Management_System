@@ -11,6 +11,8 @@ import { Card } from '../components/Card';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend, LineChart, Line, ComposedChart } from 'recharts';
 import { useToast } from '../components/ToastContext';
 import { useAuth } from '../context/AuthContext';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 class ErrorBoundary extends Component<{ children: React.ReactNode }, { hasError: boolean, error: Error | null }> {
   constructor(props: { children: React.ReactNode }) {
@@ -69,7 +71,8 @@ const ReportsContent: React.FC = () => {
   const defaultLedger = (user?.role === 'Accountant') ? 'Aging of Accounts' : 'Duplicate Alert Summary';
   const [compileLedgerType, setCompileLedgerType] = useState(defaultLedger);
   const [compileSearch, setCompileSearch] = useState('');
-  const [compileDateRange, setCompileDateRange] = useState('Last 30 Days');
+  const [activeSearch, setActiveSearch] = useState('');
+  const [compileDateRange, setCompileDateRange] = useState('All Time');
   const [compileStatus, setCompileStatus] = useState('All Statuses');
 
   const applyScheduleDates = (schedule: 'Weekly' | 'Semi-monthly' | 'Monthly' | '') => {
@@ -126,6 +129,7 @@ const ReportsContent: React.FC = () => {
 
     setDateFrom(newDateFrom);
     setDateTo(newDateTo);
+    setActiveSearch(compileSearch);
     setIsGenerated(true);
 
     addAuditLog({
@@ -145,11 +149,134 @@ const ReportsContent: React.FC = () => {
     toast.success('Report generated successfully.');
   };
 
+  const handleExportCSV = () => {
+    let dataToExport = [];
+    let headers = [];
+    let filename = '';
+
+    if (activeTab === 'aging') {
+      dataToExport = agingRecords.map(r => [
+        r.clientName,
+        r.invoiceDate ? new Date(r.invoiceDate).toLocaleDateString('en-PH') : 'N/A',
+        r.dueDate ? new Date(r.dueDate).toLocaleDateString('en-PH') : 'N/A',
+        r.amount,
+        r.agingDays
+      ]);
+      headers = ['CLIENT', 'INVOICE DATE', 'DUE DATE', 'AMOUNT', 'DAYS OUTSTANDING'];
+      filename = 'aging_report.csv';
+    } else if (activeTab === 'invoices') {
+      dataToExport = allInvoices.map(r => [
+        r.invoiceNumber,
+        r.clientName,
+        new Date(r.createdAt).toLocaleDateString('en-PH'),
+        new Date(r.dueDate).toLocaleDateString('en-PH'),
+        r.totalAmount,
+        r.status
+      ]);
+      headers = ['INVOICE NO.', 'CLIENT', 'ISSUE DATE', 'DUE DATE', 'TOTAL AMOUNT', 'STATUS'];
+      filename = 'invoice_report.csv';
+    } else if (activeTab === 'collections') {
+      dataToExport = collections.map(r => [
+        r.id,
+        r.invoiceNumber,
+        r.clientName,
+        r.amount,
+        r.paymentMethod,
+        new Date(r.recordedAt).toLocaleDateString('en-PH')
+      ]);
+      headers = ['PAYMENT ID', 'INVOICE NO.', 'CLIENT', 'AMOUNT PAID', 'PAYMENT METHOD', 'DATE COLLECTED'];
+      filename = 'collection_report.csv';
+    } else {
+      toast.error('Export not supported for this report type yet.');
+      return;
+    }
+
+    const csvContent = [
+      headers.join(','),
+      ...dataToExport.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = filename;
+    link.click();
+    toast.success('Report exported to CSV successfully.');
+  };
+
+  const handleExportPDF = () => {
+    const doc = new jsPDF();
+    let bodyData: string[][] = [];
+    let headers: string[][] = [];
+    let title = '';
+
+    if (activeTab === 'aging') {
+      title = 'Aging of Accounts Report';
+      headers = [['Client', 'Invoice Date', 'Due Date', 'Amount', 'Days Outstanding']];
+      bodyData = agingRecords.map(r => [
+        r.clientName,
+        r.invoiceDate ? new Date(r.invoiceDate).toLocaleDateString('en-PH') : 'N/A',
+        r.dueDate ? new Date(r.dueDate).toLocaleDateString('en-PH') : 'N/A',
+        `PHP ${r.amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`,
+        r.agingDays.toString()
+      ]);
+    } else if (activeTab === 'invoices') {
+      title = 'Invoice Summary Report';
+      headers = [['Invoice No.', 'Client', 'Issue Date', 'Due Date', 'Total Amount', 'Status']];
+      bodyData = allInvoices.map(r => [
+        r.invoiceNumber,
+        r.clientName,
+        new Date(r.createdAt).toLocaleDateString('en-PH'),
+        new Date(r.dueDate).toLocaleDateString('en-PH'),
+        `PHP ${r.totalAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`,
+        r.status
+      ]);
+    } else if (activeTab === 'collections') {
+      title = 'Collection Summary Report';
+      headers = [['Payment ID', 'Invoice No.', 'Client', 'Amount Paid', 'Payment Method', 'Date Collected']];
+      bodyData = collections.map(r => [
+        r.id,
+        r.invoiceNumber,
+        r.clientName,
+        `PHP ${r.amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`,
+        r.paymentMethod,
+        new Date(r.recordedAt).toLocaleDateString('en-PH')
+      ]);
+    } else {
+      toast.error('Export not supported for this report type yet.');
+      return;
+    }
+
+    doc.setFontSize(16);
+    doc.text(title, 14, 15);
+    doc.setFontSize(10);
+    doc.text(`Generated: ${new Date().toLocaleString('en-US')}`, 14, 22);
+
+    autoTable(doc, {
+      startY: 30,
+      head: headers,
+      body: bodyData,
+      theme: 'striped',
+      headStyles: { fillColor: [13, 148, 136] }, // #0D9488
+    });
+
+    doc.save(`${title.replace(/\s+/g, '_').toLowerCase()}.pdf`);
+    toast.success('Report exported to PDF successfully.');
+  };
+
   const getFilteredAR = () => {
     if (!isGenerated || !dateFrom || !dateTo) return arRecords;
     return arRecords.filter(ar => {
       const d = ar.invoiceDate.split('T')[0];
-      return d >= dateFrom && d <= dateTo;
+      const matchDate = d >= dateFrom && d <= dateTo;
+      if (!matchDate) return false;
+      if (activeSearch) {
+        const term = activeSearch.toLowerCase();
+        const client = clients.find(c => c.id === ar.clientId);
+        const cName = client?.name?.toLowerCase() || '';
+        return cName.includes(term) || ar.invoiceId.toLowerCase().includes(term);
+      }
+      return true;
     });
   };
 
@@ -157,7 +284,15 @@ const ReportsContent: React.FC = () => {
     if (!isGenerated || !dateFrom || !dateTo) return invoices;
     return invoices.filter(inv => {
       const d = inv.createdAt.split('T')[0];
-      return d >= dateFrom && d <= dateTo;
+      const matchDate = d >= dateFrom && d <= dateTo;
+      if (!matchDate) return false;
+      if (activeSearch) {
+        const term = activeSearch.toLowerCase();
+        const client = clients.find(c => c.id === inv.clientId);
+        const cName = client?.name?.toLowerCase() || '';
+        return cName.includes(term) || inv.invoiceNumber.toLowerCase().includes(term);
+      }
+      return true;
     });
   };
 
@@ -165,7 +300,15 @@ const ReportsContent: React.FC = () => {
     if (!isGenerated || !dateFrom || !dateTo) return payments;
     return payments.filter(p => {
       const d = p.recordedAt.split('T')[0];
-      return d >= dateFrom && d <= dateTo;
+      const matchDate = d >= dateFrom && d <= dateTo;
+      if (!matchDate) return false;
+      if (activeSearch) {
+        const term = activeSearch.toLowerCase();
+        const client = clients.find(c => c.id === p.clientId);
+        const cName = client?.name?.toLowerCase() || '';
+        return cName.includes(term) || p.invoiceNumber?.toLowerCase().includes(term) || p.id.toLowerCase().includes(term);
+      }
+      return true;
     });
   };
 
@@ -214,6 +357,9 @@ const ReportsContent: React.FC = () => {
     });
   }
 
+  // Filter aging records to only show those with 31+ days outstanding
+  agingRecords = agingRecords.filter(r => r.agingDays >= 31);
+
   // For bracket cards always count from ALL AR records (not grouped)
   const getAgingBracketData = (bracket: string) => {
     const base = selectedClientId
@@ -238,7 +384,7 @@ const ReportsContent: React.FC = () => {
   const agingColumns = [
     {
       key: 'clientName', label: 'CLIENT', sortable: true, render: (row: any) => (
-        <span onClick={() => navigate(`/reports/${row.clientId}?tab=${activeTab}`)} style={{ color: '#0F172A', fontWeight: 700, cursor: 'pointer', textDecoration: 'none' }}>
+        <span style={{ color: '#0F172A', fontWeight: 700 }}>
           {row.clientName}
         </span>
       )
@@ -246,8 +392,7 @@ const ReportsContent: React.FC = () => {
     { key: 'invoiceDate', label: 'INVOICE DATE', render: (row: any) => row.invoiceDate ? new Date(row.invoiceDate).toLocaleDateString('en-PH') : 'N/A' },
     { key: 'dueDate', label: 'DUE DATE', render: (row: any) => row.dueDate ? new Date(row.dueDate).toLocaleDateString('en-PH') : 'N/A' },
     { key: 'amount', label: 'AMOUNT', render: (row: any) => `₱${row.amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` },
-    { key: 'agingDays', label: 'DAYS OUTSTANDING', sortable: true },
-    { key: 'status', label: 'PAYMENT STATUS', render: (row: any) => <StatusBadge status={row.status} /> }
+    { key: 'agingDays', label: 'DAYS OUTSTANDING', sortable: true, render: (row: any) => <span style={{ color: row.agingDays >= 31 ? '#EF4444' : 'inherit', fontWeight: row.agingDays >= 31 ? 700 : 'inherit' }}>{row.agingDays}</span> }
   ];
 
   // ── 2. Invoice Summary Tab Data ────────────────────────────────
@@ -306,19 +451,14 @@ const ReportsContent: React.FC = () => {
     { key: 'invoiceNumber', label: 'INVOICE NO.', sortable: true },
     {
       key: 'clientName', label: 'CLIENT', sortable: true, render: (row: any) => (
-        !selectedClientId ? (
-          <span onClick={() => navigate(`/reports/${row.clientId}?tab=${activeTab}`)} style={{ color: '#0F172A', fontWeight: 700, cursor: 'pointer', textDecoration: 'none' }}>
-            {row.clientName}
-          </span>
-        ) : (
-          <span style={{ fontWeight: 600 }}>{row.clientName}</span>
-        )
+        <span style={{ color: '#0F172A', fontWeight: 700 }}>
+          {row.clientName}
+        </span>
       )
     },
     { key: 'createdAt', label: 'ISSUE DATE', render: (row: any) => new Date(row.createdAt).toLocaleDateString('en-PH') },
     { key: 'dueDate', label: 'DUE DATE', render: (row: any) => new Date(row.dueDate).toLocaleDateString('en-PH') },
-    { key: 'totalAmount', label: 'TOTAL AMOUNT', render: (row: any) => `₱${row.totalAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` },
-    { key: 'status', label: 'STATUS', render: (row: any) => <StatusBadge status={row.status} /> }
+    { key: 'totalAmount', label: 'TOTAL AMOUNT', render: (row: any) => `₱${row.totalAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` }
   ];
 
   // ── 3. Collection Report Tab Data ──────────────────────────────
@@ -386,17 +526,13 @@ const ReportsContent: React.FC = () => {
     { key: 'invoiceNumber', label: 'INVOICE NO.' },
     {
       key: 'clientName', label: 'CLIENT', sortable: true, render: (row: any) => (
-        !selectedClientId ? (
-          <span onClick={() => navigate(`/reports/${row.clientId}?tab=${activeTab}`)} style={{ color: '#0F172A', fontWeight: 700, cursor: 'pointer', textDecoration: 'none' }}>
-            {row.clientName}
-          </span>
-        ) : (
-          <span style={{ fontWeight: 600 }}>{row.clientName}</span>
-        )
+        <span style={{ color: '#0F172A', fontWeight: 700 }}>
+          {row.clientName}
+        </span>
       )
     },
     { key: 'amount', label: 'AMOUNT PAID', render: (row: any) => <span style={{ fontWeight: 700, color: '#10B981' }}>₱{row.amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span> },
-    { key: 'paymentMethod', label: 'PAYMENT METHOD' },
+    { key: 'paymentMethod', label: 'PAYMENT' },
     { key: 'recordedAt', label: 'DATE COLLECTED', render: (row: any) => new Date(row.recordedAt).toLocaleDateString('en-PH') }
   ];
 
@@ -500,14 +636,14 @@ const ReportsContent: React.FC = () => {
               <i className="ti ti-printer" style={{ fontSize: '15px' }} /> Print
             </button>
             <button
-              onClick={() => {}}
+              onClick={handleExportCSV}
               style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', background: '#fff', border: '1px solid #CBD5E1', borderRadius: 8, fontSize: '0.82rem', fontWeight: 600, color: '#0F172A', cursor: 'pointer', transition: 'background 0.15s', whiteSpace: 'nowrap' }}
               onMouseEnter={e => (e.currentTarget.style.background = '#F8FAFC')}
               onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
               <i className="ti ti-download" style={{ fontSize: '15px' }} /> Export CSV
             </button>
             <button
-              onClick={() => {}}
+              onClick={handleExportPDF}
               style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 18px', background: '#0D9488', border: 'none', borderRadius: 8, fontSize: '0.82rem', fontWeight: 700, color: '#fff', cursor: 'pointer', transition: 'background 0.15s', whiteSpace: 'nowrap', boxShadow: '0 2px 6px rgba(13,148,136,0.25)' }}
               onMouseEnter={e => (e.currentTarget.style.background = '#0F766E')}
               onMouseLeave={e => (e.currentTarget.style.background = '#0D9488')}>
@@ -574,20 +710,22 @@ const ReportsContent: React.FC = () => {
           </div>
 
           {/* Status Filter */}
-          <div style={{ flex: '1 1 140px', minWidth: 130 }}>
-            <label style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748B', display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Status Filter</label>
-            <div style={{ position: 'relative' }}>
-              <select value={compileStatus} onChange={e => setCompileStatus(e.target.value)}
-                style={{ width: '100%', appearance: 'none', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '9px 32px 9px 12px', fontSize: '0.85rem', color: '#0F172A', cursor: 'pointer', outline: 'none' }}>
-                <option>All Statuses</option>
-                <option>Pending Review</option>
-                <option>Resolved</option>
-                <option>Dismissed</option>
-                <option>Flagged</option>
-              </select>
-              <i className="ti ti-chevron-down" style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: '#64748B', fontSize: '13px', pointerEvents: 'none' }} />
+          {(user?.role === 'Head Accountant' || user?.role === 'Finance Manager') && (
+            <div style={{ flex: '1 1 140px', minWidth: 130 }}>
+              <label style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748B', display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Status Filter</label>
+              <div style={{ position: 'relative' }}>
+                <select value={compileStatus} onChange={e => setCompileStatus(e.target.value)}
+                  style={{ width: '100%', appearance: 'none', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '9px 32px 9px 12px', fontSize: '0.85rem', color: '#0F172A', cursor: 'pointer', outline: 'none' }}>
+                  <option>All Statuses</option>
+                  <option>Pending Review</option>
+                  <option>Resolved</option>
+                  <option>Dismissed</option>
+                  <option>Flagged</option>
+                </select>
+                <i className="ti ti-chevron-down" style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: '#64748B', fontSize: '13px', pointerEvents: 'none' }} />
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Generate Report */}
           <div style={{ flexShrink: 0 }}>
@@ -645,35 +783,13 @@ const ReportsContent: React.FC = () => {
                   })}
                 </div>
 
-                <div className="kpi-anim-wrapper" style={{ background: '#fff', borderRadius: 12, padding: '20px', border: '1px solid #E2E8F0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                    <p style={{ margin: 0, fontSize: '0.85rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Receivables Aging Breakdown</p>
-                    <i className="ti ti-chart-pie" style={{ color: '#F97316', fontSize: '1.2rem' }}></i>
-                  </div>
-                  <div style={{ width: '100%', height: 220 }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie data={agingChartData.filter(d => d.value > 0)} cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={2} dataKey="value" stroke="none">
-                          {agingChartData.filter(d => d.value > 0).map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
-                        </Pie>
-                        <Tooltip formatter={(val: any) => `₱${Number(val).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', fontSize: '12px', fontWeight: 600 }} />
-                        <Legend wrapperStyle={{ fontSize: '12px', marginTop: '10px' }} iconType="circle" />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-
                 <TableContainer>
                   <DataTable
-                    title="Detailed Aging Ledger"
                     data={agingRecords}
                     columns={agingColumns}
                     rowKey="id"
-                    exportable={true}
-                    columnToggle={true}
-                    densityToggle={true}
-                    searchPlaceholder="Search aging records (Client, Invoice)..."
-                    searchFields={['clientName', 'invoiceNumber']}
+                    exportable={false}
+                    hideSearch={true}
                   />
                 </TableContainer>
               </>
@@ -709,15 +825,11 @@ const ReportsContent: React.FC = () => {
 
                 <TableContainer>
                   <DataTable
-                    title="Invoice Summary Report"
                     data={allInvoices}
-                    columns={selectedClientId ? invoiceColumns : invoiceColumns.filter(c => !['invoiceNumber', 'status'].includes(c.key))}
+                    columns={invoiceColumns}
                     rowKey="id"
-                    exportable={true}
-                    columnToggle={true}
-                    densityToggle={true}
-                    searchPlaceholder="Search invoices (No, Client, Status)..."
-                    searchFields={['invoiceNumber', 'clientName', 'status']}
+                    exportable={false}
+                    hideSearch={true}
                   />
                 </TableContainer>
               </>
@@ -731,7 +843,7 @@ const ReportsContent: React.FC = () => {
                   <MetricCard label="TRANSACTIONS" value={collections.length} icon="ti-receipt" color="#8B5CF6" bg="#EDE9FE" />
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16 }}>
                   {/* Timeline Chart */}
                   <div className="kpi-anim-wrapper" style={{ background: '#fff', borderRadius: 12, padding: '24px', border: '1px solid #E2E8F0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
@@ -750,85 +862,15 @@ const ReportsContent: React.FC = () => {
                       </ResponsiveContainer>
                     </div>
                   </div>
-
-                  {/* Method Breakdown */}
-                  <div className="kpi-anim-wrapper" style={{ background: '#fff', borderRadius: 12, padding: '24px', border: '1px solid #E2E8F0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                      <p style={{ margin: 0, fontSize: '0.85rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Method Breakdown</p>
-                      <i className="ti ti-chart-pie" style={{ color: '#0EA5E9', fontSize: '1.2rem' }}></i>
-                    </div>
-
-                    {Object.keys(methodBreakdown).length > 0 ? (
-                      <div style={{ display: 'flex', alignItems: 'center', flex: 1, gap: '20px' }}>
-                        <div style={{ width: 140, height: 140, flexShrink: 0 }}>
-                          <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                              <Pie
-                                data={Object.entries(methodBreakdown).map(([method, amount]) => {
-                                  let color = '#3B82F6';
-                                  const lower = method.toLowerCase();
-                                  if (lower.includes('gcash')) color = '#2563EB';
-                                  else if (lower.includes('maya')) color = '#10B981';
-                                  else if (lower.includes('check')) color = '#F59E0B';
-                                  else if (lower.includes('bank')) color = '#8B5CF6';
-                                  return { name: method, value: amount, color };
-                                })}
-                                cx="50%" cy="50%" innerRadius={45} outerRadius={65} paddingAngle={3} dataKey="value" stroke="none"
-                              >
-                                {Object.entries(methodBreakdown).map(([method, _], index) => {
-                                  let color = '#3B82F6';
-                                  const lower = method.toLowerCase();
-                                  if (lower.includes('gcash')) color = '#2563EB';
-                                  else if (lower.includes('maya')) color = '#10B981';
-                                  else if (lower.includes('check')) color = '#F59E0B';
-                                  else if (lower.includes('bank')) color = '#8B5CF6';
-                                  return <Cell key={`cell-${index}`} fill={color} />;
-                                })}
-                              </Pie>
-                              <Tooltip formatter={(val: any) => `₱${Number(val).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', fontSize: '12px', fontWeight: 600 }} />
-                            </PieChart>
-                          </ResponsiveContainer>
-                        </div>
-
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1, justifyContent: 'center' }}>
-                          {Object.entries(methodBreakdown).map(([method, amount]: [string, any]) => {
-                            let color = '#3B82F6'; let bg = '#EFF6FF';
-                            const lower = method.toLowerCase();
-                            if (lower.includes('gcash')) { color = '#2563EB'; bg = '#DBEAFE'; }
-                            else if (lower.includes('maya')) { color = '#10B981'; bg = '#D1FAE5'; }
-                            else if (lower.includes('check')) { color = '#F59E0B'; bg = '#FEF3C7'; }
-                            else if (lower.includes('bank')) { color = '#8B5CF6'; bg = '#EDE9FE'; }
-                            return (
-                              <div key={method} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: bg, padding: '6px 10px', borderRadius: '6px' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: color }} />
-                                  <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#1E293B' }}>{method}</span>
-                                </div>
-                                <span style={{ fontSize: '0.85rem', fontWeight: 800, color }}>₱{amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ) : (
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1 }}>
-                        <span style={{ fontSize: '0.9rem', color: '#94A3B8', fontWeight: 500 }}>No collections recorded.</span>
-                      </div>
-                    )}
-                  </div>
                 </div>
 
                 <TableContainer>
                   <DataTable
-                    title="Collection Report"
                     data={collections}
-                    columns={selectedClientId ? collectionColumns : collectionColumns.filter(c => !['id', 'invoiceNumber', 'paymentMethod'].includes(c.key))}
+                    columns={selectedClientId ? collectionColumns : collectionColumns.filter(c => !['id', 'invoiceNumber'].includes(c.key))}
                     rowKey="id"
-                    exportable={true}
-                    columnToggle={true}
-                    densityToggle={true}
-                    searchPlaceholder="Search collections (Payment ID, Invoice, Method)..."
-                    searchFields={['id', 'invoiceNumber', 'clientName', 'paymentMethod']}
+                    exportable={false}
+                    hideSearch={true}
                   />
                 </TableContainer>
               </>

@@ -329,17 +329,15 @@ export const SpeedPayValidation: React.FC = () => {
       </div>
 
 
-      {/* Policy banner */}
-      <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, padding: '12px 18px', display: 'flex', gap: 12, alignItems: 'center' }}>
-        <i className="ti ti-info-circle" style={{ color: '#F59E0B', fontSize: 20, flexShrink: 0 }} />
-        <p style={{ margin: 0, fontSize: '0.85rem', color: '#92400E' }}>
-          <strong>Validation Policy:</strong> Confirm that the submitted amount matches the invoice total and that the payment has been received in the company account before approving.
-        </p>
-      </div>
-
       <TableContainer>
         <DataTable
           title="SpeedPay Validations"
+          subtitle={
+            <span style={{ color: '#92400E', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <i className="ti ti-info-circle" style={{ color: '#F59E0B', fontSize: 16 }} />
+              <span><strong>Validation Policy:</strong> Confirm that the submitted amount matches the invoice total and that the payment has been received in the company account before approving.</span>
+            </span>
+          }
           data={filteredData}
           columns={columns}
           actions={actions}
