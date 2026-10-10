@@ -1,5 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import './mockInterceptor'; // ADDED MOCK INTERCEPTOR
 import App from './App';
 import './global.css';
 

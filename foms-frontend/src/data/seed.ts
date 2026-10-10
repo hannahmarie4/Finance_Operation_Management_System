@@ -38,7 +38,7 @@ export const SEEDED_USERS: SeededUser[] = [
   },
 
   {
-    employeeId: 'EMP-005',
+    employeeId: 'EMP-004',
     fullName: 'Joana Marie Ogaya',
     role: 'Assistant of Finance Manager',
     avatarInitials: 'JO',
@@ -753,7 +753,7 @@ export const SEEDED_AUDIT_LOGS: AuditLog[] = [
   {
     id: 'AL-1004',
     timestamp: '2026-09-26T11:45:00Z',
-    userId: 'EMP-005',
+    userId: 'EMP-004',
     userFullName: 'Joana Marie Ogaya',
     userRole: 'Assistant of Finance Manager',
     action: 'UPDATE_CLIENT',

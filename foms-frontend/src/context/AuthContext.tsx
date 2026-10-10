@@ -61,7 +61,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     // new real-API login. Clear them so the user gets sent to login fresh.
     if (stored) {
       // ── Hard reject deleted roles/users ──
-      if ((stored.role as string) === 'Coordinator' || stored.employeeId === 'EMP-004') {
+      if ((stored.role as string) === 'Coordinator' || stored.employeeId === 'EMP-005') {
         clearSession();
         return { user: null, isAuthenticated: false, isLoading: false };
       }
@@ -119,6 +119,27 @@ export function AuthProvider({ children }: AuthProviderProps) {
       return SEEDED_USERS;
     }
   });
+
+  useEffect(() => {
+    setUsersList((prev) => {
+      let changed = false;
+      const updated = prev.filter((u) => {
+        if (u.employeeId === 'EMP-005') {
+          changed = true;
+          return false;
+        }
+        return true;
+      });
+      if (!updated.some((u) => u.employeeId === 'EMP-004')) {
+        const joana = SEEDED_USERS.find((u) => u.employeeId === 'EMP-004');
+        if (joana) {
+          updated.push(joana);
+          changed = true;
+        }
+      }
+      return changed ? updated : prev;
+    });
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('foms_staff_users', JSON.stringify(usersList));

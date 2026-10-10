@@ -50,7 +50,7 @@ function getEmployeeName(userId: string, defaultName: string): string {
   if (userId === 'EMP-002') return 'Misty';
   if (userId === 'EMP-003') return 'Maria Mariel Jane Anonuevo';
 
-  if (userId === 'EMP-005') return 'Joana Marie Ogaya';
+  if (userId === 'EMP-004') return 'Joana Marie Ogaya';
   return (defaultName === 'System' || !defaultName) ? 'Crystalyn Joyce C. Fajardo' : defaultName;
 }
 
@@ -59,7 +59,7 @@ function getEmployeeRole(userId: string, defaultRole: string): string {
   if (userId === 'EMP-002') return 'Head Accountant';
   if (userId === 'EMP-003') return 'Accountant';
 
-  if (userId === 'EMP-005') return 'Assistant of Finance Manager';
+  if (userId === 'EMP-004') return 'Assistant of Finance Manager';
   return (defaultRole === 'System' || !defaultRole) ? 'Finance Manager' : defaultRole;
 }
 
