@@ -46,7 +46,6 @@ import CashFlowManagement from "./pages/CashFlowManagement";
 import FinancialAdjustments from "./pages/FinancialAdjustments";
 
 // ── SpeedPay (Public + Finance Validation) ───────────────────────
-import SpeedPay from "./pages/SpeedPay";
 import SpeedPayValidation from "./pages/SpeedPayValidation";
 
 // ── Finance Manager: Duplicate Detection ────────────────────────
@@ -105,7 +104,6 @@ function App() {
               <Routes>
               {/* ── Public Routes ───────────────────────────────── */}
               <Route path="/login" element={<LoginPage />} />
-              <Route path="/speedpay" element={<SpeedPay />} />
 
             {/* ── Protected Routes (Main Layout) ──────────────── */}
             <Route
