@@ -31,10 +31,23 @@ function saveSession(user: User): void {
   sessionStorage.setItem(SESSION_CONFIG.STORAGE_KEY, JSON.stringify(user));
 }
 
+// Canonical role names — pages compare against 'Finance Manager' /
+// 'Assistant of Finance Manager', so normalize the 'Financial' variants.
+const ROLE_ALIASES: Record<string, string> = {
+  'Financial Manager': 'Finance Manager',
+  'Assistant of Financial Manager': 'Assistant of Finance Manager',
+};
+
+function normalizeRole(role: string): string {
+  return ROLE_ALIASES[role] ?? role;
+}
+
 function loadSession(): User | null {
   try {
     const raw = sessionStorage.getItem(SESSION_CONFIG.STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as User) : null;
+    if (!raw) return null;
+    const user = JSON.parse(raw) as User;
+    return { ...user, role: normalizeRole(user.role as string) as any };
   } catch {
     return null;
   }
@@ -169,20 +182,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const userData = data.user; // ← user info is nested under data.user
 
         // Map role from backend to frontend UserRole type
-        const roleMap: Record<string, string> = {
-          'Finance Manager': 'Finance Manager',
-          'Financial Manager': 'Financial Manager',
-          'Head Accountant': 'Head Accountant',
-          'Accountant': 'Accountant',
-
-          'Assistant of Finance Manager': 'Assistant of Finance Manager',
-          'Assistant of Financial Manager': 'Assistant of Financial Manager',
-        };
-
         const user: User = {
           employeeId: userData.id,
           fullName: userData.fullName,
-          role: (roleMap[userData.role] ?? userData.role) as any,
+          role: normalizeRole(userData.role) as any,
           avatarInitials: userData.fullName?.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() || 'EMP',
           lastLogin: new Date().toISOString(),
           loginHistory: [new Date().toISOString()],

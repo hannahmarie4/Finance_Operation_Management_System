@@ -39,7 +39,7 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
         items: [
           {
             priorityId: 'P-1001',
-            clientName: SEEDED_CLIENTS[0]?.businessName || 'Client A',
+            clientName: SEEDED_CLIENTS[0]?.name || 'Client A',
             invoiceNumber: 'INV-1001',
             outstandingBalance: 50000,
             dueDate: new Date(Date.now() - 86400000 * 45).toISOString(),
@@ -65,7 +65,7 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       let role = '';
       let fullName = '';
       if (username === 'EMP-001') {
-        role = 'Financial Manager';
+        role = 'Finance Manager';
         fullName = 'Juan Dela Cruz';
       } else if (username === 'EMP-002') {
         role = 'Head Accountant';

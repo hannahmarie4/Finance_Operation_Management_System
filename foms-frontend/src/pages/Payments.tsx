@@ -335,12 +335,18 @@ const PaymentsContent: React.FC = () => {
 
   const fmActions = [
     {
-      label: 'Final Approve',
-      icon: 'ti-shield-check',
+      label: 'Review Payment',
+      icon: 'ti-clipboard-check',
       onClick: (row: any) => {
         navigate(`/payments/${clientIdParam || row.clientId}?paymentId=${row.paymentId || row.id}&action=view`);
       },
-      hidden: (row: any) => row.status !== 'Validated',
+      hidden: (row: any) => row.status !== 'Pending Validation',
+    },
+    {
+      label: 'View Details',
+      icon: 'ti-eye',
+      onClick: (row: any) => navigate(`/payments/${clientIdParam || row.clientId}?paymentId=${row.paymentId || row.id}&action=view`),
+      hidden: (row: any) => row.status === 'Pending Validation',
     },
     {
       label: 'View Receipt',
@@ -348,12 +354,6 @@ const PaymentsContent: React.FC = () => {
       onClick: (row: any) => navigate(`/payments/${clientIdParam || row.clientId}?paymentId=${row.paymentId || row.id}&action=receipt`),
       hidden: (row: any) => row.status !== 'Approved',
     },
-    {
-      label: 'View Details',
-      icon: 'ti-eye',
-      onClick: (row: any) => navigate(`/payments/${clientIdParam || row.clientId}?paymentId=${row.paymentId || row.id}&action=view`),
-      hidden: (row: any) => row.status !== 'Rejected',
-    }
   ];
 
   const assistantActions = [
@@ -503,7 +503,7 @@ const PaymentsContent: React.FC = () => {
         details: `${verificationStatus} payment ${viewPayment.id}`,
         timestamp: new Date().toISOString()
       });
-      navigate('/payments');
+      navigate(clientIdParam ? `/payments/${clientIdParam}` : '/payments');
     } catch (err: any) {
       const msg = err?.response?.data?.message ?? err?.message ?? 'Action failed.';
       toast.error(msg, 'Validation Error');
@@ -567,7 +567,7 @@ const PaymentsContent: React.FC = () => {
         details: `FM ${approvalStatus} payment ${viewPayment.id}`,
         timestamp: new Date().toISOString()
       });
-      navigate('/payments');
+      navigate(clientIdParam ? `/payments/${clientIdParam}` : '/payments');
     } catch (err: any) {
       const msg = err?.response?.data?.message ?? err?.message ?? 'Action failed.';
       toast.error(msg, 'Approval Error');
@@ -607,7 +607,8 @@ const PaymentsContent: React.FC = () => {
 
 
   // --- Client Detail View ---
-  if (clientIdParam) {
+  // Skip client detail early return when a payment modal needs to open (view/receipt)
+  if (clientIdParam && !(paymentIdParam && (actionParam === 'view' || actionParam === 'receipt'))) {
     const client = clients.find(c => c.id === clientIdParam);
     if (!client) return <div>Client not found</div>;
     return (
@@ -973,17 +974,30 @@ const PaymentsContent: React.FC = () => {
     classification: exp.description,
   }));
 
-  const allCashFlowRows = [...cashFlowRows, ...speedPayRows, ...expenseRows]
+  // Include Pending Validation payments so the Finance Manager can review them
+  const pendingCashFlowRows = pendingPayments.map(p => {
+    const cli = clients.find(c => c.id === p.clientId);
+    const invoice = invoices.find(i => i.id === p.invoiceId);
+    return {
+      ...p,
+      clientName: (p as any).clientName || cli?.name || p.clientId || '—',
+      invoiceNumber: (p as any).invoiceNumber || invoice?.invoiceNumber || p.invoiceId || '—',
+      type: 'Inflow' as const,
+      classification: 'Pending Review',
+    };
+  });
+
+  const allCashFlowRows = [...cashFlowRows, ...speedPayRows, ...expenseRows, ...pendingCashFlowRows]
     .sort((a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime());
 
   const totalInflow = allCashFlowRows
-    .filter(r => r.type === 'Inflow')
-    .reduce((sum, r) => sum + r.amount, 0);
+    .filter(r => r.type === 'Inflow' && r.status !== 'Pending Validation')
+    .reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
 
-  const totalOutflow = expenses.reduce((sum, e) => sum + e.amount, 0);
+  const totalOutflow = expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
   const netCashFlow = totalInflow - totalOutflow;
 
-  const pendingInflowAmt = pendingPayments.reduce((s, p) => s + p.amount, 0);
+  const pendingInflowAmt = pendingPayments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
 
   const filteredCashFlow = allCashFlowRows.filter(r => {
     if (filterType !== 'All' && r.type !== filterType) return false;
@@ -1670,7 +1684,7 @@ const PaymentsContent: React.FC = () => {
       )}
 
       {actionParam === 'view' && viewPayment && createPortal(
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 99990, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' }} onClick={() => navigate('/payments')}>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 99990, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' }} onClick={() => navigate(clientIdParam ? `/payments/${clientIdParam}` : '/payments')}>
           <div style={{ background: '#F8FAFC', borderRadius: '12px', width: '100%', maxWidth: '750px', maxHeight: '95vh', overflowY: 'auto', padding: '32px', color: '#334155', boxShadow: '0 10px 25px rgba(0,0,0,0.3)', display: 'flex', flexDirection: 'column', gap: '20px' }} onClick={e => e.stopPropagation()}>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -1679,7 +1693,7 @@ const PaymentsContent: React.FC = () => {
               <Card style={{ padding: '24px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px dashed #E2E8F0' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <button onClick={() => navigate('/payments')} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748B', padding: 0 }}>
+                    <button onClick={() => navigate(clientIdParam ? `/payments/${clientIdParam}` : '/payments')} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748B', padding: 0 }}>
                       <i className="ti ti-arrow-left" style={{ fontSize: '20px' }} />
                     </button>
                     <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#0F172A', fontWeight: 800 }}>Payment Information</h3>
@@ -1853,39 +1867,74 @@ const PaymentsContent: React.FC = () => {
                   </Card>
                 )}
 
-                {/* Finance Manager Final Decision Card */}
-                {(isFinanceManager && viewPayment.status === 'Validated') && (
-                  <Card style={{ padding: '24px', border: '1px solid #3B82F6', borderRadius: '8px' }}>
-                    <h3 style={{ margin: '0 0 16px 0', fontSize: '1.05rem', color: '#0F172A', fontWeight: 800 }}>Final Decision</h3>
-                    <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
+                {/* Finance Manager Review Card — Pending Validation */}
+                {isFinanceManager && viewPayment.status === 'Pending Validation' && (
+                  <Card style={{ padding: '24px', borderTop: '4px solid #3B82F6' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+                      <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#EFF6FF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <i className="ti ti-clipboard-check" style={{ fontSize: '18px', color: '#3B82F6' }} />
+                      </div>
+                      <div>
+                        <h3 style={{ margin: 0, fontSize: '1.05rem', color: '#0F172A', fontWeight: 800 }}>Finance Manager Review</h3>
+                        <span style={{ fontSize: '12px', color: '#64748B' }}>This payment is awaiting your approval</span>
+                      </div>
+                    </div>
+
+                    <div style={{ padding: '12px 14px', background: '#FFF7ED', borderRadius: '8px', border: '1px solid #FED7AA', marginBottom: '16px', fontSize: '13px', color: '#9A3412', display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                      <i className="ti ti-info-circle" style={{ fontSize: '16px', marginTop: '1px', flexShrink: 0 }} />
+                      <span>This payment was recorded by the Accountant and is pending your review. Please verify all details above before making a decision.</span>
+                    </div>
+
+                    <div style={{ marginBottom: '16px' }}>
+                      <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '6px' }}>Decision</label>
                       <select
-                        value={approvalStatus}
-                        onChange={(e) => setApprovalStatus(e.target.value as 'Approve' | 'Return for Review')}
-                        style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #E2E8F0', fontSize: '14px', fontWeight: 600, flex: 1, cursor: 'pointer', background: '#ffffff', color: '#1E293B' }}
+                        value={verificationStatus}
+                        onChange={(e) => setVerificationStatus(e.target.value)}
+                        style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #E2E8F0', fontSize: '13px', color: '#0F172A', fontWeight: 600, cursor: 'pointer', background: '#ffffff' }}
                       >
-                        <option value="Approve">Approve</option>
-                        <option value="Return for Review">Return for Review</option>
+                        <option value="Approve & Mark as Deposited">Approve & Mark as Deposited</option>
+                        <option value="Reject">Reject Payment</option>
                       </select>
                     </div>
 
-                    {approvalStatus === 'Return for Review' && (
+                    {verificationStatus === 'Reject' && (
                       <div style={{ marginBottom: '16px' }}>
+                        <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '6px' }}>Rejection Reason <span style={{ color: '#EF4444' }}>*</span></label>
                         <textarea
-                          placeholder="Reason for return..."
+                          placeholder="Provide a reason for rejecting this payment..."
                           value={rejectionReason}
                           onChange={(e) => setRejectionReason(e.target.value)}
-                          style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #E2E8F0', fontSize: '14px', resize: 'none', height: '80px', boxSizing: 'border-box' }}
+                          style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #E2E8F0', fontSize: '13px', resize: 'none', height: '80px', boxSizing: 'border-box' }}
                         />
                       </div>
                     )}
-                    
+
                     <Button
-                      title="Confirm Final Approval"
-                      variant="primary"
+                      title={verificationStatus === 'Reject' ? 'Reject Payment' : 'Approve & Mark as Deposited'}
+                      variant={verificationStatus === 'Reject' ? 'danger' : 'primary'}
+                      onClick={() => handleAFMSubmit(viewPayment)}
                       fullWidth
-                      style={{ background: '#10B981', borderColor: '#10B981' }}
-                      onClick={() => setShowApprovalModal(true)}
+                      style={verificationStatus !== 'Reject' ? { background: '#10B981', borderColor: '#10B981' } : {}}
                     />
+                  </Card>
+                )}
+
+                {/* Finance Manager — Already Reviewed (View Only) */}
+                {isFinanceManager && (viewPayment.status === 'Validated' || viewPayment.status === 'Approved' || viewPayment.status === 'Rejected') && (
+                  <Card style={{ padding: '20px', borderTop: `4px solid ${viewPayment.status === 'Rejected' ? '#EF4444' : '#10B981'}` }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{ width: 36, height: 36, borderRadius: '50%', background: viewPayment.status === 'Rejected' ? '#FEE2E2' : '#DCFCE7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <i className={`ti ${viewPayment.status === 'Rejected' ? 'ti-x' : 'ti-check'}`} style={{ fontSize: '18px', color: viewPayment.status === 'Rejected' ? '#DC2626' : '#15803D' }} />
+                      </div>
+                      <div>
+                        <h3 style={{ margin: 0, fontSize: '1rem', color: viewPayment.status === 'Rejected' ? '#DC2626' : '#15803D', fontWeight: 800 }}>
+                          {viewPayment.status === 'Rejected' ? 'Payment Rejected' : 'Payment Reviewed'}
+                        </h3>
+                        <span style={{ fontSize: '12px', color: '#64748B' }}>
+                          {viewPayment.status === 'Rejected' ? 'This payment has been rejected. No further action is required.' : 'This payment has already been verified. No further action is required.'}
+                        </span>
+                      </div>
+                    </div>
                   </Card>
                 )}
               </div>
@@ -2009,7 +2058,7 @@ const PaymentsContent: React.FC = () => {
       )}
 
       {paymentIdParam && actionParam === 'receipt' && viewPayment && createPortal(
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(4px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 99999, padding: '24px' }} onClick={() => navigate('/payments')}>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(4px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 99999, padding: '24px' }} onClick={() => navigate(clientIdParam ? `/payments/${clientIdParam}` : '/payments')}>
           <div style={{ background: '#F8FAFC', width: '100%', maxWidth: '850px', maxHeight: '90vh', overflowY: 'auto', borderRadius: '12px', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }} onClick={e => e.stopPropagation()}>
             
             {/* STICKY HEADER */}
