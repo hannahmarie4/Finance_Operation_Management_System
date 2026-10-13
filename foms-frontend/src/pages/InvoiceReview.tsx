@@ -106,26 +106,7 @@ export const InvoiceReview: React.FC = () => {
     if (!selectedInvoice) return null;
     const client = clients.find(c => c.id === selectedInvoice.clientId);
     const submitter = SEEDED_USERS.find(u => u.employeeId === selectedInvoice.createdBy);
-    let invoiceWaybills = waybills.filter(w => selectedInvoice.waybillIds.includes(w.id));
-    
-    if (invoiceWaybills.length === 0) {
-      invoiceWaybills = [{
-        id: 'DUMMY-WB-1',
-        waybillNumber: 'WB-DUMMY-' + (selectedInvoice.invoiceNumber || selectedInvoice.id).substring(0, 8),
-        clientCode: selectedInvoice.clientId,
-        deliveryDate: selectedInvoice.createdAt,
-        status: 'Validated',
-        hasOriginalPOD: true,
-        hasApprovedCTC: false,
-        encodedBy: 'System',
-        encodedAt: selectedInvoice.createdAt,
-        senderName: 'Dummy Sender Inc.',
-        receiverName: 'Juan Dela Cruz',
-        receiverAddress: '123 Dummy St., Metro Manila',
-        itemQuantity: 1,
-        declaredValue: 5000,
-      } as any];
-    }
+    const invoiceWaybills = waybills.filter(w => selectedInvoice.waybillIds?.includes(w.id));
 
     return createPortal(
       <div style={{ position: 'fixed', inset: 0, zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(8px)', padding: '20px' }}>
@@ -176,39 +157,35 @@ export const InvoiceReview: React.FC = () => {
 
             {/* Waybill Lines Breakdown */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {invoiceWaybills.map((wb) => {
-                const br = billingRecords.find(r => r.waybillId === wb.id && r.status === 'Approved');
-                let fd;
-                
-                if (br) {
-                  fd = {
-                    area: billingRates.find(r => r.id === br.rateId)?.region || 'Unknown',
-                    chargeableWeight: br.chargeableWeight,
-                    weightBasis: br.volumeWeight > br.actualWeight ? 'Volume Weight' : 'Actual Weight',
-                    freightCost: br.freightCost,
-                    valuation: br.valuation || 0,
-                    odaCharge: br.odaCharge || 0,
-                  };
-                } else if (wb.id === 'DUMMY-WB-1') {
-                  fd = {
-                    area: 'Metro Manila',
-                    chargeableWeight: 10,
-                    weightBasis: 'act',
-                    freightCost: selectedInvoice.amount,
-                    valuation: 50,
-                    odaCharge: 0,
-                  };
-                } else {
-                  const computed = computeFreightCost(wb, billingRates);
-                  fd = {
-                    area: computed.area,
-                    chargeableWeight: computed.chargeableWeight,
-                    weightBasis: computed.weightBasis,
-                    freightCost: computed.freightCost,
-                    valuation: computed.valuation || 0,
-                    odaCharge: computed.odaCharge || 0,
-                  };
-                }
+              {invoiceWaybills.length === 0 ? (
+                <div style={{ padding: '24px 16px', background: '#F8FAFC', borderRadius: 8, border: '1px dashed #CBD5E1', textAlign: 'center', color: '#64748B', fontSize: '13px' }}>
+                  No associated waybills attached to this invoice.
+                </div>
+              ) : (
+                invoiceWaybills.map((wb) => {
+                  const br = billingRecords.find(r => r.waybillId === wb.id && r.status === 'Approved');
+                  let fd;
+
+                  if (br) {
+                    fd = {
+                      area: billingRates.find(r => r.id === br.rateId)?.region || 'Unknown',
+                      chargeableWeight: br.chargeableWeight,
+                      weightBasis: br.volumeWeight > br.actualWeight ? 'Volume Weight' : 'Actual Weight',
+                      freightCost: br.freightCost,
+                      valuation: br.valuation || 0,
+                      odaCharge: br.odaCharge || 0,
+                    };
+                  } else {
+                    const computed = computeFreightCost(wb, billingRates);
+                    fd = {
+                      area: computed.area,
+                      chargeableWeight: computed.chargeableWeight,
+                      weightBasis: computed.weightBasis,
+                      freightCost: computed.freightCost,
+                      valuation: computed.valuation || 0,
+                      odaCharge: computed.odaCharge || 0,
+                    };
+                  }
                 
                 const isExpanded = expandedWaybills[wb.id];
                 const toggleExpand = () => setExpandedWaybills(prev => ({ ...prev, [wb.id]: !prev[wb.id] }));
@@ -265,7 +242,7 @@ export const InvoiceReview: React.FC = () => {
                     )}
                   </div>
                 );
-              })}
+              }))}
               {/* Grand totals */}
               <div style={{ background: '#ECFDF5', border: '1px solid #10B981', borderRadius: '8px', padding: '16px', marginTop: '4px' }}>
                 {[

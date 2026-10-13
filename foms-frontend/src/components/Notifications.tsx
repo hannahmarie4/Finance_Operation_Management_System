@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Bell, CheckCheck, Trash2, Info, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import StatusBadge from './StatusBadge';
+import { shouldLoadDemoSeeds } from '../config/runtimeMode';
 
 export interface NotificationItem {
   id: string;
@@ -18,7 +19,9 @@ const DUMMY_NOTIFICATIONS: NotificationItem[] = [
 ];
 
 export const Notifications: React.FC = () => {
-  const [notifications, setNotifications] = useState<NotificationItem[]>(DUMMY_NOTIFICATIONS);
+  const [notifications, setNotifications] = useState<NotificationItem[]>(
+    shouldLoadDemoSeeds ? DUMMY_NOTIFICATIONS : []
+  );
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
 
   const filtered = filter === 'all' ? notifications : notifications.filter(n => !n.read);

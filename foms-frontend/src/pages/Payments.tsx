@@ -18,6 +18,7 @@ import { RecordHistoryModal } from '../components/RecordHistoryModal';
 import { ClientInfoCard } from '../components/ClientInfoCard';
 import api from '../services/api';
 import { InvoiceDocument } from '../components/InvoiceDocument';
+import { isDemoMode } from '../config/runtimeMode';
 
 const getEmployeeName = (id: string, def: string) => {
   if (id === 'EMP-001') return 'Crystalyn Joyce C. Fajardo';
@@ -33,6 +34,12 @@ const safeFormatDate = (dateVal: string | Date | undefined | null, options?: Int
   if (!dateVal) return '—';
   const d = new Date(dateVal);
   return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-PH', options || { month: 'short', day: 'numeric', year: 'numeric' });
+};
+
+const requireSuccessfulResponse = (response: { status: number; data?: { message?: string } }) => {
+  if (response.status < 200 || response.status >= 300) {
+    throw new Error(response.data?.message ?? 'The payment operation could not be completed. Please try again.');
+  }
 };
 
 class PaymentsErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean, error: any }> {
@@ -442,7 +449,7 @@ const PaymentsContent: React.FC = () => {
         details: `Recorded payment for Invoice ${form.invoiceNo}`,
         timestamp: new Date().toISOString()
       });
-      toast.success('Payment recorded and saved to database. Pending validation.');
+      toast.success(isDemoMode ? 'Payment recorded in this demo session. Pending validation.' : 'Payment recorded and saved to database. Pending validation.');
     } catch (err: any) {
       const msg = err?.response?.data?.message ?? err?.message ?? 'Failed to record payment.';
       toast.error(msg, 'Record Payment Failed');
@@ -460,11 +467,13 @@ const PaymentsContent: React.FC = () => {
     setSubmitted(true);
     try {
       if (verificationStatus === 'Reject') {
-        await api.post(`/finance/payments/${viewPayment.id}/reject`, { RejectionReason: rejectionReason }).catch(() => { });
+        const response = await api.post(`/finance/payments/${viewPayment.id}/reject`, { RejectionReason: rejectionReason });
+        requireSuccessfulResponse(response);
         updatePayment(viewPayment.id, { status: 'Rejected' });
-        toast.error(`Payment rejected and saved to database.`, 'Payment Rejected');
+        toast.error(isDemoMode ? 'Payment rejected in this demo session.' : 'Payment rejected and saved to database.', 'Payment Rejected');
       } else {
-        await api.post(`/finance/payments/${viewPayment.id}/validate`, { Remarks: rejectionReason || 'Validated' }).catch(() => { });
+        const response = await api.post(`/finance/payments/${viewPayment.id}/validate`, { Remarks: rejectionReason || 'Validated' });
+        requireSuccessfulResponse(response);
         updatePayment(viewPayment.id, { status: 'Verified' as any, validatedBy: user?.fullName, validatedAt: new Date().toISOString() });
 
         // Auto-mark invoice as Paid if fully covered (TC 170-173)
@@ -521,12 +530,14 @@ const PaymentsContent: React.FC = () => {
     setSubmitted(true);
     try {
       if (approvalStatus === 'Return for Review') {
-        await api.post(`/finance/payments/${viewPayment.id}/return`, { Remarks: rejectionReason }).catch(() => { });
+        const response = await api.post(`/finance/payments/${viewPayment.id}/return`, { Remarks: rejectionReason });
+        requireSuccessfulResponse(response);
         updatePayment(viewPayment.id, { status: 'Pending Validation' });
-        toast.info(`Payment returned for correction and saved to database.`, 'Payment Returned');
+        toast.info(isDemoMode ? 'Payment returned for correction in this demo session.' : 'Payment returned for correction and saved to database.', 'Payment Returned');
       } else {
         // Finance Manager final approval = validate endpoint
-        await api.post(`/finance/payments/${viewPayment.id}/validate`, { Remarks: 'Finance Manager Final Approval' }).catch(() => { });
+        const response = await api.post(`/finance/payments/${viewPayment.id}/validate`, { Remarks: 'Finance Manager Final Approval' });
+        requireSuccessfulResponse(response);
         updatePayment(viewPayment.id, { status: 'Approved', validatedBy: user?.fullName, validatedAt: new Date().toISOString() });
 
         // Auto-mark invoice as Paid if fully covered (TC 170-173)

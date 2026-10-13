@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { useAppData } from '../context/AppDataContext';
 
 /* ─────────────────────────────────────────────
    Camera Modal Component
@@ -186,6 +187,7 @@ const CameraModal: React.FC<{
    Main Page
 ───────────────────────────────────────────── */
 const AIDuplicateScan: React.FC = () => {
+  const { invoices } = useAppData();
   const [isDragging, setIsDragging] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [isScanning, setIsScanning] = useState(false);
@@ -211,7 +213,11 @@ const AIDuplicateScan: React.FC = () => {
     setIsScanning(true); setScanResult(null);
     setTimeout(() => {
       setIsScanning(false);
-      setScanResult(Math.random() > 0.5 ? 'duplicate' : 'unique');
+      if (invoices.length === 0) {
+        setScanResult('unique');
+      } else {
+        setScanResult(Math.random() > 0.5 ? 'duplicate' : 'unique');
+      }
     }, 2200);
   };
 
@@ -389,7 +395,7 @@ const AIDuplicateScan: React.FC = () => {
               </div>
               {scanResult === 'duplicate' && (
                 <div style={{ background: '#FEF2F2', borderRadius: '8px', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: '0.8125rem', color: '#64748B' }}>Matched Invoice</span><span style={{ fontSize: '0.8125rem', fontWeight: 700, color: '#0F172A' }}>LZD-2026-0001</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: '0.8125rem', color: '#64748B' }}>Matched Invoice</span><span style={{ fontSize: '0.8125rem', fontWeight: 700, color: '#0F172A' }}>{invoices[0]?.invoiceNumber || 'N/A'}</span></div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: '0.8125rem', color: '#64748B' }}>Similarity Score</span><span style={{ fontSize: '0.8125rem', fontWeight: 700, color: '#EF4444' }}>97.4%</span></div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: '0.8125rem', color: '#64748B' }}>Match Type</span><span style={{ fontSize: '0.8125rem', fontWeight: 700, color: '#0F172A' }}>Exact Duplicate</span></div>
                 </div>

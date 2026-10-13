@@ -8,10 +8,13 @@
 
 import axios from 'axios';
 import { SESSION_CONFIG } from '../data/seed';
+import { isDemoMode } from '../config/runtimeMode';
+import { demoApiAdapter } from './demoApiAdapter';
 
 const api = axios.create({
   baseURL: '/api',
   headers: { 'Content-Type': 'application/json' },
+  ...(isDemoMode ? { adapter: demoApiAdapter } : {}),
 });
 
 // ── Request interceptor: attach Bearer token ──

@@ -59,6 +59,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
   return (
     <aside className={`sidebar ${collapsed ? "collapsed" : ""}`}>
       {/* Logo Header */}
@@ -67,7 +68,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {logoUrl ? (
             <img src={logoUrl} alt="Logo" className="sidebar-logo-img" />
           ) : (
-            <span style={{ fontSize: "18px", fontWeight: 800, color: "#fff", letterSpacing: "-0.5px", fontFamily: "var(--fh)" }}>
+            <span style={{ fontSize: "18px", fontWeight: 800, color: "#fff", letterSpacing: "-0.5px", fontFamily: "var(--fh, 'Montserrat', sans-serif)" }}>
               {logoText}
             </span>
           )}
@@ -76,6 +77,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           className="sb-toggle-btn"
           onClick={toggleCollapse}
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
           <i className={collapsed ? "ti ti-chevron-right" : "ti ti-chevron-left"} />
         </button>
@@ -83,78 +85,91 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Role Badge */}
       {!collapsed && user && (
-        <div style={{ padding: '0 24px', marginBottom: '24px' }}>
-          <div style={{
-            background: 'rgba(16, 185, 129, 0.15)',
-            color: '#10B981',
-            padding: '8px 12px',
-            borderRadius: '9999px',
-            fontSize: '0.75rem',
-            fontWeight: 800,
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '6px',
-            border: '1px solid rgba(16, 185, 129, 0.2)'
-          }}>
-            {ROLE_LABELS[user.role] || user.role}
+        <div className="sidebar-role-container">
+          <div className="sidebar-role-pill">
+            <span className="sidebar-role-dot" />
+            <span>{ROLE_LABELS[user.role] || user.role}</span>
           </div>
         </div>
       )}
 
-      {/* Navigation Links */}
+      {/* Navigation Links (DMS-Inspired) */}
       <nav className="sidebar-nav">
         {navGroups.map((group, groupIndex) => (
           <React.Fragment key={groupIndex}>
             {group.label && <span className="nav-module-label">{group.label}</span>}
             {group.items.map((item, itemIndex) => {
-              const isActive = location.pathname.startsWith(item.path);
+              const isChildActive = (childPath: string) => {
+                const [pathname, search] = childPath.split('?');
+                return location.pathname === pathname && (!search || location.search === `?${search}`);
+              };
+              const hasActiveChild = item.children?.some(c => isChildActive(c.path));
+              const isActive = hasActiveChild ||
+                location.pathname === item.path ||
+                (item.path !== '/' && item.path !== '/dashboard' && location.pathname.startsWith(item.path)) ||
+                (item.path === '/dashboard' && (location.pathname === '/dashboard' || location.pathname === '/'));
+
+              const isExpanded = expandedItems[item.label] ?? false;
 
               return (
                 <div key={itemIndex} className="nav-item-container">
                   <a
                     href="#"
+                    title={collapsed ? item.label : undefined}
                     onClick={(e) => {
                       e.preventDefault();
                       if (item.children) {
-                        toggleExpand(item.label);
+                        if (collapsed) {
+                          setCollapsed(false);
+                          setExpandedItems((prev) => ({ ...prev, [item.label]: true }));
+                        } else {
+                          toggleExpand(item.label);
+                        }
                       } else {
                         navigate(item.path);
                       }
                     }}
                     className={`nav-item ${isActive ? "active" : ""}`}
+                    aria-current={isActive ? "page" : undefined}
                   >
+                    {/* DMS Signature Left Active Indicator Bar */}
+                    {isActive && <span className="nav-active-pill" aria-hidden="true" />}
+
                     {item.icon && (
-                      <span className="nav-icon" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
-                        <i className={item.icon} style={{ fontSize: "18px" }}></i>
+                      <span className="nav-icon">
+                        <i className={item.icon}></i>
                       </span>
                     )}
-                    <span className="nav-label" style={{ flex: 1 }}>{item.label}</span>
+
+                    <span className="nav-label">{item.label}</span>
+
                     {item.badge && !collapsed && (
-                      <span style={{
-                        background: item.badge.bg,
-                        color: item.badge.color,
-                        padding: '2px 8px',
-                        borderRadius: '999px',
-                        fontSize: '0.7rem',
-                        fontWeight: 700,
-                        marginLeft: 'auto',
-                        whiteSpace: 'nowrap'
-                      }}>
+                      <span
+                        className="nav-item-badge"
+                        style={{
+                          background: item.badge.bg,
+                          color: item.badge.color,
+                        }}
+                      >
                         {item.badge.text}
                       </span>
                     )}
+
                     {item.children && !collapsed && (
-                      <i className={`ti ti-chevron-${expandedItems[item.label] ? 'down' : 'right'}`} style={{ marginLeft: 'auto', fontSize: '14px', opacity: 0.7 }} />
+                      <i
+                        className="ti ti-chevron-down nav-chevron-icon"
+                        style={{
+                          transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
+                        }}
+                      />
                     )}
                   </a>
-                  
-                  {item.children && expandedItems[item.label] && !collapsed && (
-                    <div className="nav-children" style={{ display: 'flex', flexDirection: 'column', marginLeft: '42px', marginTop: '4px', gap: '4px' }}>
+
+                  {/* DMS-Inspired Inset Submenu Panel */}
+                  {item.children && isExpanded && !collapsed && (
+                    <div className="nav-children-panel">
                       {item.children.map((child, childIndex) => {
-                        const isChildActive = location.pathname + location.search === child.path;
+                        const childActive = isChildActive(child.path);
                         return (
                           <a
                             key={childIndex}
@@ -164,18 +179,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                               const [pathname, search] = child.path.split('?');
                               navigate({ pathname, search: search ? `?${search}` : '' });
                             }}
-                            className={`nav-child-item ${isChildActive ? "active" : ""}`}
-                            style={{ 
-                              padding: '8px 12px', 
-                              borderRadius: '8px', 
-                              fontSize: '0.85rem', 
-                              color: isChildActive ? '#fff' : '#94A3B8',
-                              background: isChildActive ? 'rgba(255, 255, 255, 0.05)' : 'transparent',
-                              textDecoration: 'none',
-                              display: 'block'
-                            }}
+                            className={`nav-child-link ${childActive ? "active" : ""}`}
                           >
-                            {child.label}
+                            <span>{child.label}</span>
                           </a>
                         );
                       })}
@@ -188,59 +194,69 @@ export const Sidebar: React.FC<SidebarProps> = ({
         ))}
       </nav>
 
-      {/* Profile Card */}
+      {/* User Profile Card & Elevated Popover (DMS Inspired) */}
       {user && (
-        <div className="sidebar-footer" ref={profileMenuRef} style={{ position: 'relative' }}>
-          
-          {isProfileMenuOpen && !collapsed && (
-            <div style={{
-              position: 'absolute',
-              bottom: 'calc(100% + 8px)',
-              left: '16px',
-              right: '16px',
-              background: '#fff',
-              borderRadius: '12px',
-              padding: '16px 0',
-              boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
-              zIndex: 100
-            }}>
-              <div style={{ padding: '0 16px 12px 16px', borderBottom: '1px solid #E2E8F0', marginBottom: '8px' }}>
-                <div style={{ fontWeight: 700, color: '#1B254B', fontSize: '14px', marginBottom: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.fullName}</div>
-                <div style={{ color: '#64748B', fontSize: '12px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ROLE_LABELS[user.role]}</div>
+        <div className="sidebar-footer" ref={profileMenuRef}>
+          {isProfileMenuOpen && (
+            <div className={`sidebar-profile-dropdown ${collapsed ? "collapsed" : ""}`}>
+              <div className="dropdown-identity">
+                <span className="dropdown-name">{user.fullName}</span>
+                <span className="dropdown-role">{ROLE_LABELS[user.role] || user.role}</span>
               </div>
-              
-              <button style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 16px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#1B254B', fontSize: '14px', fontWeight: 600, textAlign: 'left' }} onClick={() => { navigate('/profile'); setIsProfileMenuOpen(false); }}>
-                <i className="ti ti-user" style={{ fontSize: '18px', color: '#64748B' }}></i> My Profile
+
+              <button
+                className="dropdown-option"
+                onClick={() => {
+                  navigate('/profile');
+                  setIsProfileMenuOpen(false);
+                }}
+              >
+                <i className="ti ti-user" />
+                <span>My Profile</span>
               </button>
-              
-              <button style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 16px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#1B254B', fontSize: '14px', fontWeight: 600, textAlign: 'left' }}>
-                <i className="ti ti-settings" style={{ fontSize: '18px', color: '#64748B' }}></i> System Settings
+
+              <button
+                className="dropdown-option"
+                onClick={() => {
+                  navigate('/settings');
+                  setIsProfileMenuOpen(false);
+                }}
+              >
+                <i className="ti ti-settings" />
+                <span>System Settings</span>
               </button>
-              
-              <div style={{ height: '1px', background: '#E2E8F0', margin: '8px 0' }}></div>
-              
-              <button style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 16px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#EF4444', fontSize: '14px', fontWeight: 600, textAlign: 'left' }} onClick={() => { logout(); setIsProfileMenuOpen(false); }}>
-                <i className="ti ti-logout" style={{ fontSize: '18px' }}></i> Log Out
+
+              <div className="dropdown-divider" />
+
+              <button
+                className="dropdown-option logout"
+                onClick={() => {
+                  logout();
+                  setIsProfileMenuOpen(false);
+                }}
+              >
+                <i className="ti ti-logout" />
+                <span>Log Out</span>
               </button>
             </div>
           )}
 
-          <div 
-            className="profile-card" 
+          <div
+            className="profile-card"
             onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
-            style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}
+            title={collapsed ? `${user.fullName} (${ROLE_LABELS[user.role] || user.role})` : undefined}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', overflow: 'hidden' }}>
+            <div style={{ display: 'flex', alignItems: 'center', overflow: 'hidden' }}>
               <div className="profile-av">{user.avatarInitials}</div>
               {!collapsed && (
-                <div className="profile-info" style={{ overflow: 'hidden' }}>
-                  <span className="profile-name" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.fullName}</span>
-                  <span className="profile-role" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ROLE_LABELS[user.role]}</span>
+                <div className="profile-info">
+                  <span className="profile-name">{user.fullName}</span>
+                  <span className="profile-role">{ROLE_LABELS[user.role] || user.role}</span>
                 </div>
               )}
             </div>
             {!collapsed && (
-              <i className="ti ti-selector" style={{ color: '#94A3B8', fontSize: '16px', flexShrink: 0 }}></i>
+              <i className="ti ti-selector profile-selector-icon" />
             )}
           </div>
         </div>

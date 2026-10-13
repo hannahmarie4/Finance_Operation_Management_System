@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/ToastContext';
+import { shouldLoadDemoSeeds } from '../config/runtimeMode';
 
 interface FlaggedDoc {
   flagId: string;
@@ -140,7 +141,7 @@ const FlaggedDuplicates: React.FC = () => {
         }));
       }
       
-      if (mapped.length === 0) {
+      if (mapped.length === 0 && shouldLoadDemoSeeds) {
         mapped = [
             { flagId: 'FLAG-001', type: 'EXACT MATCH', uploadedNumber: 'INV-1004', existingRecord: 'INV-1004', clientName: 'ACME Corp', amount: 15500.00, similarity: 100, duplicateReason: 'Same OR number and Amount', handlingAction: 'Flag and Block', flaggedBy: 'AI Gemini System', flaggedByRole: 'AI Model', flaggedDate: '10/02/2023', status: 'Pending' },
             { flagId: 'FLAG-002', type: 'PARTIAL MATCH', uploadedNumber: 'OR-5501', existingRecord: 'OR-5501-A', clientName: 'Globex Inc', amount: 8250.00, similarity: 92, duplicateReason: 'Similar Number, Exact Date/Amount', handlingAction: 'Flag for Review', flaggedBy: 'AI Gemini System', flaggedByRole: 'AI Model', flaggedDate: '10/03/2023', status: 'Pending' },
@@ -150,11 +151,14 @@ const FlaggedDuplicates: React.FC = () => {
       setData(mapped);
     } catch (e) {
       console.error(e);
-      setData([
-          { flagId: 'FLAG-001', type: 'EXACT MATCH', uploadedNumber: 'INV-1004', existingRecord: 'INV-1004', clientName: 'ACME Corp', amount: 15500.00, similarity: 100, duplicateReason: 'Same OR number and Amount', handlingAction: 'Flag and Block', flaggedBy: 'AI Gemini System', flaggedByRole: 'AI Model', flaggedDate: '10/02/2023', status: 'Pending' },
-          { flagId: 'FLAG-002', type: 'PARTIAL MATCH', uploadedNumber: 'OR-5501', existingRecord: 'OR-5501-A', clientName: 'Globex Inc', amount: 8250.00, similarity: 92, duplicateReason: 'Similar Number, Exact Date/Amount', handlingAction: 'Flag for Review', flaggedBy: 'AI Gemini System', flaggedByRole: 'AI Model', flaggedDate: '10/03/2023', status: 'Pending' }
-      ]);
-      console.error(e);
+      if (shouldLoadDemoSeeds) {
+        setData([
+            { flagId: 'FLAG-001', type: 'EXACT MATCH', uploadedNumber: 'INV-1004', existingRecord: 'INV-1004', clientName: 'ACME Corp', amount: 15500.00, similarity: 100, duplicateReason: 'Same OR number and Amount', handlingAction: 'Flag and Block', flaggedBy: 'AI Gemini System', flaggedByRole: 'AI Model', flaggedDate: '10/02/2023', status: 'Pending' },
+            { flagId: 'FLAG-002', type: 'PARTIAL MATCH', uploadedNumber: 'OR-5501', existingRecord: 'OR-5501-A', clientName: 'Globex Inc', amount: 8250.00, similarity: 92, duplicateReason: 'Similar Number, Exact Date/Amount', handlingAction: 'Flag for Review', flaggedBy: 'AI Gemini System', flaggedByRole: 'AI Model', flaggedDate: '10/03/2023', status: 'Pending' }
+        ]);
+      } else {
+        setData([]);
+      }
     } finally {
       setLoading(false);
     }

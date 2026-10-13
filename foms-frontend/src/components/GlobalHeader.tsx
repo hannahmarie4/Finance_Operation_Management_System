@@ -10,10 +10,7 @@ import {
   LogOut,
   User,
   ChevronRight,
-  Sparkles,
-  MoreVertical,
   Calendar,
-  Clock,
   ArrowLeft
 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -37,28 +34,15 @@ const GlobalHeader: React.FC<GlobalHeaderProps> = () => {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [bellAnimating, setBellAnimating] = useState(false);
 
-  const [currentTime, setCurrentTime] = useState(new Date());
-
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
-
   const formattedDateTime = useMemo(() => {
-    const datePart = currentTime.toLocaleDateString('en-US', {
+    const today = new Date();
+    return today.toLocaleDateString('en-US', {
       weekday: 'short',
       month: 'short',
       day: 'numeric',
-      year: 'numeric'
+      year: 'numeric',
     });
-    const timePart = currentTime.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: true
-    });
-    return `${datePart} • ${timePart}`;
-  }, [currentTime]);
+  }, []);
 
   const notificationRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
@@ -143,55 +127,147 @@ const GlobalHeader: React.FC<GlobalHeaderProps> = () => {
   const profileRole = user ? ROLE_LABELS[user.role] : 'Unauthenticated';
   const profileInitials = profileName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
 
-  const isChildRoute = 
-    location.pathname.split('/').filter(Boolean).length > 1 || 
-    location.search.length > 0 ||
-    location.pathname.startsWith('/invoice-create');
+  // Helper to determine parent path fallback for detail views
+  const getParentFallbackPath = (pathname: string): string => {
+    const clean = pathname.replace(/\/+$/, '') || '/';
+    const segments = clean.split('/').filter(Boolean);
+    if (segments.length > 1) {
+      return '/' + segments.slice(0, -1).join('/');
+    }
+    return '/dashboard';
+  };
+
+  // Exact route matching against sidebar routes:
+  // Pages directly listed in the FOMS sidebar must NOT show a back button in the Global Header.
+  // Show the back button only on pages or detail views NOT directly listed in the sidebar.
+  const isSidebarRoute = useMemo(() => {
+    const cleanPath = location.pathname.replace(/\/+$/, '') || '/';
+    if (cleanPath === '/' || cleanPath === '/dashboard') return true;
+
+    // Check against active user's sidebar routes
+    if (user && NAV_CONFIG[user.role]) {
+      for (const group of NAV_CONFIG[user.role].groups) {
+        for (const item of group.items) {
+          const itemClean = item.path.replace(/\/+$/, '') || '/';
+          if (itemClean === cleanPath) return true;
+          if (item.children) {
+            for (const child of item.children) {
+              const childClean = child.path.replace(/\/+$/, '') || '/';
+              if (childClean === cleanPath) return true;
+            }
+          }
+        }
+      }
+    }
+
+    // Also check against all sidebar routes defined in NAV_CONFIG
+    for (const roleConfig of Object.values(NAV_CONFIG)) {
+      for (const group of roleConfig.groups) {
+        for (const item of group.items) {
+          const itemClean = item.path.replace(/\/+$/, '') || '/';
+          if (itemClean === cleanPath) return true;
+          if (item.children) {
+            for (const child of item.children) {
+              const childClean = child.path.replace(/\/+$/, '') || '/';
+              if (childClean === cleanPath) return true;
+            }
+          }
+        }
+      }
+    }
+
+    return false;
+  }, [location.pathname, user]);
+
+  const showBackButton = !isSidebarRoute;
+
+  // Track in-app navigation history safely to prevent exiting the application
+  const currentFullPath = location.pathname + location.search;
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('foms_in_app_history');
+      let stack: string[] = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(stack)) stack = [];
+
+      const lastPath = stack[stack.length - 1];
+      const secondLastPath = stack[stack.length - 2];
+
+      if (secondLastPath && secondLastPath === currentFullPath) {
+        // User navigated back via browser or in-app control
+        stack.pop();
+      } else if (lastPath !== currentFullPath) {
+        // Record new route, filtering out auth transitions
+        if (!currentFullPath.startsWith('/login') && !currentFullPath.startsWith('/logout')) {
+          stack.push(currentFullPath);
+          if (stack.length > 30) stack.shift();
+        }
+      }
+
+      sessionStorage.setItem('foms_in_app_history', JSON.stringify(stack));
+    } catch {
+      // Ignore storage restrictions
+    }
+  }, [currentFullPath]);
+
+  const handleBackNavigation = () => {
+    try {
+      const raw = sessionStorage.getItem('foms_in_app_history');
+      let stack: string[] = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(stack)) stack = [];
+
+      // Clean current path from the top of the stack
+      while (stack.length > 0 && stack[stack.length - 1] === currentFullPath) {
+        stack.pop();
+      }
+
+      // Find the most recent valid in-app predecessor
+      let targetPath = '';
+      while (stack.length > 0) {
+        const candidate = stack.pop();
+        if (candidate && candidate !== currentFullPath && !candidate.startsWith('/login') && !candidate.startsWith('/logout')) {
+          targetPath = candidate;
+          break;
+        }
+      }
+
+      sessionStorage.setItem('foms_in_app_history', JSON.stringify(stack));
+
+      if (targetPath) {
+        navigate(targetPath);
+      } else {
+        // Sensible fallback to parent page or Dashboard
+        const fallback = getParentFallbackPath(location.pathname);
+        navigate(fallback);
+      }
+    } catch {
+      navigate(getParentFallbackPath(location.pathname));
+    }
+  };
 
   return (
-    <header className="site-header" style={{ position: 'sticky' }}>
+    <header className="site-header">
       <nav className="nav-bar">
         {/* Left Side: Page Title */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          {isChildRoute && (
+        <div className="header-left-group">
+          {showBackButton && (
             <button
-              onClick={() => navigate(-1)}
-              style={{
-                width: '36px',
-                height: '36px',
-                borderRadius: '50%',
-                border: '1px solid #E2E8F0',
-                background: '#fff',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                color: '#334155',
-                transition: 'all 200ms',
-                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = '#1E3A8A';
-                e.currentTarget.style.color = '#1E3A8A';
-                e.currentTarget.style.background = '#EFF6FF';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = '#E2E8F0';
-                e.currentTarget.style.color = '#334155';
-                e.currentTarget.style.background = '#fff';
-              }}
-              aria-label="Go back"
+              type="button"
+              onClick={handleBackNavigation}
+              className="header-back-btn"
+              aria-label="Go back to previous page"
+              title="Go back"
             >
               <ArrowLeft size={18} strokeWidth={2} />
             </button>
           )}
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+          <div className="header-title-wrapper">
+            <span className="header-breadcrumb">
               <span>{profileRole}</span>
-              <ChevronRight size={12} strokeWidth={3} />
-              <span style={{ color: '#0F172A' }}>{currentTitle}</span>
+              <ChevronRight size={12} strokeWidth={2.5} />
+              <span className="header-breadcrumb-current">{currentTitle}</span>
             </span>
-            <h1 className="header-title" style={{ margin: '2px 0 0', fontSize: '1.5rem', fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em' }}>
+            <h1 className="header-title">
               {currentTitle}
             </h1>
           </div>
@@ -199,22 +275,10 @@ const GlobalHeader: React.FC<GlobalHeaderProps> = () => {
         
         {/* Right Side: Interactive Controls */}
         <div className="header-controls">
-          {/* Date and Time Pill */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '6px 14px',
-            background: '#F8FAFC',
-            border: '1px solid #E2E8F0',
-            borderRadius: '9999px',
-            color: '#334155',
-            fontSize: '0.85rem',
-            fontWeight: 500,
-            whiteSpace: 'nowrap'
-          }}>
-            <Clock size={15} style={{ color: '#0D9488' }} strokeWidth={2.5} />
-            <span>{formattedDateTime}</span>
+          {/* Date Widget (Matching DMS Reference Exactly) */}
+          <div className="header-datetime" aria-label="Current date">
+            <Calendar size={14} className="header-datetime-icon" aria-hidden="true" />
+            <span className="header-datetime-text">{formattedDateTime}</span>
           </div>
 
           {/* Notification Button & Dropdown */}

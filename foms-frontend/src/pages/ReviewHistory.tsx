@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { shouldLoadDemoSeeds } from '../config/runtimeMode';
 
 interface ReviewRecord {
   historyId: string;
@@ -60,7 +61,7 @@ const ReviewHistory: React.FC = () => {
         }));
       }
       
-      if (mapped.length === 0) {
+      if (mapped.length === 0 && shouldLoadDemoSeeds) {
         mapped = [
             { historyId: 'REV-001', type: 'DUPLICATE FLAG', documentNumber: 'INV-1002', clientName: 'ACME Corp', aiResult: 'Flagged as Duplicate', finalDecision: 'Accepted as Recommendation', reviewer: 'Maria Clara', reviewerRole: 'Finance Manager', decisionReason: 'Confirmed exact match', reviewerNote: 'Duplicate block enforced', reviewedDate: '10/02/2023, 10:45 AM' },
             { historyId: 'REV-002', type: 'DUPLICATE FLAG', documentNumber: 'OR-5500', clientName: 'Globex Inc', aiResult: 'Flagged for Review', finalDecision: 'Overridden by Manager', reviewer: 'Juan Dela Cruz', reviewerRole: 'Head Accountant', decisionReason: 'Different project phase', reviewerNote: 'Proceed to payment', reviewedDate: '10/03/2023, 09:30 AM' },
@@ -70,11 +71,14 @@ const ReviewHistory: React.FC = () => {
       setData(mapped);
     } catch (e) {
       console.error(e);
-      setData([
-          { historyId: 'REV-001', type: 'DUPLICATE FLAG', documentNumber: 'INV-1002', clientName: 'ACME Corp', aiResult: 'Flagged as Duplicate', finalDecision: 'Accepted as Recommendation', reviewer: 'Maria Clara', reviewerRole: 'Finance Manager', decisionReason: 'Confirmed exact match', reviewerNote: 'Duplicate block enforced', reviewedDate: '10/02/2023, 10:45 AM' },
-          { historyId: 'REV-002', type: 'DUPLICATE FLAG', documentNumber: 'OR-5500', clientName: 'Globex Inc', aiResult: 'Flagged for Review', finalDecision: 'Overridden by Manager', reviewer: 'Juan Dela Cruz', reviewerRole: 'Head Accountant', decisionReason: 'Different project phase', reviewerNote: 'Proceed to payment', reviewedDate: '10/03/2023, 09:30 AM' }
-      ]);
-      console.error(e);
+      if (shouldLoadDemoSeeds) {
+        setData([
+            { historyId: 'REV-001', type: 'DUPLICATE FLAG', documentNumber: 'INV-1002', clientName: 'ACME Corp', aiResult: 'Flagged as Duplicate', finalDecision: 'Accepted as Recommendation', reviewer: 'Maria Clara', reviewerRole: 'Finance Manager', decisionReason: 'Confirmed exact match', reviewerNote: 'Duplicate block enforced', reviewedDate: '10/02/2023, 10:45 AM' },
+            { historyId: 'REV-002', type: 'DUPLICATE FLAG', documentNumber: 'OR-5500', clientName: 'Globex Inc', aiResult: 'Flagged for Review', finalDecision: 'Overridden by Manager', reviewer: 'Juan Dela Cruz', reviewerRole: 'Head Accountant', decisionReason: 'Different project phase', reviewerNote: 'Proceed to payment', reviewedDate: '10/03/2023, 09:30 AM' }
+        ]);
+      } else {
+        setData([]);
+      }
     } finally {
       setLoading(false);
     }

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/ToastContext';
+import { shouldLoadDemoSeeds } from '../config/runtimeMode';
 
 interface UniqueDoc {
   id: string;
@@ -154,7 +155,7 @@ const UniqueDocuments: React.FC = () => {
         }));
       }
       
-      if (mapped.length === 0) {
+      if (mapped.length === 0 && shouldLoadDemoSeeds) {
         mapped = [
           { id: 'REC-2023-010', type: 'Invoice', orInvoiceNumber: 'INV-1001', clientName: 'ACME Corp', amount: 15500.00, transactionDate: '2023-10-01', source: 'Email', aiConfidence: 98, reviewedBy: 'Maria Clara', reviewedDate: '2023-10-02 10:30 AM', status: 'Verified' },
           { id: 'REC-2023-011', type: 'Receipt', orInvoiceNumber: 'OR-1002', clientName: 'Globex Inc', amount: 8250.00, transactionDate: '2023-10-02', source: 'Portal', aiConfidence: 95, reviewedBy: 'Juan Dela Cruz', reviewedDate: '2023-10-03 09:15 AM', status: 'Verified' },
@@ -164,10 +165,14 @@ const UniqueDocuments: React.FC = () => {
       setDocs(mapped as UniqueDoc[]);
     } catch (e) {
       console.error(e);
-      setDocs([
-        { id: 'REC-2023-010', type: 'Invoice', orInvoiceNumber: 'INV-1001', clientName: 'ACME Corp', amount: 15500.00, transactionDate: '2023-10-01', source: 'Email', aiConfidence: 98, reviewedBy: 'Maria Clara', reviewedDate: '2023-10-02 10:30 AM', status: 'Verified' },
-        { id: 'REC-2023-011', type: 'Receipt', orInvoiceNumber: 'OR-1002', clientName: 'Globex Inc', amount: 8250.00, transactionDate: '2023-10-02', source: 'Portal', aiConfidence: 95, reviewedBy: 'Juan Dela Cruz', reviewedDate: '2023-10-03 09:15 AM', status: 'Verified' }
-      ]);
+      if (shouldLoadDemoSeeds) {
+        setDocs([
+          { id: 'REC-2023-010', type: 'Invoice', orInvoiceNumber: 'INV-1001', clientName: 'ACME Corp', amount: 15500.00, transactionDate: '2023-10-01', source: 'Email', aiConfidence: 98, reviewedBy: 'Maria Clara', reviewedDate: '2023-10-02 10:30 AM', status: 'Verified' },
+          { id: 'REC-2023-011', type: 'Receipt', orInvoiceNumber: 'OR-1002', clientName: 'Globex Inc', amount: 8250.00, transactionDate: '2023-10-02', source: 'Portal', aiConfidence: 95, reviewedBy: 'Juan Dela Cruz', reviewedDate: '2023-10-03 09:15 AM', status: 'Verified' }
+        ]);
+      } else {
+        setDocs([]);
+      }
     } finally {
       setLoading(false);
     }

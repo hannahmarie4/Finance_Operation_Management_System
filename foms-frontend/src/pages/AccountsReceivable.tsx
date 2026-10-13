@@ -5,6 +5,7 @@ import { useAppData } from '../context/AppDataContext';
 import { StatusCard } from '../components/StatusCard';
 import { DataTable } from '../components/DataTable';
 import { TableContainer } from '../components/TableContainer';
+import { shouldLoadDemoSeeds } from '../config/runtimeMode';
 
 const getDaysOverdue = (dueDate: string) => {
   if (!dueDate || dueDate === 'N/A') return 0;
@@ -58,7 +59,7 @@ const SharedKPIs = ({ arRecords }: { arRecords: any[] }) => {
 
 const CustomSearchFilter = ({ searchQuery, setSearchQuery, priorityFilter, setPriorityFilter }: any) => {
   const [isFocused, setIsFocused] = useState(false);
-  const [recentSearches, setRecentSearches] = useState<string[]>(['Shopee and', 'Lazada Account']);
+  const [recentSearches, setRecentSearches] = useState<string[]>(shouldLoadDemoSeeds ? ['Shopee and', 'Lazada Account'] : []);
 
   return (
     <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginTop: 12 }}>
@@ -73,7 +74,7 @@ const CustomSearchFilter = ({ searchQuery, setSearchQuery, priorityFilter, setPr
           onChange={e => setSearchQuery(e.target.value)}
           style={{ width: '100%', padding: '10px 16px 10px 42px', border: '1px solid #0D9488', borderRadius: '9999px', fontSize: '0.9rem', outline: 'none', color: '#111827' }}
         />
-        {isFocused && (
+        {isFocused && recentSearches.length > 0 && (
           <div style={{ position: 'absolute', top: 'calc(100% + 8px)', left: 0, right: 0, background: '#fff', border: '1px solid #E2E8F0', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)', zIndex: 10, overflow: 'hidden' }}>
             <div style={{ padding: '12px 16px', fontSize: '11px', fontWeight: 700, color: '#6B7280', letterSpacing: '0.05em', borderBottom: '1px solid #F1F5F9' }}>
               RECENT
@@ -196,17 +197,17 @@ const ManagerView = ({ token, user, arRecords }: any) => {
           };
         });
         
-        if (mapped.length === 0) {
+        if (mapped.length === 0 && shouldLoadDemoSeeds) {
           setData(mockData);
         } else {
           setData(mapped);
         }
       } else {
-        setData(mockData);
+        setData(shouldLoadDemoSeeds ? mockData : []);
       }
     } catch (e) {
       console.error(e);
-      setData(mockData);
+      setData(shouldLoadDemoSeeds ? mockData : []);
     } finally {
       setLoading(false);
     }
@@ -530,7 +531,7 @@ const AccountantView = ({ token, user, arRecords }: any) => {
       })
       .sort((a: any, b: any) => b.priority_score - a.priority_score);
 
-    if (list.length === 0) {
+    if (list.length === 0 && shouldLoadDemoSeeds) {
       return [
         {
           id: 'AR-MOCK-1',

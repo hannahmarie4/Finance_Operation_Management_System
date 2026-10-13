@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { SEEDED_AUDIT_LOGS, AuditLog } from '../data/seed';
 import api from '../services/api';
+import { isDemoMode, shouldLoadDemoSeeds } from '../config/runtimeMode';
 
 interface AuditContextType {
   logs: AuditLog[];
@@ -17,8 +18,8 @@ export const AuditProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       .then(res => {
         if (res.data && Array.isArray(res.data)) {
           // Backend logs mapped to frontend AuditLog interface
-          const backendLogs = res.data.map((l: any) => ({
-            id: l.id || l.logId || `AL-${Math.floor(Math.random() * 10000)}`,
+          const backendLogs = res.data.map((l: any, idx: number) => ({
+            id: l.id || l.logId || `AL-${Date.now()}-${idx}`,
             action: l.action || 'UNKNOWN',
             module: l.entityName || l.module || 'System',
             recordType: l.entityName || l.recordType || 'Record',
@@ -30,21 +31,24 @@ export const AuditProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             ipAddress: l.ipAddress || '192.168.1.1',
             timestamp: l.loggedAt || l.timestamp || l.createdAt || new Date().toISOString()
           }));
-          // Merge seeded data with backend logs so UI is never empty during testing
-          const existingIds = new Set(backendLogs.map((l: any) => l.id));
-          const seedToKeep = SEEDED_AUDIT_LOGS.filter(s => !existingIds.has(s.id));
-          setLogs([...backendLogs, ...seedToKeep].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
+          if (isDemoMode && shouldLoadDemoSeeds) {
+            const existingIds = new Set(backendLogs.map((l: any) => l.id));
+            const seedToKeep = SEEDED_AUDIT_LOGS.filter(s => !existingIds.has(s.id));
+            setLogs([...backendLogs, ...seedToKeep].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
+          } else {
+            setLogs(backendLogs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
+          }
         }
       })
       .catch(err => {
-        console.warn('Failed to fetch audit logs, using fallback seed data.', err);
-        setLogs([...SEEDED_AUDIT_LOGS]);
+        console.warn('Failed to fetch audit logs.', err);
+        if (isDemoMode && shouldLoadDemoSeeds) setLogs([...SEEDED_AUDIT_LOGS]);
       });
   }, []);
 
   const logAction = (action: string, module: string, recordType: string, recordId: string, details: string, userFullName: string, userRole: string, userId: string) => {
     const newLog: AuditLog = {
-      id: `AL-${Math.floor(Math.random() * 10000)}`,
+      id: `AL-${Date.now()}`,
       action,
       module,
       recordType,

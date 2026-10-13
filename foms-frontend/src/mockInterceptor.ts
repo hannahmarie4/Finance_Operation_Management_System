@@ -1,4 +1,5 @@
-import { SEEDED_CLIENTS, SEEDED_INVOICES, SEEDED_WAYBILLS, SEEDED_PAYMENTS } from './data/seed';
+import { SEEDED_CLIENTS, SEEDED_INVOICES, SEEDED_WAYBILLS, SEEDED_PAYMENTS, SEEDED_USERS } from './data/seed';
+import { shouldLoadDemoSeeds } from './config/runtimeMode';
 
 const originalFetch = window.fetch;
 
@@ -18,28 +19,35 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       });
 
     // /api/ai-data/...
-    if (url.includes('/api/ai-data/clients')) return okResponse({ items: SEEDED_CLIENTS });
-    if (url.includes('/api/ai-data/invoices')) return okResponse({ items: SEEDED_INVOICES });
-    if (url.includes('/api/ai-data/waybills')) return okResponse({ items: SEEDED_WAYBILLS });
-    if (url.includes('/api/ai-data/payments')) return okResponse({ items: SEEDED_PAYMENTS });
+    if (url.includes('/api/ai-data/clients')) return okResponse({ items: shouldLoadDemoSeeds ? SEEDED_CLIENTS : [] });
+    if (url.includes('/api/ai-data/invoices')) return okResponse({ items: shouldLoadDemoSeeds ? SEEDED_INVOICES : [] });
+    if (url.includes('/api/ai-data/waybills')) return okResponse({ items: shouldLoadDemoSeeds ? SEEDED_WAYBILLS : [] });
+    if (url.includes('/api/ai-data/payments')) return okResponse({ items: shouldLoadDemoSeeds ? SEEDED_PAYMENTS : [] });
 
     // /api/ai/dashboard/...
     if (url.includes('/api/ai/dashboard/summary')) {
-      return okResponse({
+      return okResponse(shouldLoadDemoSeeds ? {
         totalDuplicateAlerts: 12,
         pendingDuplicateReviews: 5,
         exactMatchAlerts: 3,
         urgentCollectionAccounts: 8,
         recommendationsAwaitingValidation: 4,
         lastUpdatedAt: new Date().toISOString()
+      } : {
+        totalDuplicateAlerts: 0,
+        pendingDuplicateReviews: 0,
+        exactMatchAlerts: 0,
+        urgentCollectionAccounts: 0,
+        recommendationsAwaitingValidation: 0,
+        lastUpdatedAt: new Date().toISOString()
       });
     }
     if (url.includes('/api/ai/dashboard/attention-accounts')) {
       return okResponse({
-        items: [
+        items: shouldLoadDemoSeeds ? [
           {
             priorityId: 'P-1001',
-            clientName: SEEDED_CLIENTS[0]?.businessName || 'Client A',
+            clientName: SEEDED_CLIENTS[0]?.name || 'Client A',
             invoiceNumber: 'INV-1001',
             outstandingBalance: 50000,
             dueDate: new Date(Date.now() - 86400000 * 45).toISOString(),
@@ -48,7 +56,7 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
             recommendationBasis: ['Consistently late', 'High balance'],
             reviewStatus: 'Pending Review'
           }
-        ]
+        ] : []
       });
     }
 
@@ -58,25 +66,20 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       if (init && init.body && typeof init.body === 'string') {
         try {
           const body = JSON.parse(init.body);
-          if (body.username) username = body.username.toUpperCase();
+          if (body.username) username = body.username.trim().toUpperCase();
         } catch (e) {}
       }
 
-      let role = '';
-      let fullName = '';
-      if (username === 'EMP-001') {
-        role = 'Financial Manager';
-        fullName = 'Juan Dela Cruz';
-      } else if (username === 'EMP-002') {
-        role = 'Head Accountant';
-        fullName = 'Maria Clara Garcia';
-      } else if (username === 'EMP-003') {
-        role = 'Accountant';
-        fullName = 'Pedro Penduko';
-      } else if (username === 'EMP-004') {
-        role = 'Assistant of Finance Manager';
-        fullName = 'Ana Reyes';
-      } else {
+      let customUsers: any[] = [];
+      try {
+        const saved = localStorage.getItem('foms_staff_users');
+        if (saved) customUsers = JSON.parse(saved);
+      } catch (e) {}
+
+      const foundUser = SEEDED_USERS.find(u => u.employeeId.toUpperCase() === username) ||
+        customUsers.find((u: any) => u.employeeId?.toUpperCase() === username);
+
+      if (!foundUser) {
         return new Response(
           JSON.stringify({ success: false, message: 'Invalid Employee ID or password.' }),
           { status: 401, headers: { 'Content-Type': 'application/json' } }
@@ -88,7 +91,7 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
         data: {
           accessToken: 'mock_token',
           refreshToken: 'mock_refresh_token',
-          user: { id: username, fullName: fullName, role: role }
+          user: { id: foundUser.employeeId, fullName: foundUser.fullName, role: foundUser.role }
         }
       });
     }
@@ -103,7 +106,7 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
 
     // AI endpoints mock
     if (url.includes('/api/ai/duplicates') || url.includes('/api/ai/collection')) {
-      return okResponse({ items: [] });
+      return okResponse([]);
     }
     
     // Notifications mock from previous system
@@ -119,4 +122,4 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   return originalFetch(input, init);
 };
 
-console.log('[Mock Interceptor] Enabled: All /api calls will be intercepted with static data.');
+console.info('[Demo mode] Fetch requests are served with simulated data. Changes are not saved to the real backend or database.');
