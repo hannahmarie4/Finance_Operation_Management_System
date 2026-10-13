@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { ROLE_LABELS, AuditLog } from '../data/seed';
+import { shouldLoadDemoSeeds } from '../config/runtimeMode';
 import type { UserRole } from '../types/auth';
 import { Card } from '../components/Card';
 import { Button } from '../components/Buttons';
@@ -53,14 +54,11 @@ const AsstFinanceDashboard: React.FC = () => {
       return pDate.toDateString() === date.toDateString();
     });
 
-    // Add some realistic dummy data if it's empty so the chart always looks good
-    const baseVal = Math.floor(Math.random() * 5) + 2;
-
     return {
       day: dayStr,
-      validated: dayPayments.filter(p => p.status === 'Validated').length || (baseVal * 2),
-      pending: dayPayments.filter(p => p.status === 'Pending Validation').length || baseVal,
-      rejected: dayPayments.filter(p => p.status === 'Rejected').length || Math.floor(baseVal / 2)
+      validated: dayPayments.filter(p => p.status === 'Validated').length,
+      pending: dayPayments.filter(p => p.status === 'Pending Validation').length,
+      rejected: dayPayments.filter(p => p.status === 'Rejected').length
     };
   });
 
@@ -71,13 +69,11 @@ const AsstFinanceDashboard: React.FC = () => {
       return lDate.toDateString() === date.toDateString();
     }) || [];
 
-    const baseVal = Math.floor(Math.random() * 4) + 1;
-
     return {
       day: dayStr,
-      validated: dayLiquidations.filter((l: any) => l.status === 'Validated').length || baseVal,
-      pending: dayLiquidations.filter((l: any) => l.status === 'Pending Validation').length || (baseVal + 1),
-      returned: dayLiquidations.filter((l: any) => l.status === 'Returned').length || 0
+      validated: dayLiquidations.filter((l: any) => l.status === 'Validated').length,
+      pending: dayLiquidations.filter((l: any) => l.status === 'Pending Validation').length,
+      returned: dayLiquidations.filter((l: any) => l.status === 'Returned').length
     };
   });
 
@@ -94,13 +90,11 @@ const AsstFinanceDashboard: React.FC = () => {
       return lDate.getMonth() === date.getMonth() && lDate.getFullYear() === date.getFullYear();
     }) || [];
 
-    const baseVal = Math.floor(Math.random() * 20) + 10;
-
     return {
       day: monthStr,
-      validated: monthLiquidations.filter((l: any) => l.status === 'Validated').length || baseVal,
-      pending: monthLiquidations.filter((l: any) => l.status === 'Pending Validation').length || (baseVal + 5),
-      returned: monthLiquidations.filter((l: any) => l.status === 'Returned').length || 0
+      validated: monthLiquidations.filter((l: any) => l.status === 'Validated').length,
+      pending: monthLiquidations.filter((l: any) => l.status === 'Pending Validation').length,
+      returned: monthLiquidations.filter((l: any) => l.status === 'Returned').length
     };
   });
 
@@ -220,7 +214,7 @@ const FinanceManagerDashboard: React.FC = () => {
     if (id) setSearchParams({ client: id });
     else setSearchParams({});
   };
-  const { invoices, arRecords, payments, clients, auditLogs, cashFlowRecords } = useAppData();
+  const { invoices, arRecords, payments, clients, auditLogs, cashFlowRecords, financialAdjustments } = useAppData();
   const [collectionTrendView, setCollectionTrendView] = useState<'weekly' | 'monthly'>('monthly');
   const [showInflow, setShowInflow] = useState(true);
   const [showOutflow, setShowOutflow] = useState(true);
@@ -358,30 +352,6 @@ const FinanceManagerDashboard: React.FC = () => {
     })
     .filter(r => r.daysRemaining >= 0 && r.daysRemaining <= 7);
 
-  // Add dummy data for demonstration if empty
-  if (rawNearDueAccounts.length === 0) {
-    rawNearDueAccounts = [
-      {
-        id: 'DEMO-1',
-        clientId: 'CL-001',
-        clientName: 'Lazada Philippines',
-        invoiceNumber: 'LZD-2026-9998',
-        amountDue: 45000.50,
-        dueDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
-        daysRemaining: 2
-      },
-      {
-        id: 'DEMO-2',
-        clientId: 'CL-002',
-        clientName: 'Shopee Express',
-        invoiceNumber: 'SHP-2026-9999',
-        amountDue: 28500.00,
-        dueDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
-        daysRemaining: 5
-      }
-    ];
-  }
-
   const nearDueCount = rawNearDueAccounts.length;
 
   let nearDueAccounts: any[] = [];
@@ -460,46 +430,79 @@ const FinanceManagerDashboard: React.FC = () => {
         </div>
 
         {/* Needs your attention panel */}
-        <div style={{ background: '#FFF', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '0' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid #E2E8F0' }}>
-            <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: '#0F172A' }}>Needs your attention</h3>
-            <span style={{ fontSize: '13px', color: '#94A3B8' }}>3 items</span>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid #E2E8F0' }}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#EF4444', marginTop: '6px' }} />
-                <div>
-                  <div style={{ fontSize: '13.5px', fontWeight: 600, color: '#0F172A', marginBottom: '2px' }}>4 exact-match duplicate invoices</div>
-                  <div style={{ fontSize: '12.5px', color: '#94A3B8' }}>Out of 13 flagged, need confirmation</div>
-                </div>
-              </div>
-              <button onClick={() => navigate('/flagged-duplicates')} style={{ background: 'none', border: 'none', color: '#0D9488', fontSize: '13px', fontWeight: 600, cursor: 'pointer', padding: 0 }}>Review →</button>
-            </div>
-            
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid #E2E8F0' }}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#D97706', marginTop: '6px' }} />
-                <div>
-                  <div style={{ fontSize: '13.5px', fontWeight: 600, color: '#0F172A', marginBottom: '2px' }}>6 items pending your review</div>
-                  <div style={{ fontSize: '12.5px', color: '#94A3B8' }}>Adjustments and payment confirmations</div>
-                </div>
-              </div>
-              <button onClick={() => navigate('/for-review')} style={{ background: 'none', border: 'none', color: '#0D9488', fontSize: '13px', fontWeight: 600, cursor: 'pointer', padding: 0 }}>Review →</button>
-            </div>
+        {(() => {
+          const pendingApprovalsCount = filteredPayments.filter(p => p.status === 'Validated').length;
+          const pendingAdjustmentsCount = (financialAdjustments || []).filter(a => a.status === 'Pending Approval').length;
+          const totalPendingReviewCount = shouldLoadDemoSeeds ? 6 : (pendingApprovalsCount + pendingAdjustmentsCount);
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px' }}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#EF4444', marginTop: '6px' }} />
-                <div>
-                  <div style={{ fontSize: '13.5px', fontWeight: 600, color: '#0F172A', marginBottom: '2px' }}>{nearDueCount} accounts near due date</div>
-                  <div style={{ fontSize: '12.5px', color: '#94A3B8' }}>{nearDueAccounts.slice(0, 2).map((a: any) => `${a.clientName} (${a.daysRemaining} days)`).join(', ')}</div>
+          const duplicateAlertStats = shouldLoadDemoSeeds ? {
+            exactMatch: 4,
+            total: 13,
+          } : {
+            exactMatch: 0,
+            total: 0,
+          };
+
+          const attentionItemsCount =
+            (duplicateAlertStats.exactMatch > 0 ? 1 : 0) +
+            (totalPendingReviewCount > 0 ? 1 : 0) +
+            (nearDueCount > 0 ? 1 : 0);
+
+          return (
+            <div style={{ background: '#FFF', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '0' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid #E2E8F0' }}>
+                <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: '#0F172A' }}>Needs your attention</h3>
+                <span style={{ fontSize: '13px', color: '#94A3B8' }}>{attentionItemsCount} {attentionItemsCount === 1 ? 'item' : 'items'}</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid #E2E8F0' }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: duplicateAlertStats.exactMatch > 0 ? '#EF4444' : '#10B981', marginTop: '6px' }} />
+                    <div>
+                      <div style={{ fontSize: '13.5px', fontWeight: 600, color: '#0F172A', marginBottom: '2px' }}>
+                        {duplicateAlertStats.exactMatch > 0 ? `${duplicateAlertStats.exactMatch} exact-match duplicate invoices` : 'No duplicate invoices flagged'}
+                      </div>
+                      <div style={{ fontSize: '12.5px', color: '#94A3B8' }}>
+                        {duplicateAlertStats.exactMatch > 0 ? `Out of ${duplicateAlertStats.total} flagged, need confirmation` : 'All invoice records are unique and clear'}
+                      </div>
+                    </div>
+                  </div>
+                  <button onClick={() => navigate('/flagged-duplicates')} style={{ background: 'none', border: 'none', color: '#0D9488', fontSize: '13px', fontWeight: 600, cursor: 'pointer', padding: 0 }}>Review →</button>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid #E2E8F0' }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: totalPendingReviewCount > 0 ? '#D97706' : '#10B981', marginTop: '6px' }} />
+                    <div>
+                      <div style={{ fontSize: '13.5px', fontWeight: 600, color: '#0F172A', marginBottom: '2px' }}>
+                        {totalPendingReviewCount > 0 ? `${totalPendingReviewCount} items pending your review` : 'No items pending your review'}
+                      </div>
+                      <div style={{ fontSize: '12.5px', color: '#94A3B8' }}>
+                        {totalPendingReviewCount > 0 ? 'Adjustments and payment confirmations' : 'All adjustments and payments are reviewed'}
+                      </div>
+                    </div>
+                  </div>
+                  <button onClick={() => navigate('/for-review')} style={{ background: 'none', border: 'none', color: '#0D9488', fontSize: '13px', fontWeight: 600, cursor: 'pointer', padding: 0 }}>Review →</button>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px' }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: nearDueCount > 0 ? '#EF4444' : '#10B981', marginTop: '6px' }} />
+                    <div>
+                      <div style={{ fontSize: '13.5px', fontWeight: 600, color: '#0F172A', marginBottom: '2px' }}>
+                        {nearDueCount > 0 ? `${nearDueCount} accounts near due date` : 'No accounts near due date'}
+                      </div>
+                      <div style={{ fontSize: '12.5px', color: '#94A3B8' }}>
+                        {nearDueCount > 0 ? nearDueAccounts.slice(0, 2).map((a: any) => `${a.clientName} (${a.daysRemaining} days)`).join(', ') : 'All accounts are current and up to date'}
+                      </div>
+                    </div>
+                  </div>
+                  <button onClick={() => navigate('/accounts-receivable')} style={{ background: 'none', border: 'none', color: '#0D9488', fontSize: '13px', fontWeight: 600, cursor: 'pointer', padding: 0 }}>View →</button>
                 </div>
               </div>
-              <button onClick={() => navigate('/accounts-receivable')} style={{ background: 'none', border: 'none', color: '#0D9488', fontSize: '13px', fontWeight: 600, cursor: 'pointer', padding: 0 }}>View →</button>
             </div>
-          </div>
-        </div>
+          );
+        })()}
       </div>
 
       {/* Charts Section */}
@@ -645,70 +648,86 @@ const FinanceManagerDashboard: React.FC = () => {
         />
         
         {/* Duplicate Detection Distribution */}
-        <Card style={{ display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-            <div>
-              <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0F172A' }}>Duplicate Detection Distribution</h3>
-              <p style={{ margin: '4px 0 0', fontSize: '0.8125rem', color: '#64748B' }}>Classification breakdown of scanned invoices and receipts</p>
-            </div>
-            <i className="ti-chart-pie" style={{ color: '#0EA5E9', fontSize: '18px' }}></i>
-          </div>
+        {(() => {
+          const duplicateAlertStats = shouldLoadDemoSeeds ? {
+            exactMatch: 4,
+            similarityMatch: 9,
+            cleared: 0,
+            pendingReview: 6,
+            total: 13,
+          } : {
+            exactMatch: 0,
+            similarityMatch: 0,
+            cleared: 0,
+            pendingReview: 0,
+            total: 0,
+          };
 
-          <div style={{ width: '100%', height: 220, position: 'relative', marginTop: '20px' }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={[
-                    { name: 'Exact Duplicate Match', value: 4, color: '#EF4444' },
-                    { name: 'High Similarity Match', value: 9, color: '#F59E0B' },
-                    { name: 'Cleared Unique Records', value: 0, color: '#10B981' },
-                    { name: 'Pending Review', value: 6, color: '#0EA5E9' }
-                  ]}
-                  innerRadius={65}
-                  outerRadius={90}
-                  paddingAngle={5}
-                  dataKey="value"
-                  stroke="none"
-                >
-                  {[
-                    { name: 'Exact Duplicate Match', value: 4, color: '#EF4444' },
-                    { name: 'High Similarity Match', value: 9, color: '#F59E0B' },
-                    { name: 'Cleared Unique Records', value: 0, color: '#10B981' },
-                    { name: 'Pending Review', value: 6, color: '#0EA5E9' }
-                  ].map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip 
-                  formatter={(val: any) => [val, 'Alerts']}
-                  contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }} 
-                />
-              </PieChart>
-            </ResponsiveContainer>
-            {/* Center Label */}
-            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
-              <span style={{ fontSize: '24px', fontWeight: 800, color: '#0F172A', lineHeight: 1 }}>13</span>
-              <span style={{ fontSize: '10px', fontWeight: 700, color: '#64748B', letterSpacing: '1px', textTransform: 'uppercase', marginTop: '4px' }}>ALERTS</span>
-            </div>
-          </div>
+          const rawChartData = [
+            { name: 'Exact Duplicate Match', value: duplicateAlertStats.exactMatch, color: '#EF4444' },
+            { name: 'High Similarity Match', value: duplicateAlertStats.similarityMatch, color: '#F59E0B' },
+            { name: 'Cleared Unique Records', value: duplicateAlertStats.cleared, color: '#10B981' },
+            { name: 'Pending Review', value: duplicateAlertStats.pendingReview, color: '#0EA5E9' }
+          ];
 
-          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, gap: '12px', marginTop: '32px' }}>
-            {[
-              { label: 'Exact Duplicate Match', value: 4, color: '#EF4444' },
-              { label: 'High Similarity Match', value: 9, color: '#F59E0B' },
-              { label: 'Cleared Unique Records', value: 0, color: '#10B981' },
-              { label: 'Pending Review', value: 6, color: '#0EA5E9' }
-            ].map((item, idx) => (
-              <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: item.color }} />
-                  <span style={{ fontSize: '13px', color: '#475569' }}>{item.label}</span>
+          const chartData = duplicateAlertStats.total > 0
+            ? rawChartData.filter(d => d.value > 0)
+            : [{ name: 'No Alerts', value: 1, color: '#E2E8F0' }];
+
+          return (
+            <Card style={{ display: 'flex', flexDirection: 'column' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0F172A' }}>Duplicate Detection Distribution</h3>
+                  <p style={{ margin: '4px 0 0', fontSize: '0.8125rem', color: '#64748B' }}>Classification breakdown of scanned invoices and receipts</p>
                 </div>
-                <span style={{ fontSize: '14px', fontWeight: 700, color: '#0F172A' }}>{item.value}</span>
+                <i className="ti-chart-pie" style={{ color: '#0EA5E9', fontSize: '18px' }}></i>
               </div>
-            ))}
-          </div>
-        </Card>
+
+              <div style={{ width: '100%', height: 220, position: 'relative', marginTop: '20px' }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={chartData}
+                      innerRadius={65}
+                      outerRadius={90}
+                      paddingAngle={duplicateAlertStats.total > 0 ? 5 : 0}
+                      dataKey="value"
+                      stroke="none"
+                    >
+                      {chartData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    {duplicateAlertStats.total > 0 && (
+                      <Tooltip
+                        formatter={(val: any) => [val, 'Alerts']}
+                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
+                      />
+                    )}
+                  </PieChart>
+                </ResponsiveContainer>
+                {/* Center Label */}
+                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+                  <span style={{ fontSize: '24px', fontWeight: 800, color: '#0F172A', lineHeight: 1 }}>{duplicateAlertStats.total}</span>
+                  <span style={{ fontSize: '10px', fontWeight: 700, color: '#64748B', letterSpacing: '1px', textTransform: 'uppercase', marginTop: '4px' }}>ALERTS</span>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', flex: 1, gap: '12px', marginTop: '32px' }}>
+                {rawChartData.map((item, idx) => (
+                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: item.color }} />
+                      <span style={{ fontSize: '13px', color: '#475569' }}>{item.name}</span>
+                    </div>
+                    <span style={{ fontSize: '14px', fontWeight: 700, color: '#0F172A' }}>{item.value}</span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          );
+        })()}
       </div>
     </div>
   );

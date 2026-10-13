@@ -44,15 +44,9 @@ export const StatusCard: React.FC<StatusCardProps> = ({
 }) => {
   const colors = variantColors[variant] || variantColors.teal;
 
-  // Add default rich data to make cards look like the image if not provided
-  const displayTrend = trend || {
-    type: (variant === 'danger' || variant === 'warning') && polarity === 'higher-is-better' ? 'down' : 'up',
-    value: `${Math.floor(Math.random() * 20) + 2}%`
-  } as Trend;
-
+  const displayTrend = trend;
   const displaySparkline = sparklineData || [];
-
-  const displayPeriodText = periodText || 'vs prev.';
+  const displayPeriodText = periodText;
 
   const customStyles = {
     '--kpi-ac': colors.accent,
@@ -137,12 +131,18 @@ export const StatusCard: React.FC<StatusCardProps> = ({
           <span className="kpi-label" style={{ fontSize: '0.7rem', fontWeight: 600, color: '#475569', marginBottom: '4px', display: 'block', whiteSpace: 'normal', lineHeight: 1.2, textTransform: 'uppercase' }}>{label}</span>
           <div className="kpi-val" style={{ fontSize: '1.15rem', fontWeight: 800, color: '#0F172A', marginBottom: '8px', lineHeight: 1 }}>{value}</div>
           
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: '4px', flexWrap: 'wrap', marginTop: 'auto' }}>
-            <div className={`kpi-trend ${getTrendClass(displayTrend.type)}`} style={{ display: 'flex', alignItems: 'center', gap: '2px', fontWeight: 600, fontSize: '0.7rem' }}>
-              <span>{getTrendIcon(displayTrend.type)} {displayTrend.value}</span>
+          {(displayTrend || displayPeriodText) && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: '4px', flexWrap: 'wrap', marginTop: 'auto' }}>
+              {displayTrend && (
+                <div className={`kpi-trend ${getTrendClass(displayTrend.type)}`} style={{ display: 'flex', alignItems: 'center', gap: '2px', fontWeight: 600, fontSize: '0.7rem' }}>
+                  <span>{getTrendIcon(displayTrend.type)} {displayTrend.value}</span>
+                </div>
+              )}
+              {displayPeriodText && (
+                <span className="kpi-period" style={{ fontSize: '0.65rem', color: '#94A3B8', whiteSpace: 'nowrap' }}>{displayPeriodText}</span>
+              )}
             </div>
-            <span className="kpi-period" style={{ fontSize: '0.65rem', color: '#94A3B8', whiteSpace: 'nowrap' }}>{displayPeriodText}</span>
-          </div>
+          )}
         </div>
       </div>
     </div>

@@ -145,32 +145,52 @@ export const ClientManagement: React.FC = () => {
     toast.success('Official Receipt downloaded successfully!');
   };
 
-  const handleEditSubmit = (e: React.FormEvent) => {
+  const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (id) {
-      updateClient(id, {
+      const changes = {
         name: formData.name,
+        businessName: formData.name,
         contactPerson: formData.contactPerson,
-        phone: formData.contactNumber,
+        contactNumber: formData.contactNumber,
         address: formData.address,
-        billingSchedule: formData.billingSchedule as any,
-        status: formData.status as any,
-      });
-      addAuditLog({
-        id: `AL-${Date.now()}`,
-        userId: user?.employeeId || 'U-000',
-        userFullName: user?.fullName || 'System',
-        userRole: user?.role || 'Accountant',
-        action: 'UPDATE_CLIENT',
-        module: 'ClientManagement',
-        recordId: id,
-        recordType: 'Client',
-        ipAddress: '127.0.0.1',
-        details: `Updated client profile: ${id}`,
-        timestamp: new Date().toISOString()
-      });
-      toast.success(`Client ${id} successfully updated.`);
-      setIsEditMode(false);
+        billingSchedule: formData.billingSchedule,
+        status: formData.status,
+      };
+
+      try {
+        const response = await api.put(`/clients/${id}`, changes);
+        if (response.status < 200 || response.status >= 300) {
+          throw new Error(response.data?.message ?? 'Unable to update the client. Please try again.');
+        }
+
+        updateClient(id, {
+          name: formData.name,
+          contactPerson: formData.contactPerson,
+          phone: formData.contactNumber,
+          address: formData.address,
+          billingSchedule: formData.billingSchedule as any,
+          status: formData.status as any,
+        });
+        addAuditLog({
+          id: `AL-${Date.now()}`,
+          userId: user?.employeeId || 'U-000',
+          userFullName: user?.fullName || 'System',
+          userRole: user?.role || 'Accountant',
+          action: 'UPDATE_CLIENT',
+          module: 'ClientManagement',
+          recordId: id,
+          recordType: 'Client',
+          ipAddress: '127.0.0.1',
+          details: `Updated client profile: ${id}`,
+          timestamp: new Date().toISOString()
+        });
+        toast.success(`Client ${id} successfully updated.`);
+        setIsEditMode(false);
+      } catch (err: any) {
+        const message = err?.response?.data?.message ?? err?.message ?? 'Unable to update the client. Please try again.';
+        toast.error(message, 'Client Update Failed');
+      }
     }
   };
 
@@ -384,7 +404,7 @@ export const ClientManagement: React.FC = () => {
                             {(() => {
                               let count = waybills.filter(w => w.invoiceId === inv.id || w.invoiceId === inv.invoiceNumber || inv.waybillIds?.includes(w.id)).length;
                               if (count === 0) count = waybills.filter(w => w.clientCode === inv.clientId).length;
-                              return count > 0 ? count : (inv.waybillIds?.length || Math.floor(Math.random() * 10) + 5);
+                              return count > 0 ? count : (inv.waybillIds?.length || 0);
                             })()}
                           </td>
                           <td style={{ padding: '12px 16px', color: '#0F172A', fontWeight: 600 }}>₱ {inv.totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>

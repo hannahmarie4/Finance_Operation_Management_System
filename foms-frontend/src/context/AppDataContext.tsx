@@ -11,6 +11,8 @@
 
 import React, { createContext, useContext, useState, useMemo, useCallback, useEffect } from 'react';
 import api from '../services/api';
+import { isDemoMode, shouldLoadDemoSeeds } from '../config/runtimeMode';
+import { demoStore } from '../services/demoApiAdapter';
 import {
   SEEDED_WAYBILLS,
   SEEDED_INVOICES,
@@ -304,37 +306,46 @@ const AppDataContext = createContext<AppDataContextValue | null>(null);
 // ─── Provider ─────────────────────────────────────────────────────
 
 export function AppDataProvider({ children }: { children: React.ReactNode }) {
-  const [waybills, setWaybills] = useState<Waybill[]>(SEEDED_WAYBILLS);
-  const [invoices, setInvoices] = useState<Invoice[]>(SEEDED_INVOICES);
-  const [payments, setPayments] = useState<Payment[]>(SEEDED_PAYMENTS);
-  const [receipts, setReceipts] = useState<Receipt[]>(SEEDED_RECEIPTS);
-  const [speedPay, setSpeedPay] = useState<SpeedPaySubmission[]>(SEEDED_SPEEDPAY);
-  const [clients, setClients] = useState<Client[]>(SEEDED_CLIENTS);
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(SEEDED_AUDIT_LOGS);
-  const [followUpRecords, setFollowUpRecords] = useState<FollowUpRecord[]>(SEEDED_FOLLOW_UP_RECORDS);
-  const [liquidations, setLiquidations] = useState<Liquidation[]>(SEEDED_LIQUIDATIONS);
+  const [waybills, setWaybills] = useState<Waybill[]>(shouldLoadDemoSeeds ? SEEDED_WAYBILLS : []);
+  const [invoices, setInvoices] = useState<Invoice[]>(shouldLoadDemoSeeds ? SEEDED_INVOICES : []);
+  const [payments, setPayments] = useState<Payment[]>(shouldLoadDemoSeeds ? SEEDED_PAYMENTS : []);
+  const [receipts, setReceipts] = useState<Receipt[]>(shouldLoadDemoSeeds ? SEEDED_RECEIPTS : []);
+  const [speedPay, setSpeedPay] = useState<SpeedPaySubmission[]>(shouldLoadDemoSeeds ? SEEDED_SPEEDPAY : []);
+  const [clients, setClients] = useState<Client[]>(shouldLoadDemoSeeds ? SEEDED_CLIENTS : []);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(shouldLoadDemoSeeds ? SEEDED_AUDIT_LOGS : []);
+  const [followUpRecords, setFollowUpRecords] = useState<FollowUpRecord[]>(shouldLoadDemoSeeds ? SEEDED_FOLLOW_UP_RECORDS : []);
+  const [liquidations, setLiquidations] = useState<Liquidation[]>(shouldLoadDemoSeeds ? SEEDED_LIQUIDATIONS : []);
   
   // Financial Adjustments State
   const [financialAdjustments, setFinancialAdjustments] = useState<FinancialAdjustment[]>(() => {
+    if (isDemoMode) {
+      if (!shouldLoadDemoSeeds) return [];
+      try {
+        const saved = sessionStorage.getItem('foms_demo_financial_adjustments');
+        return saved ? JSON.parse(saved) : (shouldLoadDemoSeeds ? SEEDED_ADJUSTMENTS : []);
+      } catch {
+        return shouldLoadDemoSeeds ? SEEDED_ADJUSTMENTS : [];
+      }
+    }
     try {
       const saved = localStorage.getItem('foms_financial_adjustments');
-      return saved ? JSON.parse(saved) : SEEDED_ADJUSTMENTS;
+      return saved ? JSON.parse(saved) : (shouldLoadDemoSeeds ? SEEDED_ADJUSTMENTS : []);
     } catch {
-      return SEEDED_ADJUSTMENTS;
+      return shouldLoadDemoSeeds ? SEEDED_ADJUSTMENTS : [];
     }
   });
 
-  const [cashFlowRecords, setCashFlowRecords] = useState<CashFlowRecord[]>(SEEDED_CASH_FLOW_RECORDS);
+  const [cashFlowRecords, setCashFlowRecords] = useState<CashFlowRecord[]>(shouldLoadDemoSeeds ? SEEDED_CASH_FLOW_RECORDS : []);
 
-  const [billingRates, setBillingRates] = useState<BillingRate[]>(SEEDED_RATES);
-  const [billingRecords, setBillingRecords] = useState<BillingRecord[]>(SEEDED_BILLING_RECORDS);
-  const [settlements, setSettlements] = useState<Settlement[]>(SEEDED_SETTLEMENTS);
+  const [billingRates, setBillingRates] = useState<BillingRate[]>(shouldLoadDemoSeeds ? SEEDED_RATES : []);
+  const [billingRecords, setBillingRecords] = useState<BillingRecord[]>(shouldLoadDemoSeeds ? SEEDED_BILLING_RECORDS : []);
+  const [settlements, setSettlements] = useState<Settlement[]>(shouldLoadDemoSeeds ? SEEDED_SETTLEMENTS : []);
 
   // ── Refresh functions — REPLACE state from DB (never merge) ──────
   const refreshClients = useCallback(async () => {
     try {
       const res = await api.get('/clients');
-      const mapped: Client[] = res.data.map(mapClient);
+      const mapped: Client[] = Array.isArray(res.data) ? res.data.map(mapClient) : [];
       setClients(mapped);
     } catch { /* keep current state */ }
   }, []);
@@ -342,16 +353,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const refreshInvoices = useCallback(async () => {
     try {
       const res = await api.get('/invoices');
-      const mapped: Invoice[] = res.data.map(mapInvoice);
-      
-      const extraMocks = SEEDED_INVOICES.filter(s => ['Draft', 'Needs Revision', 'Pending Approval', 'Approved'].includes(s.status));
-      const existingIds = new Set(mapped.map(m => m.id));
-      for (const mock of extraMocks) {
-        if (!existingIds.has(mock.id)) {
-          mapped.push(mock);
-        }
-      }
-
+      const mapped: Invoice[] = Array.isArray(res.data) ? res.data.map(mapInvoice) : [];
       setInvoices(mapped);
     } catch { /* keep current state */ }
   }, []);
@@ -359,33 +361,23 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const refreshPayments = useCallback(async () => {
     try {
       const res = await api.get('/payments');
-      const mapped: Payment[] = res.data.map(mapPayment);
-      
-      const existingIds = new Set(mapped.map(m => m.id));
-      for (const mock of SEEDED_PAYMENTS) {
-        if (!existingIds.has(mock.id)) {
-          mapped.push(mock);
-        }
-      }
-
+      const mapped: Payment[] = Array.isArray(res.data) ? res.data.map(mapPayment) : [];
       setPayments(mapped);
-    } catch {
-      setPayments([...SEEDED_PAYMENTS]);
-    }
+    } catch { /* retain current API/demo state; never substitute seed data */ }
   }, []);
 
   const refreshSpeedPay = useCallback(async () => {
     try {
       const res = await api.get('/speedpay/submissions');
-      const mapped: SpeedPaySubmission[] = res.data.map(mapSpeedPay);
-      if (mapped.length > 0) setSpeedPay(mapped);
+      const mapped: SpeedPaySubmission[] = Array.isArray(res.data) ? res.data.map(mapSpeedPay) : [];
+      setSpeedPay(mapped);
     } catch { /* keep current state */ }
   }, []);
 
   const refreshReceipts = useCallback(async () => {
     try {
       const res = await api.get('/official-receipts');
-      const mapped: Receipt[] = res.data.map((r: any) => ({
+      const mapped: Receipt[] = Array.isArray(res.data) ? res.data.map((r: any) => ({
         id: r.id,
         receiptNumber: r.receiptNumber ?? r.orNumber ?? r.id,
         invoiceId: r.invoiceId ?? r.paymentCollection?.invoiceId ?? '',
@@ -395,8 +387,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         referenceNumber: r.referenceNumber ?? '',
         issuedBy: r.issuedBy ?? 'System',
         issuedAt: r.issuedDate ?? r.issuedAt ?? new Date().toISOString(),
-      }));
-      if (mapped.length > 0) setReceipts(mapped);
+      })) : [];
+      setReceipts(mapped);
     } catch { /* keep current state */ }
   }, []);
 
@@ -410,7 +402,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     api.get('/shipment-records')
       .then((res) => {
-        const mapped: Waybill[] = res.data.map((w: any) => ({
+        const mapped: Waybill[] = Array.isArray(res.data) ? res.data.map((w: any) => ({
           id: w.id ?? w.shipmentRecordId,
           waybillNumber: w.waybillNumber ?? w.id,
           clientCode: w.clientId ?? w.clientCode ?? 'CLI-001',
@@ -422,16 +414,10 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
           encodedAt: w.encodedAt ?? new Date().toISOString(),
           destinationArea: w.destinationArea ?? 'Unknown',
           invoiceId: w.invoiceId
-        }));
-        if (mapped.length > 0) {
-          setWaybills(prev => {
-            const map = new Map(prev.map(w => [w.id, w]));
-            mapped.forEach(m => map.set(m.id, { ...map.get(m.id), ...m }));
-            return Array.from(map.values());
-          });
-        }
+        })) : [];
+        setWaybills(mapped);
       })
-      .catch(() => { /* keep static seed as fallback */ });
+      .catch(() => { /* retain current API/demo state */ });
   }, []);
 
   // ── SpeedPay — polls every 15s so new submissions appear automatically ──
@@ -443,41 +429,45 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
   // ── Fetch CashFlow from real backend on mount ──
   useEffect(() => {
-    api.get('/cash-flow').catch(() => { /* not critical */ });
+    api.get('/cash-flow')
+      .then((res) => {
+        if (Array.isArray(res.data)) {
+          setCashFlowRecords(res.data);
+        }
+      })
+      .catch(() => { /* not critical */ });
   }, []);
 
   // ── Fetch AuditLogs from real backend on mount ──
   useEffect(() => {
     api.get('/audit-logs')
       .then((res) => {
-        const mapped: AuditLog[] = res.data.map((a: any) => ({
+        const mapped: AuditLog[] = Array.isArray(res.data) ? res.data.map((a: any) => ({
           id: a.id ?? a.auditLogId,
           timestamp: a.timestamp ?? a.createdAt ?? new Date().toISOString(),
           userId: a.userId ?? 'EMP-001',
           userFullName: getEmployeeName(a.userId, a.userFullName),
-          userRole: getEmployeeRole(a.userId, a.userRole),
+          userRole: getEmployeeRole(a.userId, a.userRole) as any,
           action: a.action ?? 'Unknown',
           module: a.module ?? 'System',
           recordId: a.recordId ?? '',
           recordType: a.recordType ?? '',
           details: a.details ?? '',
           ipAddress: a.ipAddress ?? '127.0.0.1'
-        }));
-        if (mapped.length > 0) {
-          setAuditLogs([...mapped, ...SEEDED_AUDIT_LOGS]);
-        } else {
-          setAuditLogs([...SEEDED_AUDIT_LOGS]);
-        }
+        })) : [];
+        setAuditLogs(mapped);
       })
-      .catch(() => {
-        setAuditLogs([...SEEDED_AUDIT_LOGS]);
-      });
+      .catch(() => { /* retain current API/demo state */ });
   }, []);
 
-  // Save financial adjustments to localStorage on change
+  // Save financial adjustments to storage on change
   useEffect(() => {
     try {
-      localStorage.setItem('foms_financial_adjustments', JSON.stringify(financialAdjustments));
+      if (isDemoMode) {
+        sessionStorage.setItem('foms_demo_financial_adjustments', JSON.stringify(financialAdjustments));
+      } else {
+        localStorage.setItem('foms_financial_adjustments', JSON.stringify(financialAdjustments));
+      }
     } catch { /* ignore */ }
   }, [financialAdjustments]);
 
@@ -490,15 +480,21 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   // ── Waybill Actions ──
   const updateWaybill = useCallback((id: string, changes: Partial<Waybill>) => {
     setWaybills(prev => prev.map(w => w.id === id ? { ...w, ...changes } : w));
+    if (isDemoMode) {
+      const idx = demoStore.waybills.findIndex((w: any) => w.id === id || w.waybillNumber === id);
+      if (idx >= 0) demoStore.waybills[idx] = { ...demoStore.waybills[idx], ...changes };
+    }
   }, []);
 
   const addWaybill = useCallback((waybill: Waybill) => {
     setWaybills(prev => [waybill, ...prev]);
+    if (isDemoMode) demoStore.waybills.unshift(waybill as any);
   }, []);
 
   // ── Invoice Actions ──
   const addInvoice = useCallback((invoice: Invoice) => {
     setInvoices(prev => [invoice, ...prev]);
+    if (isDemoMode) demoStore.invoices.unshift(invoice as any);
     if (invoice.waybillIds && invoice.waybillIds.length > 0) {
       setWaybills(prev => prev.map(w => 
         invoice.waybillIds.includes(w.id) ? { ...w, invoiceId: invoice.id } : w
@@ -508,15 +504,24 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
   const updateInvoice = useCallback((id: string, changes: Partial<Invoice>) => {
     setInvoices(prev => prev.map(inv => inv.id === id ? { ...inv, ...changes } : inv));
+    if (isDemoMode) {
+      const idx = demoStore.invoices.findIndex((inv: any) => inv.id === id || inv.invoiceNumber === id);
+      if (idx >= 0) demoStore.invoices[idx] = { ...demoStore.invoices[idx], ...changes };
+    }
   }, []);
 
   // ── Payment Actions ──
   const addPayment = useCallback((payment: Payment) => {
     setPayments(prev => [payment, ...prev]);
+    if (isDemoMode) demoStore.payments.unshift(payment as any);
   }, []);
 
   const updatePayment = useCallback((id: string, changes: Partial<Payment>) => {
     setPayments(prev => prev.map(p => p.id === id ? { ...p, ...changes } : p));
+    if (isDemoMode) {
+      const idx = demoStore.payments.findIndex((p: any) => p.id === id || p.invoiceNo === id || p.invoiceNumber === id);
+      if (idx >= 0) demoStore.payments[idx] = { ...demoStore.payments[idx], ...changes };
+    }
   }, []);
 
   // ── Receipt Actions ──
@@ -525,24 +530,38 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       const exists = prev.some(r => r.id === receipt.id || r.paymentId === receipt.paymentId);
       return exists ? prev : [receipt, ...prev];
     });
+    if (isDemoMode) {
+      const exists = demoStore.receipts.some((r: any) => r.id === receipt.id || r.paymentId === receipt.paymentId);
+      if (!exists) demoStore.receipts.unshift(receipt as any);
+    }
   }, []);
 
   // ── SpeedPay Actions ──
   const addSpeedPay = useCallback((submission: SpeedPaySubmission) => {
     setSpeedPay(prev => [submission, ...prev]);
+    if (isDemoMode) demoStore.speedPay.unshift(submission as any);
   }, []);
 
   const updateSpeedPay = useCallback((id: string, changes: Partial<SpeedPaySubmission>) => {
     setSpeedPay(prev => prev.map(s => s.id === id ? { ...s, ...changes } : s));
+    if (isDemoMode) {
+      const idx = demoStore.speedPay.findIndex((s: any) => s.id === id);
+      if (idx >= 0) demoStore.speedPay[idx] = { ...demoStore.speedPay[idx], ...changes };
+    }
   }, []);
 
   // ── Client Actions ──
   const updateClient = useCallback((id: string, changes: Partial<Client>) => {
     setClients(prev => prev.map(c => c.id === id ? { ...c, ...changes } : c));
+    if (isDemoMode) {
+      const idx = demoStore.clients.findIndex((c: any) => c.id === id || c.clientCode === id);
+      if (idx >= 0) demoStore.clients[idx] = { ...demoStore.clients[idx], ...changes };
+    }
   }, []);
 
   const addClient = useCallback((client: Client) => {
     setClients(prev => [client, ...prev]);
+    if (isDemoMode) demoStore.clients.unshift(client as any);
   }, []);
 
   // ── Follow-up Actions ──
@@ -553,6 +572,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   // ── Audit Log Actions ──
   const addAuditLog = useCallback((log: AuditLog) => {
     setAuditLogs(prev => [log, ...prev]);
+    if (isDemoMode) demoStore.auditLogs.unshift(log as any);
   }, []);
 
   const updateLiquidation = useCallback((id: string, changes: Partial<Liquidation>) => {
@@ -569,6 +589,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
   const addCashFlowRecord = useCallback((record: CashFlowRecord) => {
     setCashFlowRecords(prev => [record, ...prev]);
+    if (isDemoMode) demoStore.cashFlow.unshift(record as any);
   }, []);
 
   const addBillingRate = useCallback((rate: BillingRate) => {

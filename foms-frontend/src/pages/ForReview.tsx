@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import DataTable from '../components/DataTable';
 import { useAuth } from '../context/AuthContext';
+import { shouldLoadDemoSeeds } from '../config/runtimeMode';
 
 interface ReviewRecord {
   id: string;
@@ -14,6 +15,33 @@ interface ReviewRecord {
   actionTaken: string;
   remarks: string;
 }
+
+const fallbackMockData: ReviewRecord[] = [
+  {
+    id: 'REV-001',
+    timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toLocaleString(),
+    invoiceNumber: 'INV-2023-045',
+    clientName: 'Alpha Logistics',
+    balance: '₱45,000.00',
+    decision: 'Accepted as Recommendation',
+    loggedBy: 'jdelacruz',
+    loggedByRole: 'Finance Manager',
+    actionTaken: 'Sent formal demand letter.',
+    remarks: 'Client promised to pay next week.',
+  },
+  {
+    id: 'REV-002',
+    timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000).toLocaleString(),
+    invoiceNumber: 'INV-2023-012',
+    clientName: 'Beta Trading',
+    balance: '₱12,500.00',
+    decision: 'Reviewed & Closed',
+    loggedBy: 'mclara',
+    loggedByRole: 'Accountant',
+    actionTaken: 'Payment received this morning.',
+    remarks: 'Already settled via bank transfer.',
+  }
+];
 
 const truncate = (str: string, n: number) => (str && str.length > n) ? str.slice(0, n) + '...' : str;
 
@@ -53,42 +81,21 @@ const ForReview: React.FC = () => {
             remarks: r.recommended_action || 'No remarks',
           }));
           setData(mapped);
-          setLoading(false);
+          return;
+        } else {
+          setData(shouldLoadDemoSeeds ? fallbackMockData : []);
           return;
         }
+      } else {
+        setData(shouldLoadDemoSeeds ? fallbackMockData : []);
+        return;
       }
     } catch (e) {
       console.error(e);
+      setData(shouldLoadDemoSeeds ? fallbackMockData : []);
+    } finally {
+      setLoading(false);
     }
-    
-    // Fallback Mock Data
-    setData([
-      {
-        id: 'REV-001',
-        timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toLocaleString(),
-        invoiceNumber: 'INV-2023-045',
-        clientName: 'Alpha Logistics',
-        balance: '₱45,000.00',
-        decision: 'Accepted as Recommendation',
-        loggedBy: 'jdelacruz',
-        loggedByRole: 'Finance Manager',
-        actionTaken: 'Sent formal demand letter.',
-        remarks: 'Client promised to pay next week.',
-      },
-      {
-        id: 'REV-002',
-        timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000).toLocaleString(),
-        invoiceNumber: 'INV-2023-012',
-        clientName: 'Beta Trading',
-        balance: '₱12,500.00',
-        decision: 'Reviewed & Closed',
-        loggedBy: 'mclara',
-        loggedByRole: 'Accountant',
-        actionTaken: 'Payment received this morning.',
-        remarks: 'Already settled via bank transfer.',
-      }
-    ]);
-    setLoading(false);
   };
 
   useEffect(() => {
